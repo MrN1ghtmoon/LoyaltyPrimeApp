@@ -579,30 +579,20 @@ app.post('/api/users/updateBalance', async (req, res) => {
         const newBalance = await updateUserBalance(userId, change, type, description);
         
         const user = await getUserById(userId);
-        const tiers = await getCompanyTiers(user.company_id);
-        
-        let currentTier = tiers[0];
-        for (let i = tiers.length - 1; i >= 0; i--) {
-            if (newBalance >= tiers[i].threshold) {
-                currentTier = tiers[i];
-                break;
-            }
-        }
         
         res.json({ 
             success: true, 
             newBalance,
-            currentTier,
-            nextTier: getNextTier(tiers, newBalance)
+            newTotalSpent: user.total_spent  
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-function getNextTier(tiers, balance) {
+function getNextTier(tiers, totalSpent) {
     for (let i = 0; i < tiers.length; i++) {
-        if (balance < tiers[i].threshold) return tiers[i];
+        if (totalSpent < tiers[i].threshold) return tiers[i];
     }
     return null;
 }

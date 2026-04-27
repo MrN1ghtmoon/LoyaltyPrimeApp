@@ -1422,6 +1422,9 @@ async function updateUserBalance(userId, change, type, description) {
     if (type === 'earn') {
         await query('UPDATE users SET total_earned = total_earned + $1 WHERE id = $2', [change, userId]);
         await query('UPDATE user_progress SET total_earned = total_earned + $1 WHERE user_id = $2', [change, userId]);
+    } else if (type === 'spend') {
+        // ✅ ДОБАВЬТЕ ЭТУ СТРОКУ:
+        await query('UPDATE users SET total_spent = total_spent + $1 WHERE id = $2', [Math.abs(change), userId]);
     }
     
     await query(

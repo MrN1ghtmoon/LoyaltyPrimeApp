@@ -747,7 +747,7 @@ function renderTiersSettings() {
             
             <div class="tier-config-fields">
                 <div class="config-field">
-                    <label>💰 Порог LTV (₽):</label>
+                    <label>💰 Порог LTV (Бонусы):</label>
                     <input type="number" value="${tier.threshold}" 
                            onchange="updateTierConfig(${idx}, 'threshold', parseInt(this.value))" 
                            class="config-input">

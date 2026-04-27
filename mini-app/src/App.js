@@ -53,41 +53,43 @@ export function App() {
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [selectedCityId, setSelectedCityId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   
-  const getCurrentTier = (balance) => {
-    if (tiers && tiers.length > 0) {
-        let current = tiers[0];
-        for (let i = tiers.length - 1; i >= 0; i--) {
-            if (balance >= tiers[i].threshold) {
-                current = tiers[i];
-                break;
-            }
-        }
-        return current;
-    }
-    let current = DEFAULT_TIERS[0];
-    for (let i = DEFAULT_TIERS.length - 1; i >= 0; i--) {
-        if (balance >= DEFAULT_TIERS[i].threshold) {
-            current = DEFAULT_TIERS[i];
-            break;
-        }
+
+const getCurrentTierBySpent = (spent) => {
+  if (tiers && tiers.length > 0) {
+    let current = tiers[0];
+    for (let i = tiers.length - 1; i >= 0; i--) {
+      if (spent >= tiers[i].threshold) {
+        current = tiers[i];
+        break;
+      }
     }
     return current;
-  };
-  
-  const getNextTier = (balance) => {
-    const tiersList = tiers.length > 0 ? tiers : DEFAULT_TIERS;
-    for (let i = 0; i < tiersList.length; i++) {
-        if (balance < tiersList[i].threshold) return tiersList[i];
+  }
+  let current = DEFAULT_TIERS[0];
+  for (let i = DEFAULT_TIERS.length - 1; i >= 0; i--) {
+    if (spent >= DEFAULT_TIERS[i].threshold) {
+      current = DEFAULT_TIERS[i];
+      break;
     }
-    return null;
-  };
+  }
+  return current;
+};
   
-  const getProgressToNextTier = (balance) => {
-    const current = getCurrentTier(balance);
-    const next = getNextTier(balance);
+const getNextTierBySpent = (spent) => {
+  const tiersList = tiers.length > 0 ? tiers : DEFAULT_TIERS;
+  for (let i = 0; i < tiersList.length; i++) {
+    if (spent < tiersList[i].threshold) return tiersList[i];
+  }
+  return null;
+};
+  
+  const getProgressToNextTier = (spent) => {
+    const current = getCurrentTierBySpent(spent);
+    const next = getNextTierBySpent(spent);
     if (!next) return 100;
-    const progress = ((balance - current.threshold) / (next.threshold - current.threshold)) * 100;
+    const progress = ((spent - current.threshold) / (next.threshold - current.threshold)) * 100;
     return Math.min(Math.max(progress, 0), 100);
   };
 
@@ -404,76 +406,89 @@ const loadUserData = async (companyId, vkUserId, userName) => {
     saveCurrentGroupData({ ...cur, history: newHistory });
   };
   
-  const updateBalanceAndStats = async (change, type) => {
-    if (!selectedGroup) return false;
-    const cur = getCurrentGroupData();
-    let newBalance = cur.bonusBalance + change;
-    if (newBalance < 0) {
-      showModal('Недостаточно бонусов', `Не хватает ${Math.abs(change)} баллов в "${selectedGroup.name}"`);
-      return false;
-    }
-    
-    if (userId) {
-      try {
-        await fetch(`${API_URL}/api/users/updateBalance`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: userId,
-            change: change,
-            type: type,
-            description: type === 'earn' ? `Начисление ${change} бонусов` : `Списание ${Math.abs(change)} бонусов`
-          })
-        });
-      } catch (error) {
-        console.error('Ошибка обновления баланса:', error);
-      }
-    }
-    
-    const newData = { ...cur, bonusBalance: newBalance };
-    if (type === 'earn') {
-      newData.totalEarned = cur.totalEarned + change;
-      addHistory(`Начисление +${change}`, change, 'earn');
-    } else if (type === 'spend') {
-      newData.totalSpent = cur.totalSpent + Math.abs(change);
-      addHistory(`Списание: ${Math.abs(change)} баллов`, change, 'spend');
-    }
-    saveCurrentGroupData(newData);
-    return true;
+const updateBalanceAndStats = async (change, type) => {
+  if (!selectedGroup) return false;
+  const cur = getCurrentGroupData();
+  let newBalance = cur.bonusBalance + change;
+  if (newBalance < 0) {
+    showModal('Недостаточно бонусов', `Не хватает ${Math.abs(change)} баллов в "${selectedGroup.name}"`);
+    return false;
+  }
+  
+  let newTotalSpent = cur.totalSpent;
+  let newTotalEarned = cur.totalEarned;
+  
+  if (type === 'earn') {
+    newTotalEarned = cur.totalEarned + change;
+    addHistory(`Начисление +${change}`, change, 'earn');
+  } else if (type === 'spend') {
+    newTotalSpent = (cur.totalSpent || 0) + Math.abs(change);
+    addHistory(`Списание: ${Math.abs(change)} баллов`, change, 'spend');
+  }
+  
+  const newData = { 
+    ...cur, 
+    bonusBalance: newBalance,
+    totalEarned: newTotalEarned,
+    totalSpent: newTotalSpent
   };
   
-  // Функция для синхронизации баланса из БД
-  const syncBalanceFromDB = async () => {
-    if (!userId || !selectedGroup) return;
+  // Сначала сохраняем локально
+  saveCurrentGroupData(newData);
+  
+  // Затем отправляем на сервер асинхронно (не ждем ответа)
+  if (userId) {
+    fetch(`${API_URL}/api/users/updateBalance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: userId,
+        change: change,
+        type: type,
+        description: type === 'earn' ? `Начисление ${change} бонусов` : `Списание ${Math.abs(change)} бонусов`
+      })
+    }).catch(error => console.error('Ошибка обновления баланса на сервере:', error));
+  }
+  
+  return true;
+};
+  
+// Функция для синхронизации баланса из БД
+const syncBalanceFromDB = async () => {
+  if (!userId || !selectedGroup) return;
+  
+  try {
+    const response = await fetch(`${API_URL}/api/users/getOrCreate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vkId: userInfo?.id,
+        companyId: selectedGroup.id,
+        name: `${userInfo?.first_name} ${userInfo?.last_name}`
+      })
+    });
     
-    try {
-      const response = await fetch(`${API_URL}/api/users/getOrCreate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vkId: userInfo?.id,
-          companyId: selectedGroup.id,
-          name: `${userInfo?.first_name} ${userInfo?.last_name}`
-        })
-      });
+    const data = await response.json();
+    if (data.success) {
+      const cur = getCurrentGroupData();
       
-      const data = await response.json();
-      if (data.success) {
-        const cur = getCurrentGroupData();
-        // Обновляем только из БД, игнорируя localStorage
-        const newData = {
-          ...cur,
-          bonusBalance: data.user.bonus_balance || 0,
-          totalEarned: data.user.total_earned || 0,
-          totalSpent: data.user.total_spent || 0
-        };
-        saveCurrentGroupData(newData);
-        console.log('Баланс синхронизирован из БД:', newData.bonusBalance);
-      }
-    } catch (error) {
-      console.error('Ошибка синхронизации баланса:', error);
+      // ✅ НЕ перезаписываем totalSpent вообще из БД!
+      // totalSpent обновляется только локально при списаниях и выигрышах
+      // В БД total_spent обновляется только при POS-покупках
+      const newData = {
+        ...cur,
+        bonusBalance: data.user.bonus_balance || 0,
+        totalEarned: data.user.total_earned || 0,
+        // totalSpent НЕ обновляем из БД, оставляем локальное значение
+        totalSpent: cur.totalSpent || 0
+      };
+      saveCurrentGroupData(newData);
+      console.log('Баланс синхронизирован из БД:', newData.bonusBalance, 'локальный totalSpent:', newData.totalSpent);
     }
-  };
+  } catch (error) {
+    console.error('Ошибка синхронизации баланса:', error);
+  }
+};
   
   const showModal = (title, message) => setModal({ show: true, title, message });
   const closeModal = () => setModal({ show: false, title: '', message: '' });
@@ -682,101 +697,429 @@ useEffect(() => {
     );
   }
   
-  if (step === 'selectGroup') {
-    if (loadingCompanies) return <div style={{ padding:20, textAlign:'center', color:'white', background:'#1a1f2e', minHeight:'100vh' }}>Загрузка списка заведений...</div>;
-    
-    if (availableCompanies.length === 0) {
-      return (
-        <div style={{ maxWidth:500, margin:'0 auto', padding:20, background:'#1a1f2e', minHeight:'100vh' }}>
-          <div style={{ textAlign:'center', marginBottom:30 }}>
-            <h2 style={{ fontSize:24, marginBottom:8, color:'white' }}>Нет доступных заведений</h2>
-            <p style={{ opacity:0.7, color:'white' }}>Пожалуйста, добавьте заведения в базу данных</p>
-          </div>
-        </div>
-      );
-    }
-    
+if (step === 'selectGroup') {
+  if (loadingCompanies) return <div style={{ padding:20, textAlign:'center', color:'white', background:'#1a1f2e', minHeight:'100vh' }}>Загрузка списка заведений...</div>;
+  
+  if (availableCompanies.length === 0) {
     return (
       <div style={{ maxWidth:500, margin:'0 auto', padding:20, background:'#1a1f2e', minHeight:'100vh' }}>
-        <div style={{ textAlign:'center', marginBottom:30 }}><h2 style={{ fontSize:24, marginBottom:8, color:'white' }}>Выберите заведение</h2><p style={{ opacity:0.7, color:'white' }}>В каком заведении хотите копить бонусы?</p></div>
-        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          {availableCompanies.map(company => {
-            const compColor = company.brand_color || company.brandColor || '#ff4d4d';
-            return (
-            <div key={company.id} style={{ background:'rgba(30,35,48,0.8)', borderRadius:24, border:`1px solid ${compColor}40`, cursor:'pointer' }} onClick={() => handleSelectGroup(company)}>
-              <div style={{ display:'flex', alignItems:'center', padding:16 }}>
-                <div style={{ fontSize:48, marginRight:16 }}>🏢</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700, fontSize:18, color:'white' }}>{company.company}</div>
-                  <div style={{ fontSize:12, opacity:0.7, color:'white' }}>{company.description}</div>
-                </div>
-                <div style={{ fontSize:24, color:'white' }}>→</div>
-              </div>
-            </div>
-            );
-          })}
+        <div style={{ textAlign:'center', marginBottom:30 }}>
+          <h2 style={{ fontSize:24, marginBottom:8, color:'white' }}>Нет доступных заведений</h2>
+          <p style={{ opacity:0.7, color:'white' }}>Пожалуйста, добавьте заведения в базу данных</p>
         </div>
       </div>
     );
   }
+  
+  // Сортировка заведений по алфавиту
+  const sortedCompanies = [...availableCompanies].sort((a, b) => {
+    const nameA = (a.company || a.name || '').toLowerCase();
+    const nameB = (b.company || b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB, 'ru');
+  });
+  
+  // Фильтрация по поисковому запросу
+  const filteredCompanies = sortedCompanies.filter(company => {
+    const searchLower = searchQuery.toLowerCase();
+    const companyName = (company.company || company.name || '').toLowerCase();
+    const description = (company.description || '').toLowerCase();
+    return companyName.includes(searchLower) || description.includes(searchLower);
+  });
+  
+  // Группировка по первой букве
+  const groupedCompanies = {};
+  filteredCompanies.forEach(company => {
+    const name = (company.company || company.name || '');
+    const firstLetter = name.trim() ? name[0].toUpperCase() : '#';
+    if (!groupedCompanies[firstLetter]) {
+      groupedCompanies[firstLetter] = [];
+    }
+    groupedCompanies[firstLetter].push(company);
+  });
+  
+  const sortedLetters = Object.keys(groupedCompanies).sort();
+  
+  // Функция для прокрутки к секции
+  const scrollToLetter = (letter) => {
+    const element = document.getElementById(`section-${letter}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+  
+  return (
+    <div style={{ maxWidth:500, margin:'0 auto', padding:20, background:'#1a1f2e', minHeight:'100vh' }}>
+      <div style={{ textAlign:'center', marginBottom:24 }}>
+        <h2 style={{ fontSize:24, marginBottom:8, color:'white' }}>Выберите заведение</h2>
+        <p style={{ opacity:0.7, color:'white', fontSize:14 }}>В каком заведении хотите копить бонусы?</p>
+      </div>
+      
+      {/* Поле поиска */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          background: 'rgba(255,255,255,0.1)', 
+          borderRadius: 30, 
+          padding: '4px 16px',
+          border: '1px solid rgba(255,255,255,0.2)'
+        }}>
+          <span style={{ fontSize: 18, marginRight: 8, color: '#aaa' }}>🔍</span>
+          <input 
+            type="text"
+            placeholder="Поиск по названию..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              padding: '12px 0',
+              fontSize: 16,
+              color: 'white',
+              outline: 'none'
+            }}
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: 18,
+                color: '#aaa',
+                cursor: 'pointer',
+                padding: '8px'
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        
+        <div style={{ fontSize: 12, color: '#aaa', marginTop: 8, textAlign: 'center' }}>
+          Найдено: {filteredCompanies.length} из {availableCompanies.length}
+        </div>
+      </div>
+      
+      {/* Список заведений с id для прокрутки */}
+      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        {filteredCompanies.length === 0 ? (
+          <div style={{ textAlign:'center', padding: 40, opacity: 0.6 }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
+            <div style={{ color: 'white', fontSize: 16 }}>Ничего не найдено</div>
+            <div style={{ fontSize: 13, marginTop: 8, opacity: 0.5, color: 'white' }}>Попробуйте изменить запрос</div>
+          </div>
+        ) : (
+          !searchQuery ? (
+            // С группировкой по буквам
+            sortedLetters.map(letter => (
+              <div 
+                key={letter} 
+                id={`section-${letter}`}
+                style={{ scrollMarginTop: '80px' }}
+              >
+                <div style={{ 
+                  fontSize: 20, 
+                  fontWeight: 700, 
+                  color: '#ffd966', 
+                  marginBottom: 12,
+                  paddingLeft: 12,
+                  borderLeft: `4px solid ${brandColor}`,
+                  background: 'rgba(0,0,0,0.2)',
+                  padding: '8px 12px',
+                  borderRadius: 12,
+                  display: 'inline-block'
+                }}>
+                  {letter}
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {groupedCompanies[letter].map(company => {
+                    const compColor = company.brand_color || company.brandColor || '#ff4d4d';
+                    return (
+                      <div 
+                        key={company.id} 
+                        style={{ 
+                          background:'rgba(30,35,48,0.8)', 
+                          borderRadius:24, 
+                          border:`1px solid ${compColor}40`,
+                          cursor:'pointer',
+                          transition: 'transform 0.2s, box-shadow 0.2s'
+                        }}
+                        onClick={() => handleSelectGroup(company)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateX(4px)';
+                          e.currentTarget.style.boxShadow = `0 4px 12px ${compColor}20`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateX(0)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        <div style={{ display:'flex', alignItems:'center', padding:16 }}>
+                          <div style={{ 
+                            fontSize:40, 
+                            marginRight:16,
+                            width: 48,
+                            height: 48,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: `${compColor}20`,
+                            borderRadius: '50%'
+                          }}>
+                            🏢
+                          </div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontWeight:700, fontSize:18, color:'white' }}>
+                              {company.company || company.name}
+                            </div>
+                            <div style={{ fontSize:12, opacity:0.7, color:'white', marginTop:2 }}>
+                              {company.description || 'Добро пожаловать!'}
+                            </div>
+                          </div>
+                          <div style={{ fontSize:24, color:'white', opacity:0.5 }}>→</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          ) : (
+            // Без группировки при поиске
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {filteredCompanies.map(company => {
+                const compColor = company.brand_color || company.brandColor || '#ff4d4d';
+                const companyName = company.company || company.name;
+                const searchLower = searchQuery.toLowerCase();
+                const index = companyName.toLowerCase().indexOf(searchLower);
+                let highlightedName = companyName;
+                if (index !== -1 && searchQuery.length > 1) {
+                  highlightedName = (
+                    <>
+                      {companyName.substring(0, index)}
+                      <span style={{ background: `${compColor}60`, padding: '2px 4px', borderRadius: 4 }}>
+                        {companyName.substring(index, index + searchQuery.length)}
+                      </span>
+                      {companyName.substring(index + searchQuery.length)}
+                    </>
+                  );
+                }
+                
+                return (
+                  <div 
+                    key={company.id} 
+                    style={{ 
+                      background:'rgba(30,35,48,0.8)', 
+                      borderRadius:24, 
+                      border:`1px solid ${compColor}40`,
+                      cursor:'pointer',
+                      transition: 'transform 0.2s, box-shadow 0.2s'
+                    }}
+                    onClick={() => handleSelectGroup(company)}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                      e.currentTarget.style.boxShadow = `0 4px 12px ${compColor}20`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateX(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <div style={{ display:'flex', alignItems:'center', padding:16 }}>
+                      <div style={{ 
+                        fontSize:40, 
+                        marginRight:16,
+                        width: 48,
+                        height: 48,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: `${compColor}20`,
+                        borderRadius: '50%'
+                      }}>
+                        🏢
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:700, fontSize:18, color:'white' }}>
+                          {highlightedName}
+                        </div>
+                        <div style={{ fontSize:12, opacity:0.7, color:'white', marginTop:2 }}>
+                          {company.description || 'Добро пожаловать!'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize:24, color:'white', opacity:0.5 }}>→</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
+      
+      {/* Навигационные буквы снизу (только когда нет поиска) */}
+      {!searchQuery && sortedLetters.length > 1 && (
+        <div style={{ 
+          position: 'sticky', 
+          bottom: 20, 
+          marginTop: 24,
+          display: 'flex',
+          justifyContent: 'center',
+          gap: 8,
+          flexWrap: 'wrap',
+          background: 'rgba(26,31,46,0.95)',
+          padding: '12px 20px',
+          borderRadius: 40,
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          zIndex: 100
+        }}>
+          {sortedLetters.map(letter => (
+            <button
+              key={letter}
+              onClick={() => scrollToLetter(letter)}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                minWidth: 40,
+                height: 40,
+                borderRadius: 20,
+                color: 'white',
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontFamily: 'monospace'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = brandColor;
+                e.currentTarget.style.transform = 'scale(1.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              {letter}
+            </button>
+          ))}
+        </div>
+      )}
+	  
+	  {!searchQuery && (
+  <button
+    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+    style={{
+      position: 'fixed',
+      bottom: 80,
+      right: 16,
+      width: 44,
+      height: 44,
+      borderRadius: '50%',
+      background: brandColor,
+      border: 'none',
+      color: 'white',
+      fontSize: 20,
+      cursor: 'pointer',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+      zIndex: 100,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}
+  >
+    ↑
+  </button>
+)}
+      
+      {/* Индикатор количества заведений */}
+      <div style={{ 
+        textAlign: 'center', 
+        marginTop: 20, 
+        fontSize: 12, 
+        color: '#aaa',
+        padding: '8px',
+        borderTop: '1px solid rgba(255,255,255,0.1)'
+      }}>
+        📍 Всего заведений: {availableCompanies.length}
+      </div>
+    </div>
+  );
+}
+
 
   const currentGroupData = getCurrentGroupData();
-  const currentBalance = currentGroupData?.bonusBalance || 0;
-  const currentTier = getCurrentTier(currentBalance);
-  const nextTier = getNextTier(currentBalance);
-  const progressToNext = getProgressToNextTier(currentBalance);
+const currentBalance = currentGroupData?.bonusBalance || 0;
+const currentSpent = currentGroupData?.totalSpent || 0;     
+const currentTier = getCurrentTierBySpent(currentSpent);    
+const nextTier = getNextTierBySpent(currentSpent);          
+const progressToNext = getProgressToNextTier(currentSpent); 
+  
 
   return (
     <div style={{ maxWidth:500, margin:'0 auto', padding:'20px 16px 30px', background:'#1a1f2e', minHeight:'100vh' }}>
       <header style={{ background:`linear-gradient(135deg, ${selectedGroup?.color}40, rgba(30,35,48,0.9))`, borderRadius:28, padding:20, marginBottom:20, border:`1px solid ${selectedGroup?.color}60` }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-            <div style={{ width:52, height:52, background:`linear-gradient(145deg, ${selectedGroup?.color}, ${selectedGroup?.color}cc)`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>{selectedGroup?.icon}</div>
-            <div>
-              <div style={{ fontWeight:700, fontSize:16, color:'white' }}>{userInfo?.first_name} {userInfo?.last_name}</div>
-              <div style={{ fontSize:11, opacity:0.7, color:'white' }}>{selectedGroup?.name}</div>
-            </div>
-          </div>
-          <button onClick={() => setStep('selectGroup')} style={{ background:'rgba(255,255,255,0.15)', border:'none', padding:'8px 12px', borderRadius:20, color:'white', fontSize:12, cursor:'pointer' }}>🔄 Сменить</button>
+  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+    <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+      <div style={{ width:52, height:52, background:`linear-gradient(145deg, ${selectedGroup?.color}, ${selectedGroup?.color}cc)`, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>{selectedGroup?.icon}</div>
+      <div>
+        <div style={{ fontWeight:700, fontSize:16, color:'white' }}>{userInfo?.first_name} {userInfo?.last_name}</div>
+        <div style={{ fontSize:11, opacity:0.7, color:'white' }}>{selectedGroup?.name}</div>
+      </div>
+    </div>
+    <button 
+      onClick={() => {
+        setStep('selectGroup');
+      }} 
+      style={{ background:'rgba(255,255,255,0.15)', border:'none', padding:'8px 12px', borderRadius:20, color:'white', fontSize:12, cursor:'pointer' }}
+    >
+      🔄 Сменить
+    </button>
+  </div>
+  
+  <div style={{ background:'rgba(0,0,0,0.4)', borderRadius:20, padding:16, marginBottom:12, cursor:'pointer' }} onClick={() => setShowTiersModal(true)}>
+  {/* Блок с количеством бонусов НАД прогресс-баром */}
+  <div style={{ fontSize:13, opacity:0.8, marginBottom:8, color:'white' }}>💰 Ваши бонусы</div>
+  <div style={{ fontSize:36, fontWeight:800, marginBottom:12, color:'white' }}>
+    {currentBalance.toLocaleString()} <span style={{ fontSize:14, fontWeight:400 }}>бонусов</span>
+  </div>
+  
+  {/* Прогресс-бар от потраченной суммы */}
+  <div style={{ marginBottom:8 }}>
+    <div style={{ background:'rgba(255,255,255,0.2)', height:8, borderRadius:20, overflow:'hidden' }}>
+      <div style={{ width:`${getProgressToNextTier(currentGroupData?.totalSpent || 0)}%`, height:'100%', background:`linear-gradient(90deg, ${getCurrentTierBySpent(currentGroupData?.totalSpent || 0)?.color}, ${selectedGroup?.color})`, borderRadius:20, transition:'width 0.3s ease' }} />
+    </div>
+  </div>
+  {(() => {
+    const spent = currentGroupData?.totalSpent || 0;
+    const current = getCurrentTierBySpent(spent);
+    const next = getNextTierBySpent(spent);
+    if (next) {
+      return (
+        <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, opacity:0.7, color:'white' }}>
+          <span>{current?.name}</span>
+          <span>до {next.name}</span>
+          <span>{(next.threshold - spent).toLocaleString()} ₽</span>
         </div>
-        
-        <div style={{ background:'rgba(0,0,0,0.4)', borderRadius:20, padding:16, marginBottom:12, cursor:'pointer' }} onClick={() => setShowTiersModal(true)}>
-          <div style={{ fontSize:13, opacity:0.8, marginBottom:8, color:'white' }}>💰 Текущий баланс</div>
-          <div style={{ fontSize:36, fontWeight:800, marginBottom:12, color:'white' }}>
-            {currentBalance.toLocaleString()} <span style={{ fontSize:14, fontWeight:400 }}>бонусов</span>
-          </div>
-          <div style={{ marginBottom:8 }}>
-            <div style={{ background:'rgba(255,255,255,0.2)', height:8, borderRadius:20, overflow:'hidden' }}>
-              <div style={{ width:`${progressToNext}%`, height:'100%', background:`linear-gradient(90deg, ${currentTier?.color}, ${selectedGroup?.color})`, borderRadius:20, transition:'width 0.3s ease' }} />
-            </div>
-          </div>
-          {nextTier ? (
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, opacity:0.7, color:'white' }}>
-              <span>{currentTier?.name}</span>
-              <span>до {nextTier.name}</span>
-              <span>{nextTier.threshold - currentBalance} бонусов</span>
-            </div>
-          ) : (
-            <div style={{ fontSize:11, opacity:0.7, textAlign:'center', color:'white' }}>🏆 Максимальный уровень достигнут!</div>
-          )}
-          <div style={{ fontSize:10, textAlign:'center', marginTop:8, opacity:0.5, color:'white' }}>👆 Нажмите, чтобы увидеть все уровни</div>
-        </div>
-        
-        <div style={{ display:'flex', justifyContent:'center', gap:16, background:'rgba(0,0,0,0.3)', borderRadius:16, padding:'8px 12px' }}>
-          <div style={{ textAlign:'center' }}>
-            <div style={{ fontSize:11, opacity:0.7, color:'white' }}>Множитель</div>
-            <div style={{ fontSize:18, fontWeight:700, color:'#ffd966' }}>x{currentTier?.multiplier || 1}</div>
-          </div>
-          <div style={{ textAlign:'center' }}>
-            <div style={{ fontSize:11, opacity:0.7, color:'white' }}>Кешбэк</div>
-            <div style={{ fontSize:18, fontWeight:700, color:'#ffd966' }}>{currentTier?.cashback || (currentTier?.multiplier * 5) || 5}%</div>
-          </div>
-          <div style={{ textAlign:'center' }}>
-            <div style={{ fontSize:11, opacity:0.7, color:'white' }}>Всего заработано</div>
-            <div style={{ fontSize:18, fontWeight:700, color:'#ffd966' }}>{currentGroupData?.totalEarned || 0}</div>
-          </div>
-        </div>
-      </header>
+      );
+    }
+    return (
+      <div style={{ fontSize:11, opacity:0.7, textAlign:'center', color:'white' }}>
+        🏆 Максимальный уровень достигнут!
+      </div>
+    );
+  })()}
+  <div style={{ fontSize:10, textAlign:'center', marginTop:8, opacity:0.5, color:'white' }}>👆 Нажмите, чтобы увидеть все уровни</div>
+</div>
+  
+  <div style={{ display:'flex', justifyContent:'center', gap:16, background:'rgba(0,0,0,0.3)', borderRadius:16, padding:'8px 12px' }}>
+  <div style={{ textAlign:'center' }}><div style={{ fontSize:11, opacity:0.7, color:'white' }}>Множитель</div><div style={{ fontSize:18, fontWeight:700, color:'#ffd966' }}>x{getCurrentTierBySpent(currentGroupData?.totalSpent || 0)?.multiplier || 1}</div></div>
+  <div style={{ textAlign:'center' }}><div style={{ fontSize:11, opacity:0.7, color:'white' }}>Кешбэк</div><div style={{ fontSize:18, fontWeight:700, color:'#ffd966' }}>{getCurrentTierBySpent(currentGroupData?.totalSpent || 0)?.cashback || (getCurrentTierBySpent(currentGroupData?.totalSpent || 0)?.multiplier * 5) || 5}%</div></div>
+  <div style={{ textAlign:'center' }}><div style={{ fontSize:11, opacity:0.7, color:'white' }}>Всего потрачено</div><div style={{ fontSize:18, fontWeight:700, color:'#ffd966' }}>{currentGroupData?.totalSpent?.toLocaleString() || 0}</div></div>
+</div>
+</header>
 
       <nav style={{ display:'flex', gap:8, background:'rgba(0,0,0,0.3)', padding:6, borderRadius:60, marginBottom:24, flexWrap:'wrap', justifyContent:'center' }}>
         {['home','card','offers','giveaways','games','quests','referral','history'].map(tab => (
@@ -797,11 +1140,7 @@ useEffect(() => {
     </div>
     
     <div style={{ background:'rgba(30,35,48,0.7)', borderRadius:28, padding:20 }}>
-      <h3 style={{ fontSize:18, marginBottom:12, color:'white' }}>📊 Моя статистика</h3>
-      <div style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid rgba(255,255,255,0.08)', color:'white' }}>
-        <span>Потрачено бонусов:</span>
-        <span style={{ fontWeight:700, color:'#ffd966' }}>{currentGroupData?.totalSpent || 0}</span>
-      </div>
+      <h3 style={{ fontSize:18, marginBottom:12, color:'white' }}>📊 Информация</h3>
       <div style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:'1px solid rgba(255,255,255,0.08)', color:'white' }}>
         <span>День рождения:</span>
         <span 
@@ -1480,14 +1819,14 @@ useEffect(() => {
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:700, color:'white', fontSize:16 }}>{tier.name}</div>
                       <div style={{ fontSize:11, color:'#aaa', marginTop:4 }}>
-                        <span>💰 от {tier.threshold.toLocaleString()} ₽</span>
+                        <span>💰 от {tier.threshold.toLocaleString()} бонусов</span>
                         <span style={{ marginLeft:12 }}>⚡ x{tier.multiplier}</span>
                         <span style={{ marginLeft:12 }}>💸 {tier.cashback || tier.multiplier * 5}%</span>
                       </div>
                     </div>
-                    {idx === tiers.findIndex(t => t.name === getCurrentTier(currentBalance).name) && (
-                      <span style={{ background:'#ffd966', color:'#1a1f2e', padding:'4px 8px', borderRadius:12, fontSize:10, fontWeight:600 }}>Текущий</span>
-                    )}
+                    {idx === tiers.findIndex(t => t.name === getCurrentTierBySpent(currentSpent).name) && (
+  <span style={{ background:'#ffd966', color:'#1a1f2e', padding:'4px 8px', borderRadius:12, fontSize:10, fontWeight:600 }}>Текущий</span>
+)}
                   </div>
                 </div>
               ))}
