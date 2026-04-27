@@ -12,7 +12,7 @@ from vk_api.exceptions import ApiError
 from flask import Flask, request, jsonify
 
 # ========== КОНФИГУРАЦИЯ ==========
-TOKEN = 'vk1.a.t6UxweH2XlW_Nt9uzTVOMniSxlC5XxvynU1CW-C29d9lzpTvlkNrZEfblXeKoTQQkUQa4O3JNirVWPsUtOOM-Zcr1BZrwf-6r6t6DP0UndWFX9YQmbN3vK6ORVOLmgjgCLmiM1667oscmODPBQA86gu2uWD8LJbgzcpdhQTq0drd88Ac-XCYWojgnAuZOSOgGvCRFgmFLQtmJ7hVdKKLMw'
+TOKEN = ''
 APP_ID = 54517632
 BACKEND_URL = 'http://localhost:3001'
 
@@ -61,6 +61,45 @@ def send_message(user_id, text, keyboard=None):
         return False
 
 
+# ---------- Загрузка изображения на сервера VK ----------
+def upload_photo_from_url(image_url):
+    """Загружает изображение по ссылке на сервера VK и возвращает attachment строку"""
+    try:
+        # Скачиваем изображение по ссылке
+        response = session.get(image_url, timeout=30)
+        if response.status_code != 200:
+            print(f"❌ Не удалось скачать изображение: {response.status_code}")
+            return None
+        
+        # Получаем URL для загрузки
+        upload_url = vk.photos.getMessagesUploadServer()['upload_url']
+        
+        # Загружаем изображение на сервер VK
+        upload_response = session.post(upload_url, files={'photo': response.content})
+        upload_data = upload_response.json()
+        
+        # Сохраняем изображение
+        saved_photo = vk.photos.saveMessagesPhoto(
+            server=upload_data['server'],
+            photo=upload_data['photo'],
+            hash=upload_data['hash']
+        )
+        
+        # Формируем attachment строку
+        photo_id = saved_photo[0]['id']
+        owner_id = saved_photo[0]['owner_id']
+        attachment = f"photo{owner_id}_{photo_id}"
+        
+        print(f"✅ Изображение загружено: {attachment}")
+        return attachment
+        
+    except Exception as e:
+        print(f"❌ Ошибка загрузки изображения: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 # ---------- Клавиатура ----------
 def get_main_keyboard():
     return {
@@ -95,6 +134,16 @@ def send_messages():
         full_message = f"📢 {title}\n\n{message}"
         sent_count = 0
         failed_count = 0
+        
+        # Загружаем изображение один раз для всех пользователей
+        photo_attachment = None
+        if image_url:
+            print(f"🖼️ Загрузка изображения: {image_url}")
+            photo_attachment = upload_photo_from_url(image_url)
+            if photo_attachment:
+                print(f"✅ Изображение готово: {photo_attachment}")
+            else:
+                print(f"⚠️ Не удалось загрузить изображение, будет отправлена ссылка")
 
         # Создаем клавиатуру с кнопкой если есть ссылка
         keyboard = None
@@ -119,8 +168,12 @@ def send_messages():
                     "random_id": random_id
                 }
 
-                if image_url:
-                    params["attachment"] = image_url
+                # Используем загруженное фото или ссылку как запасной вариант
+                if photo_attachment:
+                    params["attachment"] = photo_attachment
+                elif image_url:
+                    # Если не удалось загрузить, отправляем ссылку в тексте
+                    params["message"] = full_message + f"\n\n🖼️ Изображение: {image_url}"
 
                 if keyboard:
                     params["keyboard"] = json.dumps(keyboard, ensure_ascii=False)
@@ -156,6 +209,97 @@ def send_messages():
 @app.route('/send_messages_status', methods=['GET'])
 def send_messages_status():
     return jsonify({'status': 'ok'})
+
+
+# ---------- Flask endpoint для кампаний ----------
+@app.route('/send_campaign_messages', methods=['POST'])
+def send_campaign_messages():
+    """Получает задачу от backend и отправляет сообщения кампании пользователям"""
+    try:
+        data = request.json
+        campaign_id = data.get('campaign_id')
+        title = data.get('title', '')
+        message = data.get('message', '')
+        image_url = data.get('image_url')
+        button_link = data.get('button_link')
+        button_text = data.get('button_text', 'Перейти')
+        users = data.get('users', [])
+
+        print(f"📨 Получена задача кампании {campaign_id} для {len(users)} пользователей")
+
+        full_message = f"{title}\n\n{message}"
+        sent_count = 0
+        failed_count = 0
+        
+        # Загружаем изображение один раз для всех пользователей
+        photo_attachment = None
+        if image_url:
+            print(f"🖼️ Загрузка изображения: {image_url}")
+            photo_attachment = upload_photo_from_url(image_url)
+            if photo_attachment:
+                print(f"✅ Изображение готово: {photo_attachment}")
+            else:
+                print(f"⚠️ Не удалось загрузить изображение, будет отправлена ссылка")
+
+        # Создаем клавиатуру с кнопкой если есть ссылка
+        keyboard = None
+        if button_link:
+            keyboard = {
+                "buttons": [
+                    [
+                        {"action": {"type": "open_link", "link": button_link, "label": button_text}}
+                    ]
+                ],
+                "inline": True
+            }
+
+        for user in users:
+            vk_id = int(user.get('vk_id'))
+            try:
+                random_id = random.randint(1, 2 ** 63 - 1)
+
+                params = {
+                    "peer_id": vk_id,
+                    "message": full_message,
+                    "random_id": random_id
+                }
+
+                # Используем загруженное фото или ссылку как запасной вариант
+                if photo_attachment:
+                    params["attachment"] = photo_attachment
+                elif image_url:
+                    # Если не удалось загрузить, отправляем ссылку в тексте
+                    params["message"] = full_message + f"\n\n🖼️ Изображение: {image_url}"
+
+                if keyboard:
+                    params["keyboard"] = json.dumps(keyboard, ensure_ascii=False)
+
+                vk.messages.send(**params)
+                sent_count += 1
+                print(f"📤 Кампания {campaign_id}: отправлено {vk_id}")
+
+                time.sleep(0.05)
+
+            except Exception as e:
+                print(f"❌ Ошибка отправки кампании {vk_id}: {e}")
+                failed_count += 1
+
+        print(f"✅ Кампания {campaign_id} завершена: отправлено {sent_count}, ошибок {failed_count}")
+
+        return jsonify({
+            'success': True,
+            'sent_count': sent_count,
+            'failed_count': failed_count,
+            'total': len(users)
+        })
+    except Exception as e:
+        print(f"❌ Ошибка обработки кампании: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # ---------- Основной цикл ----------

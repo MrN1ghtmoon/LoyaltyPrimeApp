@@ -73,7 +73,21 @@ const {
     toggleNotificationCampaign,
     getActiveCampaigns,
     getUsersBySegment,
-    executeCampaign
+    executeCampaign,
+	initLocationTables,
+    getCities,
+    addCity,
+    updateCity,
+    deleteCity,
+    getAddresses,
+    getAddressById,
+    addAddress,
+    updateAddress,
+    deleteAddress,
+    getAllLocationsForApp,
+    getUserSelectedLocation,
+    updateUserSelectedLocation,
+    getMainLocation
 } = require('./database-pg');
 
 const app = express();
@@ -94,28 +108,19 @@ async function createDefaultCampaignsForCompany(companyId) {
             {
                 name: '😴 Возвращение спящих',
                 title: 'Мы скучаем по вам!',
-                message: 'Вернитесь к нам и получите двойные бонусы на следующую покупку!',
+                message: 'Вы давно не заходили к нам. Вернитесь и получите специальные бонусы на следующую покупку! 🎁',
                 audience: 'dormant',
-                is_active: true,
-                interval_days: 3,
+                is_active: false, // По умолчанию выключена
+                interval_days: 7,
                 is_default: true
             },
             {
                 name: '🎂 Поздравление с днем рождения',
-                title: 'С днем рождения! 🎉',
-                message: 'Поздравляем! В честь вашего праздника дарим вам специальные бонусы!',
-                audience: 'all',
-                is_active: true,
+                title: 'С днем рождения! 🎉🎂',
+                message: 'Поздравляем вас с днем рождения! В честь вашего праздника дарим вам удвоенные бонусы! Желаем счастья и здоровья! 🎈🎁',
+                audience: 'birthday',
+                is_active: false, // По умолчанию выключена
                 interval_days: 1,
-                is_default: true
-            },
-            {
-                name: '🔥 Достижение стрика',
-                title: 'Отличная серия! 🔥',
-                message: 'Вы с нами уже несколько дней подряд! Продолжайте получать бонусы!',
-                audience: 'active',
-                is_active: true,
-                interval_days: 2,
                 is_default: true
             }
         ];
@@ -2301,7 +2306,7 @@ app.get('/api/companies/:companyId/campaigns', async (req, res) => {
 app.post('/api/companies/:companyId/campaigns', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { name, title, message, audience, is_active, interval_days, image_url, is_default } = req.body;
+        const { name, title, message, audience, is_active, interval_days, image_url, is_default, button_link, button_text } = req.body;
         
         console.log('📝 Запрос на создание кампании:', { companyId, name, title, audience, interval_days });
         
@@ -2318,7 +2323,9 @@ app.post('/api/companies/:companyId/campaigns', async (req, res) => {
             is_active !== undefined ? is_active : true,
             interval_days || 1,
             image_url || null,
-            is_default || false
+            is_default || false,
+            button_link || null,
+            button_text || 'Перейти'
         );
         
         console.log('✅ Кампания создана:', campaign);
@@ -2334,7 +2341,7 @@ app.post('/api/companies/:companyId/campaigns', async (req, res) => {
 app.put('/api/campaigns/:campaignId', async (req, res) => {
     try {
         const { campaignId } = req.params;
-        const { name, title, message, audience, is_active, interval_days, image_url } = req.body;
+        const { name, title, message, audience, is_active, interval_days, image_url, button_link, button_text } = req.body;
         
         const campaign = await updateNotificationCampaign(
             campaignId,
@@ -2344,7 +2351,9 @@ app.put('/api/campaigns/:campaignId', async (req, res) => {
             audience,
             is_active,
             interval_days,
-            image_url
+            image_url,
+            button_link || null,
+            button_text || 'Перейти'
         );
         
         res.json({ success: true, campaign });
@@ -2398,6 +2407,8 @@ app.post('/api/campaigns/:campaignId/execute', async (req, res) => {
                 title: result.campaign.title,
                 message: result.campaign.message,
                 image_url: result.image_url,
+                button_link: result.button_link,
+                button_text: result.button_text,
                 users: result.users
             };
             
@@ -2433,7 +2444,153 @@ app.get('/api/companies/:companyId/users/segment/:segment', async (req, res) => 
     }
 });
 
+// Добавьте эти эндпоинты в server.js
 
+// ============ API ДЛЯ ГОРОДОВ И АДРЕСОВ (CRM) ============
+
+// Получение всех городов компании
+app.get('/api/companies/:companyId/cities', async (req, res) => {
+    try {
+        const cities = await getCities(req.params.companyId);
+        res.json({ success: true, cities });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Добавление города
+app.post('/api/companies/:companyId/cities', async (req, res) => {
+    try {
+        const { name, sortOrder } = req.body;
+        if (!name) {
+            return res.status(400).json({ success: false, message: 'Название города обязательно' });
+        }
+        const city = await addCity(req.params.companyId, name, sortOrder || 0);
+        res.json({ success: true, city });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Обновление города
+app.put('/api/cities/:cityId', async (req, res) => {
+    try {
+        const { name, isActive, sortOrder } = req.body;
+        const city = await updateCity(req.params.cityId, name, isActive, sortOrder);
+        res.json({ success: true, city });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Удаление города
+app.delete('/api/cities/:cityId', async (req, res) => {
+    try {
+        await deleteCity(req.params.cityId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Получение всех адресов компании
+app.get('/api/companies/:companyId/addresses', async (req, res) => {
+    try {
+        const { cityId } = req.query;
+        const addresses = await getAddresses(req.params.companyId, cityId);
+        res.json({ success: true, addresses });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Добавление адреса
+app.post('/api/companies/:companyId/addresses', async (req, res) => {
+    try {
+        const { cityId, address, latitude, longitude, phone, workingHours, isMain, sortOrder } = req.body;
+        if (!address) {
+            return res.status(400).json({ success: false, message: 'Адрес обязателен' });
+        }
+        const newAddress = await addAddress(req.params.companyId, {
+            cityId, address, latitude, longitude, phone, workingHours, isMain, sortOrder
+        });
+        res.json({ success: true, address: newAddress });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Обновление адреса
+app.put('/api/addresses/:addressId', async (req, res) => {
+    try {
+        const { cityId, address, latitude, longitude, phone, workingHours, isMain, isActive, sortOrder } = req.body;
+        const updatedAddress = await updateAddress(req.params.addressId, {
+            cityId, address, latitude, longitude, phone, workingHours, isMain, isActive, sortOrder
+        });
+        res.json({ success: true, address: updatedAddress });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Удаление адреса
+app.delete('/api/addresses/:addressId', async (req, res) => {
+    try {
+        await deleteAddress(req.params.addressId);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============ API ДЛЯ VK MINI APP - ЛОКАЦИИ ============
+
+// Получение всех локаций для mini-app
+app.get('/api/companies/:companyId/locations', async (req, res) => {
+    try {
+        const locations = await getAllLocationsForApp(req.params.companyId);
+        res.json({ success: true, ...locations });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Получение выбранной локации пользователя
+app.get('/api/users/:userId/location/:companyId', async (req, res) => {
+    try {
+        const location = await getUserSelectedLocation(req.params.userId, req.params.companyId);
+        res.json({ success: true, location });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Сохранение выбранной локации пользователя
+app.post('/api/users/:userId/location/:companyId', async (req, res) => {
+    try {
+        const { addressId } = req.body;
+        if (!addressId) {
+            return res.status(400).json({ success: false, message: 'addressId обязателен' });
+        }
+        const result = await updateUserSelectedLocation(req.params.userId, req.params.companyId, addressId);
+        res.json({ success: true, location: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Получение информации об адресе по ID
+app.get('/api/addresses/:addressId/info', async (req, res) => {
+    try {
+        const address = await getAddressById(req.params.addressId);
+        if (!address) {
+            return res.status(404).json({ success: false, message: 'Адрес не найден' });
+        }
+        res.json({ success: true, address });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 
 const PORT = 3001;

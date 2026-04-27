@@ -402,7 +402,9 @@ async function loadCRMPanel() {
     await loadScratchSettings();
     await loadDiceSettings();  
     loadNotificationsHistory();
-    await loadBonusSettings();  
+    await loadCampaigns();
+    await loadBonusSettings();
+	loadCitiesAndAddresses(); 	
 }
 
 function closeCRMPanel() {
@@ -1004,6 +1006,318 @@ async function sendDirectMessage() {
     } finally {
         sendBtn.textContent = originalText;
         sendBtn.disabled = false;
+    }
+}
+
+// ========== УПРАВЛЕНИЕ КАМПАНИЯМИ ==========
+
+let currentEditingCampaignId = null;
+
+async function loadCampaigns() {
+    if (!currentBusiness) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/campaigns`);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderCampaignsList(data.campaigns);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки кампаний:', error);
+    }
+}
+
+function renderCampaignsList(campaigns) {
+    const container = document.getElementById('campaignsList');
+    if (!container) return;
+    
+    if (!campaigns || campaigns.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">📭 Нет кампаний. Создайте первую!</div>';
+        return;
+    }
+    
+    const audienceNames = {
+        'all': 'Все',
+        'new': 'Новичок',
+        'active': 'Активный',
+        'regular': 'Постоянный',
+        'dormant': 'Спящий',
+        'birthday': 'День рождения'
+    };
+    
+    container.innerHTML = campaigns.map(campaign => {
+        const lastSent = campaign.last_sent_at ? new Date(campaign.last_sent_at).toLocaleString('ru-RU') : 'Не отправлялась';
+        const isActive = campaign.is_active;
+        
+        return `
+            <div style="margin-bottom: 16px; padding: 16px; background: ${isActive ? '#f0fff4' : '#f8f9fa'}; border-radius: 12px; border-left: 4px solid ${isActive ? '#2ecc71' : '#95a5a6'};">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">
+                            ${campaign.is_default ? '📦 ' : ''}${escapeHtml(campaign.name)}
+                            ${campaign.is_default ? '<span style="font-size: 11px; background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; margin-left: 8px;">Шаблон</span>' : ''}
+                        </div>
+                        <div style="font-size: 13px; color: #555; margin-bottom: 4px;">📨 ${escapeHtml(campaign.title)}</div>
+                        <div style="font-size: 12px; color: #888;">
+                            👥 ${audienceNames[campaign.audience] || campaign.audience} • 
+                            ⏰ Раз в ${campaign.interval_days || 1} ${getDaysWord(campaign.interval_days || 1)}
+                            ${campaign.image_url ? ' • 🖼️ С картинкой' : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <span style="font-size: 12px; padding: 4px 12px; border-radius: 20px; background: ${isActive ? '#2ecc71' : '#95a5a6'}; color: white; font-weight: 600;">
+                            ${isActive ? '✅ Включена' : '❌ Выключена'}
+                        </span>
+                    </div>
+                </div>
+                <div style="font-size: 11px; color: #888; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                    🕐 Последняя отправка: ${lastSent}
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button onclick="editCampaign(${campaign.id})" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">✏️ Редактировать</button>
+                    <button onclick="toggleCampaign(${campaign.id}, ${!isActive})" style="padding: 8px 16px; background: ${isActive ? '#e74c3c' : '#2ecc71'}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">
+                        ${isActive ? '⏸️ Выключить' : '▶️ Включить'}
+                    </button>
+                    ${!campaign.is_default ? `<button onclick="deleteCampaign(${campaign.id})" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">🗑️ Удалить</button>` : ''}
+                    <button onclick="sendCampaignNow(${campaign.id})" style="padding: 8px 16px; background: #9b59b6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">🚀 Отправить сейчас</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function getDaysWord(days) {
+    if (days === 1) return 'день';
+    if (days >= 2 && days <= 4) return 'дня';
+    return 'дней';
+}
+
+function showAddCampaignModal() {
+    currentEditingCampaignId = null;
+    document.getElementById('campaignModalTitle').textContent = '➕ Создать кампанию';
+    document.getElementById('campaignName').value = '';
+    document.getElementById('campaignAudience').value = 'all';
+    document.getElementById('campaignTitle').value = '';
+    document.getElementById('campaignMessage').value = '';
+    document.getElementById('campaignImageUrl').value = '';
+    document.getElementById('campaignButtonLink').value = '';
+    document.getElementById('campaignButtonText').value = '';
+    document.getElementById('campaignInterval').value = '7';
+    document.getElementById('campaignActive').checked = false;
+    document.getElementById('campaignSendNow').checked = false;
+    document.getElementById('campaignError').style.display = 'none';
+    
+    // Show interval field by default
+    document.getElementById('campaignIntervalGroup').style.display = 'block';
+    
+    document.getElementById('campaignModal').style.display = 'flex';
+    
+    // Add event listener for audience change
+    document.getElementById('campaignAudience').onchange = function() {
+        const audience = this.value;
+        const intervalGroup = document.getElementById('campaignIntervalGroup');
+        
+        if (audience === 'birthday') {
+            // Hide interval for birthday campaigns
+            intervalGroup.style.display = 'none';
+        } else {
+            // Show interval for other campaigns
+            intervalGroup.style.display = 'block';
+        }
+    };
+}
+
+function closeCampaignModal() {
+    document.getElementById('campaignModal').style.display = 'none';
+}
+
+async function editCampaign(campaignId) {
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/campaigns`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const campaign = data.campaigns.find(c => c.id === campaignId);
+            if (!campaign) return;
+            
+            currentEditingCampaignId = campaignId;
+            document.getElementById('campaignModalTitle').textContent = '✏️ Редактировать кампанию';
+            document.getElementById('campaignName').value = campaign.name;
+            document.getElementById('campaignAudience').value = campaign.audience;
+            document.getElementById('campaignTitle').value = campaign.title;
+            document.getElementById('campaignMessage').value = campaign.message;
+            document.getElementById('campaignImageUrl').value = campaign.image_url || '';
+            document.getElementById('campaignButtonLink').value = campaign.button_link || '';
+            document.getElementById('campaignButtonText').value = campaign.button_text || '';
+            document.getElementById('campaignInterval').value = campaign.interval_days || 7;
+            document.getElementById('campaignActive').checked = campaign.is_active;
+            document.getElementById('campaignSendNow').checked = false;
+            document.getElementById('campaignError').style.display = 'none';
+            
+            // Hide/show interval based on audience
+            const intervalGroup = document.getElementById('campaignIntervalGroup');
+            if (campaign.audience === 'birthday') {
+                intervalGroup.style.display = 'none';
+            } else {
+                intervalGroup.style.display = 'block';
+            }
+            
+            document.getElementById('campaignModal').style.display = 'flex';
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки кампании:', error);
+        alert('❌ Ошибка загрузки кампании');
+    }
+}
+
+async function saveCampaign() {
+    const name = document.getElementById('campaignName').value.trim();
+    const audience = document.getElementById('campaignAudience').value;
+    const title = document.getElementById('campaignTitle').value.trim();
+    const message = document.getElementById('campaignMessage').value.trim();
+    const imageUrl = document.getElementById('campaignImageUrl').value.trim() || null;
+    const buttonLink = document.getElementById('campaignButtonLink').value.trim() || null;
+    const buttonText = document.getElementById('campaignButtonText').value.trim() || 'Перейти';
+    const intervalDays = audience === 'birthday' ? 1 : (parseInt(document.getElementById('campaignInterval').value) || 7);
+    const isActive = document.getElementById('campaignActive').checked;
+    const sendNow = document.getElementById('campaignSendNow').checked;
+    
+    if (!name || !title || !message) {
+        const errorEl = document.getElementById('campaignError');
+        errorEl.textContent = '❌ Заполните название, заголовок и сообщение';
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    // Check if trying to create a second birthday campaign
+    if (audience === 'birthday' && !currentEditingCampaignId) {
+        // Load existing campaigns to check
+        try {
+            const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/campaigns`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const hasBirthdayCampaign = data.campaigns.some(c => c.audience === 'birthday');
+                if (hasBirthdayCampaign) {
+                    const errorEl = document.getElementById('campaignError');
+                    errorEl.textContent = '❌ Кампания дня рождения уже существует. Нельзя создать более одной.';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка проверки кампаний:', error);
+        }
+    }
+    
+    try {
+        const url = currentEditingCampaignId 
+            ? `${API_URL}/api/campaigns/${currentEditingCampaignId}`
+            : `${API_URL}/api/companies/${currentBusiness.id}/campaigns`;
+        
+        const method = currentEditingCampaignId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                title,
+                message,
+                audience,
+                image_url: imageUrl,
+                button_link: buttonLink,
+                button_text: buttonText,
+                interval_days: intervalDays,
+                is_active: isActive
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Если нужно отправить сразу
+            if (sendNow && isActive) {
+                await sendCampaignNow(data.campaign.id || currentEditingCampaignId);
+            }
+            
+            closeCampaignModal();
+            await loadCampaigns();
+            alert(`✅ Кампания ${currentEditingCampaignId ? 'обновлена' : 'создана'}!`);
+        } else {
+            const errorEl = document.getElementById('campaignError');
+            errorEl.textContent = '❌ ' + (data.message || data.error);
+            errorEl.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения кампании:', error);
+        const errorEl = document.getElementById('campaignError');
+        errorEl.textContent = '❌ Ошибка сохранения: ' + error.message;
+        errorEl.style.display = 'block';
+    }
+}
+
+async function toggleCampaign(campaignId, isActive) {
+    try {
+        const response = await fetch(`${API_URL}/api/campaigns/${campaignId}/toggle`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: isActive })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadCampaigns();
+            alert(isActive ? '✅ Кампания включена' : '⏸️ Кампания выключена');
+        }
+    } catch (error) {
+        console.error('Ошибка переключения кампании:', error);
+        alert('❌ Ошибка переключения кампании');
+    }
+}
+
+async function deleteCampaign(campaignId) {
+    if (!confirm('❓ Вы уверены, что хотите удалить эту кампанию?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/campaigns/${campaignId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadCampaigns();
+            alert('✅ Кампания удалена');
+        }
+    } catch (error) {
+        console.error('Ошибка удаления кампании:', error);
+        alert('❌ Ошибка удаления кампании');
+    }
+}
+
+async function sendCampaignNow(campaignId) {
+    if (!confirm('🚀 Отправить кампанию прямо сейчас?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/campaigns/${campaignId}/execute`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            await loadCampaigns();
+            await loadNotificationsHistory();
+            alert(`✅ Кампания отправлена ${data.sentCount || 0} пользователям`);
+        } else {
+            alert('❌ Ошибка отправки: ' + (data.message || data.error));
+        }
+    } catch (error) {
+        console.error('Ошибка отправки кампании:', error);
+        alert('❌ Ошибка отправки кампании');
     }
 }
 
@@ -3425,4 +3739,269 @@ async function saveBonusSettings() {
         saveBtn.textContent = originalText;
         saveBtn.disabled = false;
     }
+}
+// ============ УПРАВЛЕНИЕ ГОРОДАМИ И АДРЕСАМИ ==========
+
+let cities = [];
+let addresses = [];
+
+async function loadCitiesAndAddresses() {
+    if (!currentBusiness) return;
+    
+    try {
+        // Загружаем города
+        const citiesResponse = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/cities`);
+        const citiesData = await citiesResponse.json();
+        if (citiesData.success) {
+            cities = citiesData.cities;
+            renderCitiesList();
+        }
+        
+        // Загружаем адреса
+        const addressesResponse = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/addresses`);
+        const addressesData = await addressesResponse.json();
+        if (addressesData.success) {
+            addresses = addressesData.addresses;
+            renderAddressesList();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки локаций:', error);
+    }
+}
+
+function renderCitiesList() {
+    const container = document.getElementById('citiesList');
+    if (!container) return;
+    
+    if (!cities || cities.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">Нет городов</div>';
+        return;
+    }
+    
+    container.innerHTML = cities.map(city => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
+            <span>${escapeHtml(city.name)}</span>
+            <div>
+                <button onclick="editCity(${city.id})" style="background: #3498db; border: none; border-radius: 4px; padding: 4px 8px; color: white; cursor: pointer; margin-right: 4px;">✏️</button>
+                <button onclick="deleteCity(${city.id})" style="background: #e74c3c; border: none; border-radius: 4px; padding: 4px 8px; color: white; cursor: pointer;">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderAddressesList() {
+    const container = document.getElementById('addressesList');
+    if (!container) return;
+    
+    if (!addresses || addresses.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">Нет адресов</div>';
+        return;
+    }
+    
+    container.innerHTML = addresses.map(addr => `
+        <div style="display: flex; justify-content: space-between; align-items: start; padding: 12px; border-bottom: 1px solid #eee; ${addr.is_main ? 'background: #e8f5e9;' : ''}">
+            <div style="flex: 1;">
+                <div>
+                    <strong>${escapeHtml(addr.address)}</strong>
+                    ${addr.is_main ? '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">Основной</span>' : ''}
+                </div>
+                <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                    ${addr.city_name ? `🏙️ ${escapeHtml(addr.city_name)}` : '🌍 Без города'}
+                    ${addr.phone ? ` • 📞 ${addr.phone}` : ''}
+                    ${addr.working_hours ? ` • ⏰ ${addr.working_hours.substring(0, 50)}${addr.working_hours.length > 50 ? '...' : ''}` : ''}
+                </div>
+            </div>
+            <div>
+                <button onclick="editAddress(${addr.id})" style="background: #3498db; border: none; border-radius: 4px; padding: 4px 8px; color: white; cursor: pointer; margin-right: 4px;">✏️</button>
+                <button onclick="deleteAddress(${addr.id})" style="background: #e74c3c; border: none; border-radius: 4px; padding: 4px 8px; color: white; cursor: pointer;">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+let currentEditingCityId = null;
+let currentEditingAddressId = null;
+
+function openCityModal() {
+    currentEditingCityId = null;
+    document.getElementById('cityModalTitle').textContent = '➕ Добавить город';
+    document.getElementById('cityName').value = '';
+    document.getElementById('citySortOrder').value = 0;
+    document.getElementById('cityModal').style.display = 'flex';
+}
+
+function editCity(cityId) {
+    const city = cities.find(c => c.id === cityId);
+    if (!city) return;
+    
+    currentEditingCityId = cityId;
+    document.getElementById('cityModalTitle').textContent = '✏️ Редактировать город';
+    document.getElementById('cityName').value = city.name;
+    document.getElementById('citySortOrder').value = city.sort_order || 0;
+    document.getElementById('cityModal').style.display = 'flex';
+}
+
+async function saveCity() {
+    const name = document.getElementById('cityName').value.trim();
+    const sortOrder = parseInt(document.getElementById('citySortOrder').value) || 0;
+    
+    if (!name) {
+        alert('Введите название города');
+        return;
+    }
+    
+    try {
+        let response;
+        if (currentEditingCityId) {
+            response = await fetch(`${API_URL}/api/cities/${currentEditingCityId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, isActive: true, sortOrder })
+            });
+        } else {
+            response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/cities`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, sortOrder })
+            });
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+            closeCityModal();
+            await loadCitiesAndAddresses();
+            alert(`Город ${currentEditingCityId ? 'обновлен' : 'добавлен'}!`);
+        } else {
+            alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения города:', error);
+        alert('Ошибка сервера');
+    }
+}
+
+async function deleteCity(cityId) {
+    if (!confirm('Удалить город? Все адреса этого города также будут скрыты.')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/cities/${cityId}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        if (data.success) {
+            await loadCitiesAndAddresses();
+            alert('Город удален');
+        }
+    } catch (error) {
+        console.error('Ошибка удаления города:', error);
+        alert('Ошибка сервера');
+    }
+}
+
+function closeCityModal() {
+    document.getElementById('cityModal').style.display = 'none';
+}
+
+function openAddressModal() {
+    currentEditingAddressId = null;
+    document.getElementById('addressModalTitle').textContent = '➕ Добавить адрес';
+    document.getElementById('addressCityId').value = '';
+    document.getElementById('addressText').value = '';
+    document.getElementById('addressLatitude').value = '';
+    document.getElementById('addressLongitude').value = '';
+    document.getElementById('addressPhone').value = '';
+    document.getElementById('addressWorkingHours').value = '';
+    document.getElementById('addressIsMain').checked = false;
+    document.getElementById('addressModal').style.display = 'flex';
+    
+    // Заполняем select городов
+    const citySelect = document.getElementById('addressCityId');
+    citySelect.innerHTML = '<option value="">-- Без города --</option>' + 
+        cities.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+}
+
+function editAddress(addressId) {
+    const address = addresses.find(a => a.id === addressId);
+    if (!address) return;
+    
+    currentEditingAddressId = addressId;
+    document.getElementById('addressModalTitle').textContent = '✏️ Редактировать адрес';
+    
+    const citySelect = document.getElementById('addressCityId');
+    citySelect.innerHTML = '<option value="">-- Без города --</option>' + 
+        cities.map(c => `<option value="${c.id}" ${address.city_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+    
+    document.getElementById('addressText').value = address.address;
+    document.getElementById('addressLatitude').value = address.latitude || '';
+    document.getElementById('addressLongitude').value = address.longitude || '';
+    document.getElementById('addressPhone').value = address.phone || '';
+    document.getElementById('addressWorkingHours').value = address.working_hours || '';
+    document.getElementById('addressIsMain').checked = address.is_main || false;
+    document.getElementById('addressModal').style.display = 'flex';
+}
+
+async function saveAddress() {
+    const cityId = document.getElementById('addressCityId').value || null;
+    const address = document.getElementById('addressText').value.trim();
+    const latitude = document.getElementById('addressLatitude').value || null;
+    const longitude = document.getElementById('addressLongitude').value || null;
+    const phone = document.getElementById('addressPhone').value || null;
+    const workingHours = document.getElementById('addressWorkingHours').value || null;
+    const isMain = document.getElementById('addressIsMain').checked;
+    
+    if (!address) {
+        alert('Введите адрес');
+        return;
+    }
+    
+    try {
+        let response;
+        if (currentEditingAddressId) {
+            response = await fetch(`${API_URL}/api/addresses/${currentEditingAddressId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cityId, address, latitude, longitude, phone, workingHours, isMain, isActive: true })
+            });
+        } else {
+            response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/addresses`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cityId, address, latitude, longitude, phone, workingHours, isMain })
+            });
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+            closeAddressModal();
+            await loadCitiesAndAddresses();
+            alert(`Адрес ${currentEditingAddressId ? 'обновлен' : 'добавлен'}!`);
+        } else {
+            alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения адреса:', error);
+        alert('Ошибка сервера');
+    }
+}
+
+async function deleteAddress(addressId) {
+    if (!confirm('Удалить адрес?')) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/addresses/${addressId}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        if (data.success) {
+            await loadCitiesAndAddresses();
+            alert('Адрес удален');
+        }
+    } catch (error) {
+        console.error('Ошибка удаления адреса:', error);
+        alert('Ошибка сервера');
+    }
+}
+
+function closeAddressModal() {
+    document.getElementById('addressModal').style.display = 'none';
 }

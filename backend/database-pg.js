@@ -224,7 +224,8 @@ async function initDatabase() {
         `);
 
         console.log('✅ Таблицы созданы/проверены');
-        
+		
+         await initLocationTables();
         await addMissingColumns();
 		await addGiveawayColumns();
 		await migrateGiveawaysTable();
@@ -2707,6 +2708,45 @@ async function addNotificationCampaignColumns() {
             console.log('✅ Колонка sent_at добавлена в notifications');
         }
         
+        // Проверяем и добавляем колонку button_link в таблицу notification_campaigns
+        const checkButtonLink = await query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'notification_campaigns' AND column_name = 'button_link'
+        `);
+        
+        if (checkButtonLink.rows.length === 0) {
+            console.log('📝 Добавляем колонку button_link в таблицу notification_campaigns...');
+            await query(`ALTER TABLE notification_campaigns ADD COLUMN button_link TEXT`);
+            console.log('✅ Колонка button_link добавлена');
+        }
+        
+        // Проверяем и добавляем колонку button_text в таблицу notification_campaigns
+        const checkButtonText = await query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'notification_campaigns' AND column_name = 'button_text'
+        `);
+        
+        if (checkButtonText.rows.length === 0) {
+            console.log('📝 Добавляем колонку button_text в таблицу notification_campaigns...');
+            await query(`ALTER TABLE notification_campaigns ADD COLUMN button_text VARCHAR(50) DEFAULT 'Перейти'`);
+            console.log('✅ Колонка button_text добавлена');
+        }
+        
+        // Проверяем и добавляем колонку image_url в таблицу notifications
+        const checkNotifImage = await query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'notifications' AND column_name = 'image_url'
+        `);
+        
+        if (checkNotifImage.rows.length === 0) {
+            console.log('📝 Добавляем колонку image_url в таблицу notifications...');
+            await query(`ALTER TABLE notifications ADD COLUMN image_url TEXT`);
+            console.log('✅ Колонка image_url добавлена в notifications');
+        }
+        
         console.log('✅ Все колонки notification_campaigns проверены');
     } catch (error) {
         console.error('❌ Ошибка добавления колонок notification_campaigns:', error);
@@ -2777,13 +2817,13 @@ async function getNotificationCampaigns(companyId) {
 }
 
 // Добавление кампании
-async function addNotificationCampaign(companyId, name, title, message, audience, isActive = true, intervalDays = 1, imageUrl = null, isDefault = false) {
+async function addNotificationCampaign(companyId, name, title, message, audience, isActive = true, intervalDays = 1, imageUrl = null, isDefault = false, buttonLink = null, buttonText = 'Перейти') {
     try {
         const result = await query(
-            `INSERT INTO notification_campaigns (company_id, name, title, message, audience, is_active, interval_days, image_url, is_default)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `INSERT INTO notification_campaigns (company_id, name, title, message, audience, is_active, interval_days, image_url, is_default, button_link, button_text)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING *`,
-            [companyId, name, title, message, audience, isActive, intervalDays, imageUrl, isDefault]
+            [companyId, name, title, message, audience, isActive, intervalDays, imageUrl, isDefault, buttonLink, buttonText]
         );
         console.log(`✅ Кампания добавлена: ${name}`);
         return result.rows[0];
@@ -2794,14 +2834,14 @@ async function addNotificationCampaign(companyId, name, title, message, audience
 }
 
 // Обновление кампании
-async function updateNotificationCampaign(campaignId, name, title, message, audience, isActive, intervalDays, imageUrl) {
+async function updateNotificationCampaign(campaignId, name, title, message, audience, isActive, intervalDays, imageUrl, buttonLink, buttonText) {
     try {
         const result = await query(
             `UPDATE notification_campaigns 
-             SET name = $2, title = $3, message = $4, audience = $5, is_active = $6, interval_days = $7, image_url = $8, updated_at = NOW()
+             SET name = $2, title = $3, message = $4, audience = $5, is_active = $6, interval_days = $7, image_url = $8, updated_at = NOW(), button_link = $9, button_text = $10
              WHERE id = $1
              RETURNING *`,
-            [campaignId, name, title, message, audience, isActive, intervalDays, imageUrl]
+            [campaignId, name, title, message, audience, isActive, intervalDays, imageUrl, buttonLink, buttonText]
         );
         console.log(`✅ Кампания обновлена: ${name}`);
         return result.rows[0];
@@ -2909,6 +2949,16 @@ async function getUsersBySegment(companyId, audience) {
                     WHERE u.company_id = $1 AND uc.user_type = 'dormant'
                 `;
                 break;
+            case 'birthday':
+                // Получаем пользователей с днем рождения в текущем месяце из mini-app
+                const currentMonth = new Date().getMonth() + 1; // PostgreSQL months are 1-12
+                userQuery = `
+                    SELECT u.vk_id, u.name, u.company_id
+                    FROM users u
+                    WHERE u.company_id = $1 
+                    AND EXTRACT(MONTH FROM u.birthday) = $2
+                `;
+                break;
             default: // all
                 userQuery = `
                     SELECT vk_id, name, company_id
@@ -2917,7 +2967,9 @@ async function getUsersBySegment(companyId, audience) {
                 `;
         }
         
-        const result = await query(userQuery, [companyId]);
+        // Для birthday передаем дополнительный параметр - месяц
+        const queryParams = audience === 'birthday' ? [companyId, currentMonth] : [companyId];
+        const result = await query(userQuery, queryParams);
         return result.rows;
     } catch (error) {
         console.error('❌ Ошибка получения пользователей по сегменту:', error);
@@ -2942,9 +2994,9 @@ async function executeCampaign(campaignId) {
         
         // Сохраняем в историю рассылок
         await query(
-            `INSERT INTO notifications (company_id, title, message, audience, status, sent_count, sent_at)
-             VALUES ($1, $2, $3, $4, 'sent', $5, NOW())`,
-            [campaign.company_id, campaign.title, campaign.message, campaign.audience, users.length]
+            `INSERT INTO notifications (company_id, title, message, audience, status, sent_count, sent_at, image_url)
+             VALUES ($1, $2, $3, $4, 'sent', $5, NOW(), $6)`,
+            [campaign.company_id, campaign.title, campaign.message, campaign.audience, users.length, campaign.image_url]
         );
         
         // Обновляем last_sent_at
@@ -2960,7 +3012,9 @@ async function executeCampaign(campaignId) {
             campaign: campaign,
             users: users.map(u => ({ vk_id: u.vk_id, name: u.name })),
             sentCount: users.length,
-            image_url: campaign.image_url
+            image_url: campaign.image_url,
+            button_link: campaign.button_link,
+            button_text: campaign.button_text || 'Перейти'
         };
     } catch (error) {
         console.error('❌ Ошибка выполнения кампании:', error);
@@ -2984,6 +3038,320 @@ async function saveNotificationToHistory(companyId, title, message, audience, se
         return null;
     }
 }
+
+// Добавьте эти функции в database-pg.js после существующих
+
+// ============ API ДЛЯ ГОРОДОВ И АДРЕСОВ ============
+
+// Создание таблиц городов и адресов
+async function initLocationTables() {
+    try {
+        // Таблица городов
+        await query(`
+            CREATE TABLE IF NOT EXISTS cities (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL,
+                is_active BOOLEAN DEFAULT true,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(company_id, name)
+            )
+        `);
+        
+        // Таблица адресов
+        await query(`
+            CREATE TABLE IF NOT EXISTS addresses (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                city_id INTEGER REFERENCES cities(id) ON DELETE SET NULL,
+                address TEXT NOT NULL,
+                latitude DECIMAL(10, 8),
+                longitude DECIMAL(11, 8),
+                phone VARCHAR(50),
+                working_hours TEXT,
+                is_main BOOLEAN DEFAULT false,
+                is_active BOOLEAN DEFAULT true,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        
+        // Таблица выбранных локаций пользователей (ДОБАВИТЬ СЮДА)
+        await query(`
+            CREATE TABLE IF NOT EXISTS user_selected_locations (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+                selected_address_id INTEGER NOT NULL REFERENCES addresses(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, company_id)
+            )
+        `);
+        
+        console.log('✅ Таблицы городов, адресов и выбранных локаций созданы/проверены');
+    } catch (error) {
+        console.error('❌ Ошибка создания таблиц локаций:', error);
+    }
+}
+
+// Получить все города компании
+async function getCities(companyId) {
+    const result = await query(
+        'SELECT * FROM cities WHERE company_id = $1 AND is_active = true ORDER BY sort_order, name',
+        [companyId]
+    );
+    return result.rows;
+}
+
+// Получить город по ID
+async function getCityById(cityId) {
+    const result = await query('SELECT * FROM cities WHERE id = $1', [cityId]);
+    return result.rows[0];
+}
+
+// Добавить город
+async function addCity(companyId, name, sortOrder = 0) {
+    const result = await query(
+        `INSERT INTO cities (company_id, name, sort_order) 
+         VALUES ($1, $2, $3) 
+         ON CONFLICT (company_id, name) DO UPDATE SET 
+            is_active = true, 
+            updated_at = NOW()
+         RETURNING *`,
+        [companyId, name, sortOrder]
+    );
+    return result.rows[0];
+}
+
+// Обновить город
+async function updateCity(cityId, name, isActive, sortOrder) {
+    const result = await query(
+        `UPDATE cities 
+         SET name = $1, is_active = $2, sort_order = $3, updated_at = NOW()
+         WHERE id = $4 
+         RETURNING *`,
+        [name, isActive, sortOrder, cityId]
+    );
+    return result.rows[0];
+}
+
+// Удалить город (мягкое удаление)
+async function deleteCity(cityId) {
+    await query('UPDATE cities SET is_active = false WHERE id = $1', [cityId]);
+    // Также деактивируем связанные адреса
+    await query('UPDATE addresses SET is_active = false WHERE city_id = $1', [cityId]);
+    return true;
+}
+
+// Получить все адреса компании
+async function getAddresses(companyId, cityId = null) {
+    let queryText = `
+        SELECT a.*, c.name as city_name 
+        FROM addresses a
+        LEFT JOIN cities c ON a.city_id = c.id
+        WHERE a.company_id = $1 AND a.is_active = true
+    `;
+    const params = [companyId];
+    
+    if (cityId) {
+        queryText += ` AND a.city_id = $2`;
+        params.push(cityId);
+    }
+    
+    queryText += ` ORDER BY a.is_main DESC, a.sort_order, a.address`;
+    
+    const result = await query(queryText, params);
+    return result.rows;
+}
+
+// Получить адрес по ID
+async function getAddressById(addressId) {
+    const result = await query(
+        `SELECT a.*, c.name as city_name 
+         FROM addresses a
+         LEFT JOIN cities c ON a.city_id = c.id
+         WHERE a.id = $1`,
+        [addressId]
+    );
+    return result.rows[0];
+}
+
+// Добавить адрес
+async function addAddress(companyId, addressData) {
+    const { cityId, address, latitude, longitude, phone, workingHours, isMain, sortOrder = 0 } = addressData;
+    
+    // Если этот адрес устанавливается как основной, сбрасываем флаг у других адресов
+    if (isMain) {
+        await query(
+            'UPDATE addresses SET is_main = false WHERE company_id = $1',
+            [companyId]
+        );
+    }
+    
+    const result = await query(
+        `INSERT INTO addresses (company_id, city_id, address, latitude, longitude, phone, working_hours, is_main, sort_order) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+         RETURNING *`,
+        [companyId, cityId || null, address, latitude || null, longitude || null, phone || null, workingHours || null, isMain || false, sortOrder]
+    );
+    return result.rows[0];
+}
+
+// Обновить адрес
+async function updateAddress(addressId, addressData) {
+    const { cityId, address, latitude, longitude, phone, workingHours, isMain, isActive, sortOrder } = addressData;
+    
+    // Если этот адрес устанавливается как основной, сбрасываем флаг у других адресов
+    if (isMain) {
+        const addr = await getAddressById(addressId);
+        if (addr) {
+            await query(
+                'UPDATE addresses SET is_main = false WHERE company_id = $1',
+                [addr.company_id]
+            );
+        }
+    }
+    
+    const result = await query(
+        `UPDATE addresses 
+         SET city_id = $1, address = $2, latitude = $3, longitude = $4, 
+             phone = $5, working_hours = $6, is_main = $7, is_active = $8, 
+             sort_order = $9, updated_at = NOW()
+         WHERE id = $10 
+         RETURNING *`,
+        [cityId || null, address, latitude || null, longitude || null, 
+         phone || null, workingHours || null, isMain || false, isActive !== undefined ? isActive : true, 
+         sortOrder || 0, addressId]
+    );
+    return result.rows[0];
+}
+
+// Удалить адрес (мягкое удаление)
+async function deleteAddress(addressId) {
+    await query('UPDATE addresses SET is_active = false WHERE id = $1', [addressId]);
+    return true;
+}
+
+// Получить основную локацию (город + адрес) для отображения в mini-app
+async function getMainLocation(companyId) {
+    // Сначала пытаемся получить основной адрес
+    let address = await query(
+        `SELECT a.*, c.name as city_name 
+         FROM addresses a
+         LEFT JOIN cities c ON a.city_id = c.id
+         WHERE a.company_id = $1 AND a.is_active = true AND a.is_main = true
+         LIMIT 1`,
+        [companyId]
+    );
+    
+    if (address.rows.length > 0) {
+        return {
+            city: address.rows[0].city_name,
+            address: address.rows[0].address,
+            addressId: address.rows[0].id,
+            phone: address.rows[0].phone,
+            workingHours: address.rows[0].working_hours,
+            latitude: address.rows[0].latitude,
+            longitude: address.rows[0].longitude
+        };
+    }
+    
+    // Если нет основного адреса, берем первый активный
+    address = await query(
+        `SELECT a.*, c.name as city_name 
+         FROM addresses a
+         LEFT JOIN cities c ON a.city_id = c.id
+         WHERE a.company_id = $1 AND a.is_active = true
+         ORDER BY a.sort_order
+         LIMIT 1`,
+        [companyId]
+    );
+    
+    if (address.rows.length > 0) {
+        return {
+            city: address.rows[0].city_name,
+            address: address.rows[0].address,
+            addressId: address.rows[0].id,
+            phone: address.rows[0].phone,
+            workingHours: address.rows[0].working_hours,
+            latitude: address.rows[0].latitude,
+            longitude: address.rows[0].longitude
+        };
+    }
+    
+    return null;
+}
+
+// Получить все локации для отображения в mini-app (для выбора города и адреса)
+async function getAllLocationsForApp(companyId) {
+    const cities = await getCities(companyId);
+    const addresses = await getAddresses(companyId);
+    
+    // Группируем адреса по городам
+    const locationsByCity = {};
+    for (const city of cities) {
+        locationsByCity[city.id] = {
+            cityId: city.id,
+            cityName: city.name,
+            addresses: addresses.filter(a => a.city_id === city.id)
+        };
+    }
+    
+    // Добавляем адреса без города
+    const addressesWithoutCity = addresses.filter(a => !a.city_id);
+    if (addressesWithoutCity.length > 0) {
+        locationsByCity['no_city'] = {
+            cityId: null,
+            cityName: 'Другие адреса',
+            addresses: addressesWithoutCity
+        };
+    }
+    
+    return {
+        cities: cities,
+        addresses: addresses,
+        locationsByCity: locationsByCity,
+        mainLocation: await getMainLocation(companyId)
+    };
+}
+
+// Обновить выбранную локацию пользователя
+async function updateUserSelectedLocation(userId, companyId, addressId) {
+    const result = await query(
+        `INSERT INTO user_selected_locations (user_id, company_id, selected_address_id, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (user_id, company_id) 
+         DO UPDATE SET selected_address_id = $3, updated_at = NOW()
+         RETURNING *`,
+        [userId, companyId, addressId]
+    );
+    return result.rows[0];
+}
+
+// Получить выбранную локацию пользователя
+async function getUserSelectedLocation(userId, companyId) {
+    const result = await query(
+        `SELECT usl.*, a.address, a.city_id, c.name as city_name, a.phone, a.working_hours, a.latitude, a.longitude
+         FROM user_selected_locations usl
+         LEFT JOIN addresses a ON usl.selected_address_id = a.id
+         LEFT JOIN cities c ON a.city_id = c.id
+         WHERE usl.user_id = $1 AND usl.company_id = $2`,
+        [userId, companyId]
+    );
+    
+    if (result.rows.length > 0) {
+        return result.rows[0];
+    }
+    
+    // Если нет выбранной локации, возвращаем основную
+    return await getMainLocation(companyId);
+}
+
+
 
 module.exports = {
     pool,
@@ -3073,5 +3441,19 @@ module.exports = {
     getActiveCampaigns,
     getUsersBySegment,
     executeCampaign,
-	saveNotificationToHistory
+	saveNotificationToHistory,
+	initLocationTables,
+    getCities,
+    addCity,
+    updateCity,
+    deleteCity,
+    getAddresses,
+    getAddressById,
+    addAddress,
+    updateAddress,
+    deleteAddress,
+    getAllLocationsForApp,
+    getUserSelectedLocation,
+    updateUserSelectedLocation,
+    getMainLocation
 };

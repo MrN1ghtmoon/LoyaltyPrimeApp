@@ -9,8 +9,17 @@ import { DiceRoll } from './components/DiceRoll';
 import { ScratchCard } from './components/ScratchCard';
 import { Giveaways } from './components/Giveaways';
 
+// mini-app/src/App.js
+const API_URL = 'http://localhost:3001'; // Локальный бэкенд
 
-const API_URL = 'http://localhost:3001';
+// Или лучше так:
+const getApiUrl = () => {
+  if (window.location.hostname === 'localhost') {
+    return 'http://localhost:3001';
+  }
+  return 'https://ваш-бэкенд.onrender.com'; 
+};
+
 
 // Определяем DEFAULT_TIERS ДО его использования
 const DEFAULT_TIERS = [
@@ -40,6 +49,10 @@ export function App() {
   const [birthdayDate, setBirthdayDate] = useState(null);
   const [showBirthdayModal, setShowBirthdayModal] = useState(false);
   const [purchasedPromotions, setPurchasedPromotions] = useState([]);
+  const [locations, setLocations] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [showLocationSelector, setShowLocationSelector] = useState(false);
+  const [selectedCityId, setSelectedCityId] = useState(null);
   
   const getCurrentTier = (balance) => {
     if (tiers && tiers.length > 0) {
@@ -206,6 +219,59 @@ function getMinutesWord(minutes) {
     default: return 'минут';
   }
 }
+
+const loadLocations = async () => {
+    if (!selectedGroup?.id) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${selectedGroup.id}/locations`);
+        const data = await response.json();
+        
+        if (data.success) {
+            setLocations(data);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки локаций:', error);
+    }
+};
+// Загрузка выбранной локации пользователя
+const loadUserSelectedLocation = async () => {
+    if (!userId || !selectedGroup?.id) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/users/${userId}/location/${selectedGroup.id}`);
+        const data = await response.json();
+        
+        if (data.success && data.location) {
+            setSelectedLocation(data.location);
+        } else if (locations?.mainLocation) {
+            setSelectedLocation(locations.mainLocation);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки выбранной локации:', error);
+    }
+};
+const saveSelectedLocation = async (addressId) => {
+    if (!userId || !selectedGroup?.id) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/users/${userId}/location/${selectedGroup.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addressId })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            await loadUserSelectedLocation();
+            setShowLocationSelector(false);
+            showModal('📍 Адрес сохранен', 'Ваш адрес выбран. При следующем посещении он будет использоваться по умолчанию.');
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения локации:', error);
+        showModal('Ошибка', 'Не удалось сохранить адрес');
+    }
+};
 const loadUserData = async (companyId, vkUserId, userName) => {
     try {
       const response = await fetch(`${API_URL}/api/users/getOrCreate`, {
@@ -567,6 +633,13 @@ const loadUserData = async (companyId, vkUserId, userName) => {
       window.removeEventListener('focus', syncBalanceFromDB);
     };
   }, [userId, selectedGroup]);
+  // Добавьте useEffect для загрузки локаций и выбранного адреса
+useEffect(() => {
+    if (selectedGroup?.id && userId) {
+        loadLocations();
+        loadUserSelectedLocation();
+    }
+}, [selectedGroup?.id, userId]);
 
   const handleSelectGroup = async (company) => {
     // Извлекаем цвет бренда из компании (поддерживаем оба формата)
@@ -743,7 +816,41 @@ const loadUserData = async (companyId, vkUserId, userName) => {
         <span style={{ fontWeight:700, color:'#ffd966' }}>{currentGroupData?.regDate}</span>
       </div>
     </div>
-    
+	{/* Блок с выбранным адресом */}
+    {selectedLocation && (
+        <div 
+            style={{ 
+                background: 'rgba(30,35,48,0.7)', 
+                borderRadius: 28, 
+                padding: 16, 
+                marginBottom: 16,
+                cursor: 'pointer',
+                border: `1px solid ${selectedGroup?.color}40`
+            }}
+            onClick={() => setShowLocationSelector(true)}
+        >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 24 }}>📍</span>
+                <div style={{ flex: 1 }}>
+                    {selectedLocation.city && (
+                        <div style={{ fontSize: 13, opacity: 0.7, color: 'white' }}>
+                            {selectedLocation.city}
+                        </div>
+                    )}
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'white' }}>
+                        {selectedLocation.address?.substring(0, 50)}
+                        {selectedLocation.address?.length > 50 ? '...' : ''}
+                    </div>
+                    {selectedLocation.phone && (
+                        <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, color: 'white' }}>
+                            📞 {selectedLocation.phone}
+                        </div>
+                    )}
+                </div>
+                <div style={{ fontSize: 20, color: 'white' }}>▼</div>
+            </div>
+        </div>
+    )}
     {/* Блок с активными акциями на главной */}
     {promotions.length > 0 && (
       <div style={{ background:'rgba(30,35,48,0.7)', borderRadius:28, padding:20, marginTop:20 }}>
@@ -832,6 +939,107 @@ const loadUserData = async (companyId, vkUserId, userName) => {
       </div>
     )}
   </>
+)}
+{showLocationSelector && locations && (
+    <div style={{ position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', backdropFilter:'blur(8px)', display:'flex', alignItems:'flex-start', justifyContent:'center', zIndex:2000, padding:20, overflowY:'auto' }} onClick={() => setShowLocationSelector(false)}>
+        <div style={{ background:'linear-gradient(135deg,#1e2538,#131825)', borderRadius:32, maxWidth:500, width:'100%', maxHeight:'80vh', overflow:'auto', position:'relative' }} onClick={e=>e.stopPropagation()}>
+            <div style={{ padding:24 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+                    <h3 style={{ color:'white', fontSize:20 }}>📍 Выберите адрес</h3>
+                    <button onClick={() => setShowLocationSelector(false)} style={{ background:'none', border:'none', fontSize:24, color:'white', cursor:'pointer' }}>✕</button>
+                </div>
+                
+                {locations?.cities && locations.cities.length > 0 && (
+                    <>
+                        {locations.cities.map(city => {
+                            const cityAddresses = locations.addresses?.filter(a => a.city_id === city.id) || [];
+                            if (cityAddresses.length === 0) return null;
+                            
+                            return (
+                                <div key={city.id} style={{ marginBottom: 24 }}>
+                                    <h4 style={{ color: '#ffd966', fontSize: 16, marginBottom: 12, paddingLeft: 8 }}>
+                                        🏙️ {city.name}
+                                    </h4>
+                                    {cityAddresses.map(addr => (
+                                        <div 
+                                            key={addr.id}
+                                            onClick={() => saveSelectedLocation(addr.id)}
+                                            style={{ 
+                                                background: selectedLocation?.addressId === addr.id ? `${selectedGroup?.color}20` : 'rgba(255,255,255,0.05)',
+                                                borderRadius: 20,
+                                                padding: 14,
+                                                marginBottom: 8,
+                                                cursor: 'pointer',
+                                                border: selectedLocation?.addressId === addr.id ? `2px solid ${selectedGroup?.color}` : '1px solid rgba(255,255,255,0.1)'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                <span style={{ fontSize: 20 }}>{addr.is_main ? '⭐' : '📍'}</span>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ color: 'white', fontWeight: 500 }}>{addr.address}</div>
+                                                    {addr.phone && (
+                                                        <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, color: 'white' }}>
+                                                            📞 {addr.phone}
+                                                        </div>
+                                                    )}
+                                                    {addr.working_hours && (
+                                                        <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2, color: 'white' }}>
+                                                            ⏰ {addr.working_hours}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {selectedLocation?.addressId === addr.id && (
+                                                    <div style={{ color: '#2ecc71', fontSize: 20 }}>✓</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })}
+                    </>
+                )}
+                
+                {/* Адреса без города */}
+                {locations?.addresses?.filter(a => !a.city_id).length > 0 && (
+                    <div>
+                        <h4 style={{ color: '#ffd966', fontSize: 16, marginBottom: 12, paddingLeft: 8 }}>📍 Другие адреса</h4>
+                        {locations.addresses.filter(a => !a.city_id).map(addr => (
+                            <div 
+                                key={addr.id}
+                                onClick={() => saveSelectedLocation(addr.id)}
+                                style={{ 
+                                    background: selectedLocation?.addressId === addr.id ? `${selectedGroup?.color}20` : 'rgba(255,255,255,0.05)',
+                                    borderRadius: 20,
+                                    padding: 14,
+                                    marginBottom: 8,
+                                    cursor: 'pointer',
+                                    border: selectedLocation?.addressId === addr.id ? `2px solid ${selectedGroup?.color}` : '1px solid rgba(255,255,255,0.1)'
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <span style={{ fontSize: 20 }}>📍</span>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ color: 'white', fontWeight: 500 }}>{addr.address}</div>
+                                        {addr.phone && <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, color: 'white' }}>📞 {addr.phone}</div>}
+                                    </div>
+                                    {selectedLocation?.addressId === addr.id && <div style={{ color: '#2ecc71', fontSize: 20 }}>✓</div>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                
+                {(!locations?.cities || locations.cities.length === 0) && (!locations?.addresses || locations.addresses.length === 0) && (
+                    <div style={{ textAlign: 'center', padding: 40, opacity: 0.6, color: 'white' }}>
+                        <div style={{ fontSize: 48, marginBottom: 12 }}>📍</div>
+                        <div>Нет доступных адресов</div>
+                        <div style={{ fontSize: 12, marginTop: 8, opacity: 0.5 }}>Обратитесь к администратору</div>
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
 )}
       
      {activeTab === 'offers' && (
