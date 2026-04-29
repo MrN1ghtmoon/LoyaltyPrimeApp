@@ -406,7 +406,9 @@ const loadUserData = async (companyId, vkUserId, userName) => {
     saveCurrentGroupData({ ...cur, history: newHistory });
   };
   
-const updateBalanceAndStats = async (change, type) => {
+
+
+const updateBalanceAndStats = async (change, type, metadata = {}) => {
   if (!selectedGroup) return false;
   const cur = getCurrentGroupData();
   let newBalance = cur.bonusBalance + change;
@@ -415,15 +417,16 @@ const updateBalanceAndStats = async (change, type) => {
     return false;
   }
   
-  let newTotalSpent = cur.totalSpent;
-  let newTotalEarned = cur.totalEarned;
+  let newTotalSpent = cur.totalSpent || 0;
+  let newTotalEarned = cur.totalEarned || 0;
   
   if (type === 'earn') {
     newTotalEarned = cur.totalEarned + change;
     addHistory(`Начисление +${change}`, change, 'earn');
   } else if (type === 'spend') {
+    // ✅ При списании бонусов (игры) увеличиваем totalSpent
     newTotalSpent = (cur.totalSpent || 0) + Math.abs(change);
-    addHistory(`Списание: ${Math.abs(change)} баллов`, change, 'spend');
+    addHistory(`Списание: ${Math.abs(change)} баллов (игровая активность)`, change, 'spend');
   }
   
   const newData = { 
@@ -433,27 +436,46 @@ const updateBalanceAndStats = async (change, type) => {
     totalSpent: newTotalSpent
   };
   
-  // Сначала сохраняем локально
+  // Сохраняем локально (для быстрого UI)
   saveCurrentGroupData(newData);
   
-  // Затем отправляем на сервер асинхронно (не ждем ответа)
+  // ✅ Отправляем на сервер и получаем обновленные данные
   if (userId) {
-    fetch(`${API_URL}/api/users/updateBalance`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: userId,
-        change: change,
-        type: type,
-        description: type === 'earn' ? `Начисление ${change} бонусов` : `Списание ${Math.abs(change)} бонусов`
-      })
-    }).catch(error => console.error('Ошибка обновления баланса на сервере:', error));
+    try {
+      const response = await fetch(`${API_URL}/api/users/updateBalance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          change: change,
+          type: type,
+          description: type === 'earn' ? `Начисление ${change} бонусов` : `Списание ${Math.abs(change)} бонусов`,
+          metadata: { source: metadata.source || 'game', gameType: metadata.gameType }
+        })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        // ✅ Синхронизируем с сервером (на случай расхождений)
+        if (result.newTotalSpent !== undefined) {
+          const syncedData = { 
+            ...newData, 
+            totalSpent: result.newTotalSpent,
+            totalEarned: result.newTotalEarned,
+            bonusBalance: result.newBalance
+          };
+          saveCurrentGroupData(syncedData);
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка обновления баланса на сервере:', error);
+    }
   }
   
   return true;
 };
   
-// Функция для синхронизации баланса из БД
+
 const syncBalanceFromDB = async () => {
   if (!userId || !selectedGroup) return;
   
@@ -472,18 +494,15 @@ const syncBalanceFromDB = async () => {
     if (data.success) {
       const cur = getCurrentGroupData();
       
-      // ✅ НЕ перезаписываем totalSpent вообще из БД!
-      // totalSpent обновляется только локально при списаниях и выигрышах
-      // В БД total_spent обновляется только при POS-покупках
+      // ✅ ОБНОВЛЯЕМ: totalSpent берем из БД (теперь игры увеличивают его)
       const newData = {
         ...cur,
         bonusBalance: data.user.bonus_balance || 0,
         totalEarned: data.user.total_earned || 0,
-        // totalSpent НЕ обновляем из БД, оставляем локальное значение
-        totalSpent: cur.totalSpent || 0
+        totalSpent: data.user.total_spent || 0  // Теперь игры обновляют total_spent на сервере
       };
       saveCurrentGroupData(newData);
-      console.log('Баланс синхронизирован из БД:', newData.bonusBalance, 'локальный totalSpent:', newData.totalSpent);
+      console.log('Баланс синхронизирован из БД:', newData.bonusBalance, 'totalSpent:', newData.totalSpent);
     }
   } catch (error) {
     console.error('Ошибка синхронизации баланса:', error);

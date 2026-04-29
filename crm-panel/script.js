@@ -404,7 +404,8 @@ async function loadCRMPanel() {
     loadNotificationsHistory();
     await loadCampaigns();
     await loadBonusSettings();
-	loadCitiesAndAddresses(); 	
+	loadCitiesAndAddresses();
+	await loadCashierCredentials();	
 }
 
 function closeCRMPanel() {
@@ -2198,6 +2199,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (module === 'settings') {
                 loadBrandColor();
+            }
+            if (module === 'cashier') {
+                loadCashierCredentials();
             }
         });
     });
@@ -4004,4 +4008,86 @@ async function deleteAddress(addressId) {
 
 function closeAddressModal() {
     document.getElementById('addressModal').style.display = 'none';
+}
+
+// ========== МОДУЛЬ: СТРАНИЦА КАССИРА ==========
+
+async function saveCashierCredentials() {
+    if (!currentBusiness) {
+        showCashierStatus('❌ Ошибка: компания не выбрана', 'error');
+        return;
+    }
+    
+    const login = document.getElementById('cashierLogin').value.trim();
+    const password = document.getElementById('cashierPassword').value;
+    const passwordConfirm = document.getElementById('cashierPasswordConfirm').value;
+    
+    if (!login || !password) {
+        showCashierStatus('❌ Заполните все поля', 'error');
+        return;
+    }
+    
+    if (password !== passwordConfirm) {
+        showCashierStatus('❌ Пароли не совпадают', 'error');
+        return;
+    }
+    
+    if (password.length < 4) {
+        showCashierStatus('❌ Пароль должен быть не менее 4 символов', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/cashier-credentials`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login, password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showCashierStatus('✅ Данные кассира успешно сохранены!', 'success');
+            // Clear password fields
+            document.getElementById('cashierPassword').value = '';
+            document.getElementById('cashierPasswordConfirm').value = '';
+        } else {
+            showCashierStatus('❌ ' + (data.message || 'Ошибка сохранения'), 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения данных кассира:', error);
+        showCashierStatus('❌ Ошибка подключения к серверу', 'error');
+    }
+}
+
+function showCashierStatus(message, type) {
+    const statusEl = document.getElementById('cashierCredentialsStatus');
+    if (!statusEl) return;
+    
+    statusEl.innerHTML = `<div class="${type === 'success' ? 'success' : 'error'}" style="padding: 12px; border-radius: 8px; margin-top: 8px;">${message}</div>`;
+    
+    setTimeout(() => {
+        statusEl.innerHTML = '';
+    }, 3000);
+}
+
+function openCashierPage() {
+    // Open cashier.html in new window (no companyId needed - cashier page is independent)
+    window.open('cashier.html', '_blank', 'width=800,height=900,scrollbars=yes');
+}
+
+async function loadCashierCredentials() {
+    if (!currentBusiness) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/cashier-credentials`);
+        const data = await response.json();
+        
+        if (data.success && data.credentials) {
+            document.getElementById('cashierLogin').value = data.credentials.login || '';
+            // Don't load password for security
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки данных кассира:', error);
+    }
 }

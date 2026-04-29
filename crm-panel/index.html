@@ -45,7 +45,7 @@
             <div class="error-message" id="loginError"></div>
             <button class="modal-btn" onclick="handleCRMLogin()">Войти в CRM</button>
             <div class="modal-link">
-                Нет аккаунта? <span onclick="switchToRegister()">Зарегистрироваться</span>
+                <span onclick="window.open('cashier.html', '_blank')" style="cursor: pointer; color: #667eea; font-weight: 600;">Вход кассира</span>
             </div>
         </div>
     </div>
@@ -220,6 +220,9 @@
                     </button>
                     <button class="crm-nav-item" data-module="information">
                         <span class="nav-icon">ℹ️</span> Информация
+                    </button>
+                    <button class="crm-nav-item" data-module="cashier">
+                        <span class="nav-icon">🏪</span> Страница кассира
                     </button>
                     <button class="crm-nav-item" data-module="settings">
                         <span class="nav-icon">⚙️</span> Настройки
@@ -418,6 +421,51 @@
         </div>
     </div>
 </div>
+
+                <!-- Модуль страницы кассира -->
+                <div id="cashierModule" class="crm-module">
+                    <div class="module-header">
+                        <h2>🏪 Страница кассира</h2>
+                    </div>
+                    <div class="settings-card">
+                        <h3>🔐 Настройка доступа кассира</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 16px;">
+                            Установите логин и пароль для доступа к странице кассира. Эти данные будут использоваться для входа в POS-терминал.
+                        </p>
+                        
+                        <div class="form-group">
+                            <label>👤 Логин кассира</label>
+                            <input type="text" id="cashierLogin" class="form-input" placeholder="Введите логин">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>🔒 Пароль кассира</label>
+                            <input type="password" id="cashierPassword" class="form-input" placeholder="Введите пароль">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>🔒 Подтверждение пароля</label>
+                            <input type="password" id="cashierPasswordConfirm" class="form-input" placeholder="Повторите пароль">
+                        </div>
+                        
+                        <button class="btn-save" onclick="saveCashierCredentials()" style="width: 100%; margin-top: 16px;">
+                            💾 Сохранить данные кассира
+                        </button>
+                        
+                        <div id="cashierCredentialsStatus" style="margin-top: 12px;"></div>
+                    </div>
+                    
+                    <div class="settings-card" style="margin-top: 20px;">
+                        <h3>🖥️ Открыть страницу кассира</h3>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 16px;">
+                            Нажмите кнопку ниже, чтобы открыть страницу кассира в новом окне. Страница кассира доступна только по логину и паролю.
+                        </p>
+                        
+                        <button class="btn-demo" onclick="openCashierPage()" style="width: 100%; padding: 16px; font-size: 16px;">
+                            🏪 Открыть страницу кассира
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Модуль настроек -->
                 <div id="settingsModule" class="crm-module">

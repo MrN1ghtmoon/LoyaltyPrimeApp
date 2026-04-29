@@ -87,7 +87,11 @@ const {
     getAllLocationsForApp,
     getUserSelectedLocation,
     updateUserSelectedLocation,
-    getMainLocation
+    getMainLocation,
+    // Cashier credentials
+    getCashierCredentials,
+    saveCashierCredentials,
+    findCashierByLogin
 } = require('./database-pg');
 
 const app = express();
@@ -573,19 +577,21 @@ app.post('/api/users/completeQuest', async (req, res) => {
     }
 });
 
+
 app.post('/api/users/updateBalance', async (req, res) => {
     try {
-        const { userId, change, type, description } = req.body;
-        const newBalance = await updateUserBalance(userId, change, type, description);
+        const { userId, change, type, description, metadata } = req.body;
         
-        const user = await getUserById(userId);
+        const result = await updateUserBalance(userId, change, type, description, metadata);
         
         res.json({ 
             success: true, 
-            newBalance,
-            newTotalSpent: user.total_spent  
+            newBalance: result.newBalance,
+            newTotalSpent: result.totalSpent,
+            newTotalEarned: result.totalEarned
         });
     } catch (error) {
+        console.error('Ошибка обновления баланса:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1766,6 +1772,211 @@ app.delete('/api/giveaways/:id', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// ============ API ДЛЯ КАССИРА ============
+
+// Получение данных кассира
+app.get('/api/companies/:companyId/cashier-credentials', async (req, res) => {
+    try {
+        const credentials = await getCashierCredentials(req.params.companyId);
+        
+        if (credentials) {
+            res.json({ success: true, credentials: { login: credentials.login } });
+        } else {
+            res.json({ success: true, credentials: null });
+        }
+    } catch (error) {
+        console.error('Ошибка получения данных кассира:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Сохранение данных кассира
+app.post('/api/companies/:companyId/cashier-credentials', async (req, res) => {
+    try {
+        const { login, password } = req.body;
+        
+        if (!login || !password) {
+            return res.status(400).json({ success: false, message: 'Заполните все поля' });
+        }
+        
+        await saveCashierCredentials(req.params.companyId, login, password);
+        res.json({ success: true, message: 'Данные кассира сохранены' });
+    } catch (error) {
+        console.error('Ошибка сохранения данных кассира:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Авторизация кассира
+app.post('/api/cashier/login', async (req, res) => {
+    try {
+        const { login, password, companyId } = req.body;
+        
+        if (!login || !password) {
+            return res.status(400).json({ success: false, message: 'Заполните все поля' });
+        }
+        
+        let credentials;
+        let targetCompanyId = companyId;
+        
+        // If companyId is provided, use it (backward compatibility)
+        if (companyId) {
+            credentials = await getCashierCredentials(companyId);
+        } else {
+            // Otherwise, find cashier by login (independent page)
+            credentials = await findCashierByLogin(login);
+            if (credentials) {
+                targetCompanyId = credentials.company_id;
+            }
+        }
+        
+        if (!credentials) {
+            return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
+        }
+        
+        if (credentials.password !== password) {
+            return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
+        }
+        
+        // Получаем информацию о компании
+        const company = await getCompanyById(targetCompanyId);
+        
+        res.json({ success: true, company });
+    } catch (error) {
+        console.error('Ошибка авторизации кассира:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Верификация QR-кода кассиром
+app.post('/api/cashier/verify-qr', async (req, res) => {
+    try {
+        const { vkId, companyId, timestamp, signature } = req.body;
+        
+        if (!vkId && vkId !== 0) {
+            return res.status(400).json({ success: false, message: 'Отсутствует vkId' });
+        }
+        
+        if (!companyId && companyId !== 0) {
+            return res.status(400).json({ success: false, message: 'Отсутствует companyId' });
+        }
+        
+        // Проверяем возраст QR-кода (5 минут)
+        if (timestamp) {
+            const age = (Date.now() - timestamp) / 1000;
+            if (age > 300) {
+                return res.status(400).json({ success: false, message: 'QR-код истек' });
+            }
+        }
+        
+        // Получаем пользователя
+        const user = await getUserByVkId(vkId, companyId);
+        
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+        }
+        
+        res.json({ success: true, user });
+    } catch (error) {
+        console.error('Ошибка верификации QR:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Начисление бонусов
+app.post('/api/cashier/earn-bonus', async (req, res) => {
+    try {
+        const { vk_id, company_id, amount, qr_data } = req.body;
+        
+        if (!vk_id || !company_id || !amount) {
+            return res.status(400).json({ success: false, message: 'Заполните все поля' });
+        }
+        
+        const user = await getUserByVkId(vk_id, company_id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+        }
+        
+        // Рассчитываем бонусы (3% от суммы покупки)
+        const bonusRate = 0.03;
+        const bonusEarned = Math.floor(amount * bonusRate);
+        
+        // Обновляем баланс
+        const result = await updateBalanceWithTransaction(
+            user.id,
+            company_id,
+            amount,
+            bonusEarned,
+            0,
+            'Начисление бонусов',
+            [],
+            'pos',
+            'cashier_terminal',
+            'cashier',
+            { qr_data }
+        );
+        
+        res.json({ 
+            success: true, 
+            bonusEarned, 
+            newBalance: result.new_balance,
+            purchaseAmount: amount
+        });
+    } catch (error) {
+        console.error('Ошибка начисления бонусов:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Списание бонусов
+app.post('/api/cashier/spend-bonus', async (req, res) => {
+    try {
+        const { vk_id, company_id, amount, qr_data } = req.body;
+        
+        if (!vk_id || !company_id || !amount) {
+            return res.status(400).json({ success: false, message: 'Заполните все поля' });
+        }
+        
+        const user = await getUserByVkId(vk_id, company_id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+        }
+        
+        const bonusBalance = user.bonus_balance || 0;
+        const bonusToSpend = Math.min(bonusBalance, amount);
+        
+        if (bonusToSpend <= 0) {
+            return res.status(400).json({ success: false, message: 'Недостаточно бонусов' });
+        }
+        
+        // Обновляем баланс
+        const result = await updateBalanceWithTransaction(
+            user.id,
+            company_id,
+            amount,
+            0,
+            bonusToSpend,
+            'Списание бонусов',
+            [],
+            'pos',
+            'cashier_terminal',
+            'cashier',
+            { qr_data }
+        );
+        
+        res.json({ 
+            success: true, 
+            bonusSpent: bonusToSpend, 
+            newBalance: result.new_balance,
+            purchaseAmount: amount
+        });
+    } catch (error) {
+        console.error('Ошибка списания бонусов:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // ============ API ДЛЯ КЛАССИФИКАЦИИ ПОЛЬЗОВАТЕЛЕЙ ============
 
 // Получение классификации конкретного пользователя
@@ -2578,6 +2789,59 @@ app.get('/api/addresses/:addressId/info', async (req, res) => {
         }
         res.json({ success: true, address });
     } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+
+app.get('/api/users/:userId/full-data/:companyId', async (req, res) => {
+    try {
+        const { userId, companyId } = req.params;
+        
+        const userResult = await query(
+            'SELECT * FROM users WHERE id = $1 AND company_id = $2',
+            [userId, companyId]
+        );
+        
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+        }
+        
+        const user = userResult.rows[0];
+        
+        // Получаем историю транзакций
+        const historyResult = await query(
+            `SELECT id, description, bonus_earned, bonus_spent, created_at, source, metadata
+             FROM transactions 
+             WHERE user_id = $1 AND company_id = $2 
+             ORDER BY created_at DESC 
+             LIMIT 50`,
+            [userId, companyId]
+        );
+        
+        const history = historyResult.rows.map(t => ({
+            id: t.id,
+            desc: t.description,
+            points: t.bonus_earned > 0 ? `+${t.bonus_earned}` : `-${t.bonus_spent}`,
+            date: new Date(t.created_at).toLocaleString('ru-RU'),
+            type: t.bonus_earned > 0 ? 'earn' : 'spend'
+        }));
+        
+        res.json({ 
+            success: true, 
+            user: {
+                id: user.id,
+                name: user.name,
+                bonus_balance: user.bonus_balance || 0,
+                total_earned: user.total_earned || 0,
+                total_spent: user.total_spent || 0,
+                regDate: new Date(user.created_at).toLocaleDateString('ru-RU'),
+                history: history
+            }
+        });
+    } catch (error) {
+        console.error('Ошибка получения данных пользователя:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
