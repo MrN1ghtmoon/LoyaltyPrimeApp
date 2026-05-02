@@ -91,12 +91,17 @@ const {
     // Cashier credentials
     getCashierCredentials,
     saveCashierCredentials,
-    findCashierByLogin
+    findCashierByLogin,
+    // Greeting settings
+    saveGreetingSettings,
+    getGreetingSettings
 } = require('./database-pg');
 
 const app = express();
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
+app.use(express.static('crm-panel'));
+
 
 app.use((req, res, next) => {
     console.log(`📨 ${req.method} ${req.url}`);
@@ -1032,11 +1037,12 @@ app.get('/api/users/:userId/currentTier', async (req, res) => {
         }
         
         const tiers = await getCompanyTiers(user.company_id);
-        const balance = user.bonus_balance;
+        // ИСПРАВЛЕНО: используем total_spent вместо bonus_balance
+        const totalSpent = user.total_spent || 0;
         
         let currentTier = tiers[0];
         for (let i = tiers.length - 1; i >= 0; i--) {
-            if (balance >= tiers[i].threshold) {
+            if (totalSpent >= tiers[i].threshold) {
                 currentTier = tiers[i];
                 break;
             }
@@ -1044,7 +1050,7 @@ app.get('/api/users/:userId/currentTier', async (req, res) => {
         
         let nextTier = null;
         for (let i = 0; i < tiers.length; i++) {
-            if (balance < tiers[i].threshold) {
+            if (totalSpent < tiers[i].threshold) {
                 nextTier = tiers[i];
                 break;
             }
@@ -1055,16 +1061,29 @@ app.get('/api/users/:userId/currentTier', async (req, res) => {
             const tierStart = currentTier.threshold;
             const tierEnd = nextTier.threshold;
             const tierRange = tierEnd - tierStart;
-            const userProgress = balance - tierStart;
+            const userProgress = totalSpent - tierStart;
             progress = Math.min(100, Math.max(0, (userProgress / tierRange) * 100));
         }
         
         res.json({
             success: true,
-            currentTier,
-            nextTier,
+            currentTier: {
+                name: currentTier.name,
+                cashback: currentTier.cashback || 3,
+                threshold: currentTier.threshold,
+                color: currentTier.color,
+                icon: currentTier.icon
+            },
+            nextTier: nextTier ? {
+                name: nextTier.name,
+                cashback: nextTier.cashback || 3,
+                threshold: nextTier.threshold,
+                color: nextTier.color,
+                icon: nextTier.icon
+            } : null,
             progress,
-            balance
+            totalSpent: totalSpent,
+            bonusBalance: user.bonus_balance || 0
         });
     } catch (error) {
         console.error('Ошибка получения уровня:', error);
@@ -1074,12 +1093,11 @@ app.get('/api/users/:userId/currentTier', async (req, res) => {
 
 // ============ POS API ДЛЯ КАССЫ ============
 
-// Получение уровня пользователя по балансу
-async function getUserTier(balance, companyId) {
+async function getUserTier(totalSpent, companyId) {
     const tiers = await getCompanyTiers(companyId);
     let currentTier = tiers[0];
     for (let i = tiers.length - 1; i >= 0; i--) {
-        if (balance >= tiers[i].threshold) {
+        if (totalSpent >= tiers[i].threshold) {
             currentTier = tiers[i];
             break;
         }
@@ -1092,7 +1110,6 @@ app.post('/api/pos/verify-qr', async (req, res) => {
     try {
         const { qrData, amount } = req.body;
         
-        // Парсим QR данные
         let userData;
         try {
             userData = typeof qrData === 'string' ? JSON.parse(qrData) : qrData;
@@ -1100,32 +1117,51 @@ app.post('/api/pos/verify-qr', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Неверный формат QR-кода' });
         }
         
-        // Проверяем обязательные поля
         if (!userData.vkId || !userData.companyId) {
             return res.status(400).json({ success: false, message: 'Неверные данные QR-кода' });
         }
         
-        // Проверяем валидность timestamp (не старше 5 минут)
         if (userData.timestamp && Date.now() - userData.timestamp > (userData.expiresIn || 300000)) {
             return res.status(400).json({ success: false, message: 'QR-код просрочен. Обновите QR-код в приложении' });
         }
         
-        // Получаем пользователя из базы
         const user = await getUserByVkId(userData.vkId, userData.companyId);
         
         if (!user) {
-            return res.status(404).json({ success: false, message: 'Пользователь не найден. Попросите клиента зарегистрироваться' });
+            return res.status(404).json({ success: false, message: 'Пользователь не найден' });
         }
         
-        // Получаем уровень пользователя
-        const tier = await getUserTier(user.bonus_balance, userData.companyId);
+        // Получаем настройки бонусной системы
+        const companyResult = await query(
+            'SELECT bonus_settings FROM companies WHERE id = $1',
+            [userData.companyId]
+        );
         
-        // Рассчитываем бонусы если есть сумма
+        let bonusSettings = {
+            rubToBonus: 10,
+            maxBonusPaymentPercent: 25,
+            minPurchaseForBonus: 1000
+        };
+        
+        if (companyResult.rows.length > 0 && companyResult.rows[0].bonus_settings) {
+            let settings = companyResult.rows[0].bonus_settings;
+            if (typeof settings === 'string') {
+                settings = JSON.parse(settings);
+            }
+            bonusSettings = { ...bonusSettings, ...settings };
+        }
+        
+        const tier = await getUserTier(user.total_spent || 0, userData.companyId);
+        const cashbackPercent = tier.cashback || 3;
+        const rubToBonus = bonusSettings.rubToBonus || 10;
+        const minPurchase = bonusSettings.minPurchaseForBonus || 1000;
+        
         let bonusEarned = 0;
-        let bonusRate = (tier.multiplier || 1) * 10; // 10 бонусов за 1000₽ * множитель
+        let cashbackRub = 0;
         
-        if (amount && amount > 0) {
-            bonusEarned = Math.floor(amount / 1000) * bonusRate;
+        if (amount && amount > 0 && amount >= minPurchase) {
+            cashbackRub = amount * cashbackPercent / 100;
+            bonusEarned = Math.floor(cashbackRub * rubToBonus);
         }
         
         res.json({
@@ -1134,12 +1170,16 @@ app.post('/api/pos/verify-qr', async (req, res) => {
                 id: user.id,
                 vkId: user.vk_id,
                 name: user.name,
-                balance: user.bonus_balance
+                balance: user.bonus_balance,
+                totalSpent: user.total_spent || 0
             },
-            bonusRate: bonusRate,
+            cashbackPercent: cashbackPercent,
+            cashbackRub: cashbackRub.toFixed(2),
             bonusEarned: bonusEarned,
+            rubToBonus: rubToBonus,
             tier: tier.name,
-            multiplier: tier.multiplier
+            minPurchaseForBonus: minPurchase,
+            bonusSettings: bonusSettings
         });
         
     } catch (error) {
@@ -1469,7 +1509,6 @@ app.post('/api/pos/get-user-balance', async (req, res) => {
     }
 });
 
-// Начисление бонусов за покупку с записью в историю
 app.post('/api/pos/apply-bonus-v2', async (req, res) => {
     try {
         const { qrData, amount, storeId, cashierId } = req.body;
@@ -1500,8 +1539,7 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
         let bonusSettings = {
             rubToBonus: 10,
             maxBonusPaymentPercent: 25,
-            minPurchaseForBonus: 1000,
-            bonusRatePerThousand: 10
+            minPurchaseForBonus: 1000
         };
         
         if (companyResult.rows.length > 0 && companyResult.rows[0].bonus_settings) {
@@ -1512,8 +1550,10 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
             bonusSettings = { ...bonusSettings, ...settings };
         }
         
-        const tier = await getUserTier(user.bonus_balance, userData.companyId);
-        const bonusRate = (tier.multiplier || 1) * (bonusSettings.bonusRatePerThousand || 10);
+        // Получаем уровень пользователя и его кешбэк (в процентах)
+        const tier = await getUserTier(user.total_spent || 0, userData.companyId);
+        const cashbackPercent = tier.cashback || 3;
+        const rubToBonus = bonusSettings.rubToBonus || 10;
         const minPurchase = bonusSettings.minPurchaseForBonus || 1000;
         
         // Проверяем минимальную сумму для начисления бонусов
@@ -1524,12 +1564,13 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
             });
         }
         
-        const bonusEarned = Math.floor(amount / 1000) * bonusRate;
+        const cashbackRub = amount * cashbackPercent / 100;
+		const bonusEarned = Math.floor(cashbackRub * rubToBonus);
         
         if (bonusEarned === 0 && amount >= minPurchase) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Сумма ${amount}₽ слишком мала. Минимальная сумма для начисления бонусов: ${minPurchase}₽`
+                message: `Кешбэк ${cashbackPercent}% (${cashbackRub.toFixed(2)}₽) при курсе ${rubToBonus} бонусов/₽ даёт меньше 1 бонуса.`
             });
         }
         
@@ -1539,8 +1580,8 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
             user.company_id, 
             bonusEarned, 
             'earn', 
-            `Покупка на ${amount}₽ в ${storeId || 'кассе'}`,
-            { amount, storeId, cashierId, source: 'pos', bonusRate, multiplier: tier.multiplier, bonusSettings }
+            `Покупка на ${amount}₽ (кешбэк ${cashbackPercent}% = ${cashbackRub.toFixed(2)}₽ → ${bonusEarned} бонусов) в ${storeId || 'кассе'}`,
+            { amount, storeId, cashierId, source: 'pos', cashbackPercent, cashbackRub, rubToBonus, bonusSettings }
         );
         
         // Отслеживаем прогресс покупок для заданий
@@ -1552,16 +1593,19 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
         
         res.json({
             success: true,
-            message: `✅ Начислено ${bonusEarned} бонусов!`,
+            message: `✅ Начислено ${bonusEarned} бонусов (кешбэк ${cashbackPercent}% = ${cashbackRub.toFixed(2)}₽ × ${rubToBonus})!`,
             newBalance: newBalance,
             bonusEarned: bonusEarned,
+            cashbackRub: cashbackRub.toFixed(2),
+            cashbackPercent: cashbackPercent,
             amount: amount,
+            rubToBonus: rubToBonus,
             bonusSettings: bonusSettings,
             transaction: {
                 type: 'earn',
                 amount: amount,
                 bonusChange: bonusEarned,
-                description: `Покупка на ${amount}₽`,
+                description: `Покупка на ${amount}₽ (кешбэк ${cashbackPercent}%)`,
                 createdAt: new Date().toISOString()
             }
         });
@@ -1877,7 +1921,38 @@ app.post('/api/cashier/verify-qr', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Пользователь не найден' });
         }
         
-        res.json({ success: true, user });
+        // ✅ ПОЛУЧАЕМ УРОВНИ КОМПАНИИ
+        const tiers = await getCompanyTiers(companyId);
+        const totalSpent = user.total_spent || 0;
+        
+        // ✅ ОПРЕДЕЛЯЕМ ТЕКУЩИЙ УРОВЕНЬ ПОЛЬЗОВАТЕЛЯ
+        let currentTier = tiers[0];
+        for (let i = tiers.length - 1; i >= 0; i--) {
+            if (totalSpent >= tiers[i].threshold) {
+                currentTier = tiers[i];
+                break;
+            }
+        }
+        
+        // ✅ ПОЛУЧАЕМ КЕШБЭК В ПРОЦЕНТАХ
+        const cashbackPercent = currentTier.cashback || 3;
+        
+        // ✅ ВОЗВРАЩАЕМ ПОЛНЫЕ ДАННЫЕ
+        res.json({ 
+            success: true, 
+            user: {
+                id: user.id,
+                vk_id: user.vk_id,
+                name: user.name,
+                bonus_balance: user.bonus_balance || 0,
+                total_spent: totalSpent,
+                total_earned: user.total_earned || 0
+            },
+            tier: currentTier.name,
+            cashbackPercent: cashbackPercent,
+            tierIcon: currentTier.icon,
+            tierColor: currentTier.color
+        });
     } catch (error) {
         console.error('Ошибка верификации QR:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -2842,6 +2917,56 @@ app.get('/api/users/:userId/full-data/:companyId', async (req, res) => {
         });
     } catch (error) {
         console.error('Ошибка получения данных пользователя:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+// ============ API ДЛЯ ПРИВЕТСТВИЙ ============
+
+// Получить настройки приветствия
+app.get('/api/companies/:companyId/greeting-settings', async (req, res) => {
+    try {
+        const companyId = parseInt(req.params.companyId);
+        const settings = await getGreetingSettings(companyId);
+        console.log('Greeting settings retrieved:', settings);
+        res.json({ success: true, settings });
+    } catch (error) {
+        console.error('Ошибка получения настроек приветствия:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Сохранить настройки приветствия
+app.post('/api/companies/:companyId/greeting-settings', async (req, res) => {
+    try {
+        const { greetingText, greetingEmoji, companyEmoji, fullGreetingText } = req.body;
+        
+        console.log('Saving greeting settings:', { 
+            companyId: req.params.companyId, 
+            greetingText, 
+            greetingEmoji,
+            companyEmoji,
+            fullGreetingText
+        });
+        
+        if (!greetingText || !greetingEmoji) {
+            return res.status(400).json({ success: false, message: 'Заполните обязательные поля' });
+        }
+        
+        const companyId = parseInt(req.params.companyId);
+        const result = await saveGreetingSettings(
+            companyId,
+            greetingText,
+            greetingEmoji,
+            companyEmoji || '🏢',
+            fullGreetingText || ''
+        );
+        
+        console.log('Greeting saved successfully:', result);
+        res.json({ success: true, settings: result.settings });
+    } catch (error) {
+        console.error('Ошибка сохранения настроек приветствия:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

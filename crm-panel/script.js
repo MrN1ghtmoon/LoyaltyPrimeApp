@@ -748,35 +748,31 @@ function renderTiersSettings() {
             
             <div class="tier-config-fields">
                 <div class="config-field">
-                    <label>💰 Порог LTV (Бонусы):</label>
+                    <label>💰 Порог LTV (бонусов или ₽):</label>
                     <input type="number" value="${tier.threshold}" 
                            onchange="updateTierConfig(${idx}, 'threshold', parseInt(this.value))" 
                            class="config-input">
                 </div>
                 
+                <!-- ИСПРАВЛЕНО: убрали multiplier, оставили только cashback -->
                 <div class="config-field">
-                    <label>⚡ Множитель бонусов:</label>
-                    <input type="number" step="0.1" value="${tier.multiplier}" 
-                           onchange="updateTierConfig(${idx}, 'multiplier', parseFloat(this.value))" 
-                           class="config-input">
-                </div>
-                
-                <div class="config-field">
-                    <label>💰 Кешбэк (%):</label>
-                    <input type="number" step="0.5" value="${tier.cashback || tier.multiplier * 5}" 
+                    <label>💰 Кешбэк (% начисления):</label>
+                    <input type="number" step="0.5" value="${tier.cashback || 3}" 
                            onchange="updateTierConfig(${idx}, 'cashback', parseFloat(this.value))" 
                            class="config-input">
+                    <small style="display: block; margin-top: 4px; color: #666;">Процент от суммы покупки, который начисляется бонусами</small>
                 </div>
             </div>
             
             <div class="tier-preview">
                 <div style="background: ${tier.color}; padding: 8px 12px; border-radius: 12px; color: white;">
-                    ${tier.icon} ${escapeHtml(tier.name)}: x${tier.multiplier} бонусов • ${tier.cashback || tier.multiplier * 5}% кешбэк
+                    ${tier.icon} ${escapeHtml(tier.name)}: кешбэк ${tier.cashback || 3}% • порог ${tier.threshold.toLocaleString()}
                 </div>
             </div>
         </div>
     `).join('');
 }
+
 
 function getIconOptions(selectedIcon) {
     const icons = ['🌱', '🥉', '🥈', '🥇', '💎', '⭐', '🏆', '👑', '🔥', '⚡', '🎯'];
@@ -796,13 +792,13 @@ function addTierConfig() {
     const sortedTiers = [...tiers].sort((a, b) => a.threshold - b.threshold);
     const lastTier = sortedTiers[sortedTiers.length - 1];
     const newThreshold = lastTier ? lastTier.threshold + 5000 : 1000;
-    const newMultiplier = lastTier ? Math.min(5, lastTier.multiplier + 0.3) : 1;
+    // ИСПРАВЛЕНО: убрали multiplier
+    const newCashback = lastTier ? Math.min(30, lastTier.cashback + 2) : 3;
     
     tiers.push({
         name: `Уровень ${tiers.length + 1}`,
         threshold: newThreshold,
-        multiplier: newMultiplier,
-        cashback: Math.min(25, newMultiplier * 5),
+        cashback: newCashback,
         color: getNextColor(tiers.length),
         icon: getNextIcon(tiers.length)
     });
@@ -2179,6 +2175,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ========== ИНИЦИАЛИЗАЦИЯ ==========
 document.addEventListener('DOMContentLoaded', () => {
+    const fullGreetingTextInput = document.getElementById('fullGreetingText');
+    if (fullGreetingTextInput) {
+        fullGreetingTextInput.addEventListener('input', updateGreetingPreview);
+    }
+    
     document.querySelectorAll('.crm-nav-item').forEach(btn => {
         btn.addEventListener('click', () => {
             const module = btn.dataset.module;
@@ -2199,6 +2200,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (module === 'settings') {
                 loadBrandColor();
+                initEmojiPicker();
+                loadGreetingSettings();
             }
             if (module === 'cashier') {
                 loadCashierCredentials();
@@ -3569,8 +3572,8 @@ function renderBonusSettings() {
             <h3>💰 Настройки бонусной системы</h3>
             <div class="bonus-settings-description" style="margin-bottom: 20px; padding: 12px; background: #e8f5e9; border-radius: 12px;">
                 <p style="margin: 0; font-size: 13px; color: #2e7d32;">
-                    💡 Настройте параметры начисления и использования бонусов в вашей программе лояльности.
-                    Эти настройки влияют на работу POS-терминала и отображение в мини-приложении.
+                    💡 Настройте параметры использования бонусов в вашей программе лояльности.
+                    Процент начисления бонусов (кешбэк) настраивается в <strong>уровнях программы лояльности</strong>.
                 </p>
             </div>
             
@@ -3587,7 +3590,7 @@ function renderBonusSettings() {
             
             <div class="bonus-setting-row">
                 <div class="setting-info">
-                    <label>📊 Максимальный % оплаты бонусами</label>
+                    <label>📊 Максимальный процент оплаты бонусами</label>
                     <div class="setting-description">Какую часть стоимости заказа можно оплатить бонусами (0-100%)</div>
                 </div>
                 <div class="setting-control">
@@ -3604,17 +3607,6 @@ function renderBonusSettings() {
                 <div class="setting-control">
                     <input type="number" id="minPurchaseForBonus" value="${bonusSettings.minPurchaseForBonus}" min="0" max="100000" step="100" style="width: 120px; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
                     <span class="setting-unit">₽</span>
-                </div>
-            </div>
-            
-            <div class="bonus-setting-row">
-                <div class="setting-info">
-                    <label>⭐ Бонусов за 1000₽ (базовый)</label>
-                    <div class="setting-description">Сколько бонусов получает пользователь за каждые 1000₽ (до умножения на уровень)</div>
-                </div>
-                <div class="setting-control">
-                    <input type="number" id="bonusRatePerThousand" value="${bonusSettings.bonusRatePerThousand}" min="0" max="1000" step="5" style="width: 120px; padding: 10px; border-radius: 8px; border: 1px solid #ddd;">
-                    <span class="setting-unit">бонусов</span>
                 </div>
             </div>
             
@@ -3636,14 +3628,16 @@ function renderBonusSettings() {
                             (${Math.floor(1000 * bonusSettings.maxBonusPaymentPercent / 100 * bonusSettings.rubToBonus)} бонусов)
                         </div>
                     </div>
-                    <div style="margin-top: 8px; font-size: 12px; color: #f39c12;">
-                        ⭐ Базовое начисление: ${bonusSettings.bonusRatePerThousand} бонусов за 1000₽ 
-                        (с учетом уровня x множитель)
+                    <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #eee; font-size: 12px; color: #9b59b6;">
+                        ⭐ <strong>Кешбэк (начисление):</strong> настраивается в уровнях лояльности
+                        <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                            Пример: при кешбэке 10% и покупке на 1000₽ → начисляется 100 бонусов
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <button class="btn-save" onclick="saveBonusSettings()" style="margin-top: 20px; width: 100%;">💾 Сохранить настройки бонусов</button>
+            <button class="btn-save" onclick="saveBonusSettings()" style="margin-top: 20px; width: 100%;">💾 Сохранить настройки</button>
         </div>
     `;
     
@@ -3686,7 +3680,6 @@ async function saveBonusSettings() {
     const rubToBonus = parseInt(document.getElementById('rubToBonus').value);
     const maxBonusPaymentPercent = parseInt(document.getElementById('maxBonusPaymentPercent').value);
     const minPurchaseForBonus = parseInt(document.getElementById('minPurchaseForBonus').value);
-    const bonusRatePerThousand = parseInt(document.getElementById('bonusRatePerThousand').value);
     
     // Валидация
     if (isNaN(rubToBonus) || rubToBonus < 1 || rubToBonus > 1000) {
@@ -3704,25 +3697,20 @@ async function saveBonusSettings() {
         return;
     }
     
-    if (isNaN(bonusRatePerThousand) || bonusRatePerThousand < 0 || bonusRatePerThousand > 1000) {
-        alert('❌ Количество бонусов за 1000₽ должно быть от 0 до 1000');
-        return;
-    }
-    
     const saveBtn = event.target;
     const originalText = saveBtn.textContent;
     saveBtn.textContent = '💾 Сохранение...';
     saveBtn.disabled = true;
     
     try {
+        // ИСПРАВЛЕНО: убрали bonusRatePerThousand
         const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/bonus-settings`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 rubToBonus,
                 maxBonusPaymentPercent,
-                minPurchaseForBonus,
-                bonusRatePerThousand
+                minPurchaseForBonus
             })
         });
         
@@ -4091,3 +4079,220 @@ async function loadCashierCredentials() {
         console.error('Ошибка загрузки данных кассира:', error);
     }
 }
+
+// ========== GREETING SETTINGS ==========
+
+// Available emojis for selection
+const availableEmojis = [
+    '🏢', '🏪', '🏬', '🏭', '🏗️', '🏠', '🏡', '🏘️',
+    '🍕', '☕', '🍔', '🍰', '🍩', '🧁', '🍦', '🍪',
+    '🛍️', '🎁', '💎', '👗', '👟', '💄', '📱', '💻',
+    '🏋️', '🎨', '📚', '🎭', '🎪', '🎬', '🎵', '⚽',
+    '🏥', '💊', '🏨', '🚗', '⛽', '🔧', '💈', '🐾',
+    '👋', '🎉', '🌟', '💫', '✨', '🎊', '🎈', '🔥'
+];
+
+// Initialize emoji picker
+function initEmojiPicker() {
+    const pickerContainer = document.getElementById('emojiPicker');
+    if (!pickerContainer) {
+        console.error('emojiPicker element not found');
+        return;
+    }
+    
+    pickerContainer.innerHTML = '';
+    
+    availableEmojis.forEach(emoji => {
+        const emojiBtn = document.createElement('button');
+        emojiBtn.type = 'button';
+        emojiBtn.className = 'emoji-btn';
+        emojiBtn.textContent = emoji;
+        emojiBtn.style.cssText = `
+            font-size: 24px;
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        `;
+        
+        emojiBtn.onmouseover = function() {
+            this.style.transform = 'scale(1.2)';
+            this.style.borderColor = '#667eea';
+        };
+        
+        emojiBtn.onmouseout = function() {
+            if (document.getElementById('selectedEmoji').value !== emoji) {
+                this.style.transform = 'scale(1)';
+                this.style.borderColor = '#e0e0e0';
+            }
+        };
+        
+        emojiBtn.onclick = function() {
+            document.querySelectorAll('#emojiPicker .emoji-btn').forEach(btn => {
+                btn.style.borderColor = '#e0e0e0';
+                btn.style.background = 'white';
+                btn.style.transform = 'scale(1)';
+            });
+            
+            this.style.borderColor = '#667eea';
+            this.style.background = '#f0f3ff';
+            this.style.transform = 'scale(1.2)';
+            
+            document.getElementById('selectedEmoji').value = emoji;
+            updateGreetingPreview();
+        };
+        
+        pickerContainer.appendChild(emojiBtn);
+    });
+    
+    // Select default emoji
+    const defaultEmoji = document.getElementById('selectedEmoji').value;
+    const defaultBtn = Array.from(document.querySelectorAll('#emojiPicker .emoji-btn')).find(
+        btn => btn.textContent === defaultEmoji
+    );
+    if (defaultBtn) {
+        defaultBtn.style.borderColor = '#667eea';
+        defaultBtn.style.background = '#f0f3ff';
+        defaultBtn.style.transform = 'scale(1.2)';
+    }
+}
+
+// Update greeting preview
+function updateGreetingPreview() {
+    const emoji = document.getElementById('selectedEmoji').value;
+    const fullText = document.getElementById('fullGreetingText').value || 'Добро пожаловать в нашу компанию!';
+    
+    let previewHTML = `
+        <div style="text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 8px;">${emoji}</div>
+            <div style="font-size: 18px; opacity: 0.9;">Название компании</div>
+    `;
+    
+    if (fullText) {
+        previewHTML += `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0; font-size: 14px; opacity: 0.8;">${fullText}</div>`;
+    }
+    
+    previewHTML += `</div>`;
+    
+    document.getElementById('greetingPreview').innerHTML = previewHTML;
+}
+
+// Load greeting settings from backend
+async function loadGreetingSettings() {
+    if (!currentBusiness) {
+        console.error('currentBusiness is null');
+        return;
+    }
+    
+    if (!currentBusiness.id) {
+        console.error('currentBusiness.id is undefined:', currentBusiness);
+        return;
+    }
+    
+    console.log('Loading greeting settings for company ID:', currentBusiness.id);
+    
+    try {
+        const url = `${API_URL}/api/companies/${currentBusiness.id}/greeting-settings`;
+        console.log('Fetching from URL:', url);
+        
+        const response = await fetch(url);
+        console.log('Response status:', response.status);
+        
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (data.success && data.settings) {
+            document.getElementById('selectedEmoji').value = data.settings.company_emoji || '🏢';
+            document.getElementById('fullGreetingText').value = data.settings.full_greeting_text || '';
+            
+            updateGreetingPreview();
+            
+            // Update emoji picker selection
+            const selectedEmoji = data.settings.company_emoji || '🏢';
+            document.querySelectorAll('#emojiPicker .emoji-btn').forEach(btn => {
+                if (btn.textContent === selectedEmoji) {
+                    btn.style.borderColor = '#667eea';
+                    btn.style.background = '#f0f3ff';
+                    btn.style.transform = 'scale(1.2)';
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки настроек приветствия:', error);
+    }
+}
+
+// Save greeting settings to backend
+async function saveGreetingSettings() {
+    if (!currentBusiness) {
+        console.error('currentBusiness is null');
+        showGreetingStatus('❌ Ошибка: компания не выбрана', 'error');
+        return;
+    }
+    
+    if (!currentBusiness.id) {
+        console.error('currentBusiness.id is undefined:', currentBusiness);
+        showGreetingStatus('❌ Ошибка: ID компании не найден', 'error');
+        return;
+    }
+    
+    const companyEmoji = document.getElementById('selectedEmoji').value;
+    const fullGreetingText = document.getElementById('fullGreetingText').value.trim();
+    
+    console.log('=== Saving Greeting Settings ===');
+    console.log('Company ID:', currentBusiness.id);
+    console.log('Company Emoji:', companyEmoji);
+    console.log('Full Greeting Text:', fullGreetingText);
+    
+    const payload = {
+        greetingText: 'Welcome', // Required field, dummy value
+        greetingEmoji: companyEmoji, // Required field, using company emoji
+        companyEmoji: companyEmoji,
+        fullGreetingText: fullGreetingText
+    };
+    
+    console.log('Payload:', payload);
+    
+    try {
+        const url = `${API_URL}/api/companies/${currentBusiness.id}/greeting-settings`;
+        console.log('POST to URL:', url);
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+        
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (data.success) {
+            showGreetingStatus('✅ Настройки успешно сохранены!', 'success');
+            updateGreetingPreview();
+        } else {
+            console.error('Server error:', data);
+            showGreetingStatus('❌ ' + (data.message || data.error || 'Ошибка сохранения'), 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения приветствия:', error);
+        showGreetingStatus('❌ Ошибка подключения: ' + error.message, 'error');
+    }
+}
+
+// Show greeting status message
+function showGreetingStatus(message, type) {
+    const statusEl = document.getElementById('greetingStatus');
+    if (!statusEl) return;
+    
+    statusEl.innerHTML = `<div style="padding: 12px; border-radius: 8px; margin-top: 8px; ${type === 'success' ? 'background: #d4edda; color: #155724;' : 'background: #f8d7da; color: #721c24;'}">${message}</div>`;
+    
+    setTimeout(() => {
+        statusEl.innerHTML = '';
+    }, 3000);
+}
+

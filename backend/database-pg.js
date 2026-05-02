@@ -671,11 +671,11 @@ async function getCompanyTiers(companyId) {
         }
         
         const defaultTiers = [
-            { name: "🌱 Новичок", threshold: 0, multiplier: 1, cashback: 3, color: "#95a5a6", icon: "🌱" },
-            { name: "🥉 Бронза", threshold: 500, multiplier: 1.2, cashback: 5, color: "#cd7f32", icon: "🥉" },
-            { name: "🥈 Серебро", threshold: 2000, multiplier: 1.5, cashback: 7, color: "#bdc3c7", icon: "🥈" },
-            { name: "🥇 Золото", threshold: 8000, multiplier: 2, cashback: 10, color: "#f1c40f", icon: "🥇" },
-            { name: "💎 Бриллиант", threshold: 20000, multiplier: 2.5, cashback: 15, color: "#00b4d8", icon: "💎" }
+            { name: "🌱 Новичок", threshold: 0, cashback: 3, color: "#95a5a6", icon: "🌱" },
+            { name: "🥉 Бронза", threshold: 500, cashback: 5, color: "#cd7f32", icon: "🥉" },
+            { name: "🥈 Серебро", threshold: 2000, cashback: 7, color: "#bdc3c7", icon: "🥈" },
+            { name: "🥇 Золото", threshold: 8000, cashback: 10, color: "#f1c40f", icon: "🥇" },
+            { name: "💎 Бриллиант", threshold: 20000, cashback: 15, color: "#00b4d8", icon: "💎" }
         ];
         
         await updateCompanyTiers(companyId, defaultTiers);
@@ -683,11 +683,11 @@ async function getCompanyTiers(companyId) {
     } catch (error) {
         console.error('❌ Ошибка getCompanyTiers:', error);
         return [
-            { name: "🌱 Новичок", threshold: 0, multiplier: 1, cashback: 3, color: "#95a5a6", icon: "🌱" },
-            { name: "🥉 Бронза", threshold: 500, multiplier: 1.2, cashback: 5, color: "#cd7f32", icon: "🥉" },
-            { name: "🥈 Серебро", threshold: 2000, multiplier: 1.5, cashback: 7, color: "#bdc3c7", icon: "🥈" },
-            { name: "🥇 Золото", threshold: 8000, multiplier: 2, cashback: 10, color: "#f1c40f", icon: "🥇" },
-            { name: "💎 Бриллиант", threshold: 20000, multiplier: 2.5, cashback: 15, color: "#00b4d8", icon: "💎" }
+            { name: "🌱 Новичок", threshold: 0, cashback: 3, color: "#95a5a6", icon: "🌱" },
+            { name: "🥉 Бронза", threshold: 500, cashback: 5, color: "#cd7f32", icon: "🥉" },
+            { name: "🥈 Серебро", threshold: 2000, cashback: 7, color: "#bdc3c7", icon: "🥈" },
+            { name: "🥇 Золото", threshold: 8000, cashback: 10, color: "#f1c40f", icon: "🥇" },
+            { name: "💎 Бриллиант", threshold: 20000, cashback: 15, color: "#00b4d8", icon: "💎" }
         ];
     }
 }
@@ -732,18 +732,51 @@ async function addMissingColumns() {
         
         if (checkTiers.rows.length === 0) {
             console.log('📝 Добавляем колонку tiers_settings в таблицу companies...');
+            // ИСПРАВЛЕНО: убрали multiplier, оставили только cashback
             const defaultTiers = JSON.stringify([
-                {"name": "🌱 Новичок", "threshold": 0, "multiplier": 1, "cashback": 3, "color": "#95a5a6", "icon": "🌱"},
-                {"name": "🥉 Бронза", "threshold": 500, "multiplier": 1.2, "cashback": 5, "color": "#cd7f32", "icon": "🥉"},
-                {"name": "🥈 Серебро", "threshold": 2000, "multiplier": 1.5, "cashback": 7, "color": "#bdc3c7", "icon": "🥈"},
-                {"name": "🥇 Золото", "threshold": 8000, "multiplier": 2, "cashback": 10, "color": "#f1c40f", "icon": "🥇"},
-                {"name": "💎 Бриллиант", "threshold": 20000, "multiplier": 2.5, "cashback": 15, "color": "#00b4d8", "icon": "💎"}
+                {"name": "🌱 Новичок", "threshold": 0, "cashback": 3, "color": "#95a5a6", "icon": "🌱"},
+                {"name": "🥉 Бронза", "threshold": 500, "cashback": 5, "color": "#cd7f32", "icon": "🥉"},
+                {"name": "🥈 Серебро", "threshold": 2000, "cashback": 7, "color": "#bdc3c7", "icon": "🥈"},
+                {"name": "🥇 Золото", "threshold": 8000, "cashback": 10, "color": "#f1c40f", "icon": "🥇"},
+                {"name": "💎 Бриллиант", "threshold": 20000, "cashback": 15, "color": "#00b4d8", "icon": "💎"}
             ]);
             await query(`
                 ALTER TABLE companies 
                 ADD COLUMN tiers_settings JSONB DEFAULT $1::jsonb
             `, [defaultTiers]);
             console.log('✅ Колонка tiers_settings добавлена');
+        } else {
+            // Обновляем существующие записи: удаляем multiplier, оставляем cashback
+            console.log('📝 Обновляем существующие tiers_settings, удаляем multiplier...');
+            const companies = await query('SELECT id, tiers_settings FROM companies WHERE tiers_settings IS NOT NULL');
+            for (const company of companies.rows) {
+                let tiers = company.tiers_settings;
+                if (typeof tiers === 'string') {
+                    tiers = JSON.parse(tiers);
+                }
+                if (Array.isArray(tiers)) {
+                    let updated = false;
+                    const newTiers = tiers.map(tier => {
+                        if (tier.multiplier !== undefined) {
+                            updated = true;
+                            const { multiplier, ...rest } = tier;
+                            // Если cashback не задан, используем multiplier * 5 как fallback
+                            if (rest.cashback === undefined) {
+                                rest.cashback = Math.min(30, (multiplier || 1) * 5);
+                            }
+                            return rest;
+                        }
+                        return tier;
+                    });
+                    if (updated) {
+                        await query(
+                            'UPDATE companies SET tiers_settings = $1::jsonb WHERE id = $2',
+                            [JSON.stringify(newTiers), company.id]
+                        );
+                        console.log(`✅ Обновлены уровни для компании ${company.id}`);
+                    }
+                }
+            }
         }
         
         const checkStartDate = await query(`
@@ -860,17 +893,43 @@ async function addMissingColumns() {
             console.log('✅ Колонка products добавлена');
         }
         
-        // Добавляем колонку requires_purchase
+        // Добавляем колонку is_free (вместо requires_purchase)
+        const checkIsFree = await query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'promotions' AND column_name = 'is_free'
+        `);
+        
+        if (checkIsFree.rows.length === 0) {
+            console.log('📝 Добавляем колонку is_free в таблицу promotions...');
+            await query(`ALTER TABLE promotions ADD COLUMN is_free BOOLEAN DEFAULT FALSE`);
+            console.log('✅ Колонка is_free добавлена');
+        }
+        
+        // Добавляем колонку price
+        const checkPrice = await query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'promotions' AND column_name = 'price'
+        `);
+        
+        if (checkPrice.rows.length === 0) {
+            console.log('📝 Добавляем колонку price в таблицу promotions...');
+            await query(`ALTER TABLE promotions ADD COLUMN price INTEGER DEFAULT 100`);
+            console.log('✅ Колонка price добавлена');
+        }
+        
+        // Удаляем устаревшую колонку requires_purchase если она есть
         const checkRequiresPurchase = await query(`
             SELECT column_name 
             FROM information_schema.columns 
             WHERE table_name = 'promotions' AND column_name = 'requires_purchase'
         `);
         
-        if (checkRequiresPurchase.rows.length === 0) {
-            console.log('📝 Добавляем колонку requires_purchase в таблицу promotions...');
-            await query(`ALTER TABLE promotions ADD COLUMN requires_purchase BOOLEAN DEFAULT FALSE`);
-            console.log('✅ Колонка requires_purchase добавлена');
+        if (checkRequiresPurchase.rows.length > 0) {
+            console.log('📝 Удаляем устаревшую колонку requires_purchase...');
+            await query(`ALTER TABLE promotions DROP COLUMN requires_purchase`);
+            console.log('✅ Колонка requires_purchase удалена');
         }
         
         console.log('✅ Все недостающие колонки добавлены');
@@ -888,12 +947,13 @@ async function insertTestData() {
         if (count === 0) {
             console.log('📝 Добавление тестовых данных...');
             
+            // ИСПРАВЛЕНО: убрали multiplier, оставили только cashback
             const defaultTiers = JSON.stringify([
-                {"name": "🌱 Новичок", "threshold": 0, "multiplier": 1, "cashback": 3, "color": "#95a5a6", "icon": "🌱"},
-                {"name": "🥉 Бронза", "threshold": 500, "multiplier": 1.2, "cashback": 5, "color": "#cd7f32", "icon": "🥉"},
-                {"name": "🥈 Серебро", "threshold": 2000, "multiplier": 1.5, "cashback": 7, "color": "#bdc3c7", "icon": "🥈"},
-                {"name": "🥇 Золото", "threshold": 8000, "multiplier": 2, "cashback": 10, "color": "#f1c40f", "icon": "🥇"},
-                {"name": "💎 Бриллиант", "threshold": 20000, "multiplier": 2.5, "cashback": 15, "color": "#00b4d8", "icon": "💎"}
+                {"name": "🌱 Новичок", "threshold": 0, "cashback": 3, "color": "#95a5a6", "icon": "🌱"},
+                {"name": "🥉 Бронза", "threshold": 500, "cashback": 5, "color": "#cd7f32", "icon": "🥉"},
+                {"name": "🥈 Серебро", "threshold": 2000, "cashback": 7, "color": "#bdc3c7", "icon": "🥈"},
+                {"name": "🥇 Золото", "threshold": 8000, "cashback": 10, "color": "#f1c40f", "icon": "🥇"},
+                {"name": "💎 Бриллиант", "threshold": 20000, "cashback": 15, "color": "#00b4d8", "icon": "💎"}
             ]);
             
             // Добавляем первую компанию
@@ -939,6 +999,31 @@ async function insertTestData() {
                         `, [company.id, quest.emoji, quest.title, quest.description, quest.reward]);
                     }
                     console.log(`✅ Добавлено ${presetQuests.length} заданий для компании ${company.id}`);
+                }
+                
+                // ОБНОВЛЕНИЕ: миграция существующих уровней — удаляем multiplier
+                const tiersResult = await query('SELECT tiers_settings FROM companies WHERE id = $1', [company.id]);
+                if (tiersResult.rows.length > 0 && tiersResult.rows[0].tiers_settings) {
+                    let tiers = tiersResult.rows[0].tiers_settings;
+                    if (typeof tiers === 'string') {
+                        tiers = JSON.parse(tiers);
+                    }
+                    if (Array.isArray(tiers) && tiers.length > 0 && tiers[0].multiplier !== undefined) {
+                        console.log(`📝 Обновляем уровни для компании ${company.id}, удаляем multiplier...`);
+                        const newTiers = tiers.map(tier => {
+                            const { multiplier, ...rest } = tier;
+                            // Если cashback не задан, используем multiplier * 5 как fallback, но не больше 30%
+                            if (rest.cashback === undefined) {
+                                rest.cashback = Math.min(30, (multiplier || 1) * 5);
+                            }
+                            return rest;
+                        });
+                        await query(
+                            'UPDATE companies SET tiers_settings = $1::jsonb WHERE id = $2',
+                            [JSON.stringify(newTiers), company.id]
+                        );
+                        console.log(`✅ Уровни обновлены для компании ${company.id}`);
+                    }
                 }
             }
         }
@@ -1058,7 +1143,17 @@ async function getCompanyByEmail(email) {
 }
 
 async function getAllCompanies() {
-    const result = await query('SELECT id, company, brand_color as "brandColor", description FROM companies WHERE active = true ORDER BY created_at DESC');
+    const result = await query(`
+        SELECT 
+            id, 
+            company, 
+            brand_color as "brandColor", 
+            description,
+            COALESCE(settings->>'company_emoji', '🏢') as "companyEmoji"
+        FROM companies 
+        WHERE active = true 
+        ORDER BY created_at DESC
+    `);
     return result.rows;
 }
 
@@ -2650,6 +2745,7 @@ async function addBonusSettingsColumn() {
         
         if (checkColumn.rows.length === 0) {
             console.log('📝 Добавляем колонку bonus_settings в таблицу companies...');
+            // ИСПРАВЛЕНО: переименовали maxBonusPaymentPercent в maxBonusPaymentPercent (оставили как есть, но в UI будем показывать как "Макс. % оплаты")
             await query(`
                 ALTER TABLE companies 
                 ADD COLUMN bonus_settings JSONB DEFAULT '{
@@ -2661,7 +2757,6 @@ async function addBonusSettingsColumn() {
             `);
             console.log('✅ Колонка bonus_settings добавлена');
         } else {
-            // Обновляем существующие записи, если есть null значения
             await query(`
                 UPDATE companies 
                 SET bonus_settings = '{
@@ -3476,6 +3571,68 @@ async function findCashierByLogin(login) {
     }
 }
 
+async function saveGreetingSettings(companyId, greetingText, greetingEmoji, companyEmoji, fullGreetingText) {
+    try {
+        const result = await query(
+            `UPDATE companies 
+             SET settings = jsonb_set(
+                 jsonb_set(
+                     jsonb_set(
+                         COALESCE(settings, '{}'::jsonb),
+                         '{greeting}',
+                         jsonb_build_object('text', $2::text, 'emoji', $3::text)
+                     ),
+                     '{company_emoji}',
+                     to_jsonb($4::text)
+                 ),
+                 '{full_greeting_text}',
+                 to_jsonb($5::text)
+             )
+             WHERE id = $1
+             RETURNING id, settings`,
+            [companyId, greetingText, greetingEmoji, companyEmoji || '🏢', fullGreetingText || '']
+        );
+        
+        return result.rows[0];
+    } catch (error) {
+        console.error('Ошибка сохранения приветствия:', error);
+        throw error;
+    }
+}
+
+async function getGreetingSettings(companyId) {
+    try {
+        const result = await query(
+            `SELECT 
+                COALESCE(settings->'greeting'->>'text', 'Добро пожаловать!') as greeting_text,
+                COALESCE(settings->'greeting'->>'emoji', '👋') as greeting_emoji,
+                COALESCE(settings->>'company_emoji', '🏢') as company_emoji,
+                COALESCE(settings->>'full_greeting_text', '') as full_greeting_text
+             FROM companies 
+             WHERE id = $1`,
+            [companyId]
+        );
+        
+        if (result.rows.length > 0) {
+            return result.rows[0];
+        }
+        return { 
+            greeting_text: 'Добро пожаловать!', 
+            greeting_emoji: '👋',
+            company_emoji: '🏢',
+            full_greeting_text: ''
+        };
+    } catch (error) {
+        console.error('Ошибка получения приветствия:', error);
+        return { 
+            greeting_text: 'Добро пожаловать!', 
+            greeting_emoji: '👋',
+            company_emoji: '🏢',
+            full_greeting_text: ''
+        };
+    }
+}
+
 async function saveCashierCredentials(companyId, login, password) {
     try {
         const result = await query(
@@ -3678,5 +3835,8 @@ module.exports = {
     saveCashierCredentials,
     findCashierByLogin,
 	addUserProgressSpentColumn,
-	getUserFullData
+	getUserFullData,
+    // Greeting settings
+    saveGreetingSettings,
+    getGreetingSettings
 };
