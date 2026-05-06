@@ -211,6 +211,31 @@ app.get('/api/companies/list', async (req, res) => {
     }
 });
 
+app.get('/api/companies/:companyId/timezone', async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.companyId);
+    const result = await query('SELECT timezone_offset FROM companies WHERE id = $1', [companyId]);
+    if (result.rows.length > 0) {
+      res.json({ success: true, timezoneOffset: result.rows[0].timezone_offset || 0 });
+    } else {
+      res.status(404).json({ success: false, message: 'Компания не найдена' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/companies/:companyId/timezone', async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.companyId);
+    const { timezoneOffset } = req.body;
+    await query('UPDATE companies SET timezone_offset = $1 WHERE id = $2', [timezoneOffset, companyId]);
+    res.json({ success: true, timezoneOffset });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============ API ДЛЯ АКЦИЙ ============
 
 app.get('/api/promotions/:companyId', async (req, res) => {
@@ -629,6 +654,9 @@ app.get('/api/users/:userId/transactions/:companyId', async (req, res) => {
             createdAt: t.created_at
         }));
         
+        // ✅ СОРТИРУЕМ ПО ДАТЕ (новые сверху)
+        formattedTransactions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
         res.json({
             success: true,
             transactions: formattedTransactions,
@@ -799,7 +827,7 @@ app.get('/api/users/:userId/promotions/purchased/:companyId', async (req, res) =
     }
 });
 
-// ============ API ДЛЯ POS ТЕРМИНАЛА - ПРОВЕРКА КУПЛЕННЫХ АКЦИЙ ============
+// ============ API ДЛЯ КАССЫ - ПРОВЕРКА КУПЛЕННЫХ АКЦИЙ ============
 
 app.post('/api/pos/check-purchased-promotion', async (req, res) => {
     try {
@@ -1465,7 +1493,7 @@ app.get('/api/users/:userId/transactions/:companyId', async (req, res) => {
     }
 });
 
-// Получение баланса пользователя по QR-данным (для POS)
+// Получение баланса пользователя по QR-данным
 app.post('/api/pos/get-user-balance', async (req, res) => {
     try {
         const { qrData } = req.body;
@@ -1511,7 +1539,7 @@ app.post('/api/pos/get-user-balance', async (req, res) => {
 
 app.post('/api/pos/apply-bonus-v2', async (req, res) => {
     try {
-        const { qrData, amount, storeId, cashierId } = req.body;
+        const { qrData, amount, storeId, cashierId, addressId, address, cityName } = req.body;
         
         if (!amount || amount <= 0) {
             return res.status(400).json({ success: false, message: 'Введите сумму заказа' });
@@ -1550,6 +1578,9 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
             bonusSettings = { ...bonusSettings, ...settings };
         }
         
+        // Формируем название адреса для отображения
+        const addressDisplay = address ? `${address}${cityName ? ` (${cityName})` : ''}` : (storeId || 'касса');
+        
         // Получаем уровень пользователя и его кешбэк (в процентах)
         const tier = await getUserTier(user.total_spent || 0, userData.companyId);
         const cashbackPercent = tier.cashback || 3;
@@ -1565,7 +1596,7 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
         }
         
         const cashbackRub = amount * cashbackPercent / 100;
-		const bonusEarned = Math.floor(cashbackRub * rubToBonus);
+        const bonusEarned = Math.floor(cashbackRub * rubToBonus);
         
         if (bonusEarned === 0 && amount >= minPurchase) {
             return res.status(400).json({ 
@@ -1580,8 +1611,20 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
             user.company_id, 
             bonusEarned, 
             'earn', 
-            `Покупка на ${amount}₽ (кешбэк ${cashbackPercent}% = ${cashbackRub.toFixed(2)}₽ → ${bonusEarned} бонусов) в ${storeId || 'кассе'}`,
-            { amount, storeId, cashierId, source: 'pos', cashbackPercent, cashbackRub, rubToBonus, bonusSettings }
+            `Покупка на ${amount}₽ (кешбэк ${cashbackPercent}% = ${cashbackRub.toFixed(2)}₽ → ${bonusEarned} бонусов) - ${addressDisplay}`,
+            { 
+                amount, 
+                storeId, 
+                cashierId, 
+                source: 'pos', 
+                cashbackPercent, 
+                cashbackRub, 
+                rubToBonus, 
+                bonusSettings,
+                address_id: addressId,      
+                address: address,
+                city_name: cityName
+            }
         );
         
         // Отслеживаем прогресс покупок для заданий
@@ -1605,7 +1648,7 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
                 type: 'earn',
                 amount: amount,
                 bonusChange: bonusEarned,
-                description: `Покупка на ${amount}₽ (кешбэк ${cashbackPercent}%)`,
+                description: `Покупка на ${amount}₽ (кешбэк ${cashbackPercent}%) - ${addressDisplay}`,
                 createdAt: new Date().toISOString()
             }
         });
@@ -1616,10 +1659,9 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
     }
 });
 
-// Списание бонусов с записью в историю
 app.post('/api/pos/spend-bonus-v2', async (req, res) => {
     try {
-        const { qrData, bonusToSpend, storeId, cashierId } = req.body;
+        const { qrData, bonusToSpend, storeId, cashierId, addressId, address, cityName } = req.body;
         
         if (!bonusToSpend || bonusToSpend <= 0) {
             return res.status(400).json({ success: false, message: 'Введите сумму списания' });
@@ -1645,13 +1687,24 @@ app.post('/api/pos/spend-bonus-v2', async (req, res) => {
             });
         }
         
+        // Формируем название адреса для отображения
+        const addressDisplay = address ? `${address}${cityName ? ` (${cityName})` : ''}` : (storeId || 'касса');
+        
         const newBalance = await updateBalanceWithTransaction(
             user.id,
             user.company_id,
             bonusToSpend,
             'spend',
-            `Списание ${bonusToSpend} бонусов в ${storeId || 'кассе'}`,
-            { bonusToSpend, storeId, cashierId, source: 'pos' }
+            `Списание ${bonusToSpend} бонусов - ${addressDisplay}`,
+            { 
+                bonusToSpend, 
+                storeId, 
+                cashierId, 
+                source: 'pos', 
+                address_id: addressId, 
+                address: address, 
+                city_name: cityName 
+            }
         );
         
         res.json({
@@ -1662,7 +1715,7 @@ app.post('/api/pos/spend-bonus-v2', async (req, res) => {
             transaction: {
                 type: 'spend',
                 bonusChange: -bonusToSpend,
-                description: `Списание ${bonusToSpend} бонусов`,
+                description: `Списание ${bonusToSpend} бонусов - ${addressDisplay}`,
                 createdAt: new Date().toISOString()
             }
         });
@@ -2970,8 +3023,174 @@ app.post('/api/companies/:companyId/greeting-settings', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+// API для получения данных активности по периодам (неделя, месяц, год)
+app.get('/api/companies/:companyId/analytics/activity', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const period = req.query.period || 'week';
+        
+        let startDate;
+        let groupByFormat;
+        const now = new Date();
+        
+        switch (period) {
+            case 'week':
+                startDate = new Date(now);
+                startDate.setDate(startDate.getDate() - 7);
+                groupByFormat = 'YYYY-MM-DD';
+                break;
+            case 'month':
+                startDate = new Date(now);
+                startDate.setMonth(startDate.getMonth() - 1);
+                groupByFormat = 'YYYY-MM-DD';
+                break;
+            case 'year':
+                startDate = new Date(now);
+                startDate.setFullYear(startDate.getFullYear() - 1);
+                groupByFormat = 'YYYY-MM';
+                break;
+            default:
+                startDate = new Date(now);
+                startDate.setDate(startDate.getDate() - 7);
+                groupByFormat = 'YYYY-MM-DD';
+        }
+        
+        // Для PostgreSQL используем to_char для форматирования дат
+        let groupBySql;
+        if (period === 'year') {
+            groupBySql = `to_char(created_at, 'YYYY-MM')`;
+        } else {
+            groupBySql = `to_char(created_at, 'YYYY-MM-DD')`;
+        }
+        
+        const result = await query(
+            `SELECT 
+                ${groupBySql} as date,
+                COUNT(*) as transactions,
+                COUNT(DISTINCT user_id) as unique_users,
+                COALESCE(SUM(amount), 0) as revenue
+             FROM transactions
+             WHERE company_id = $1
+             AND source = 'pos'
+             AND amount > 0
+             AND created_at >= $2
+             GROUP BY ${groupBySql}
+             ORDER BY date ASC`,
+            [companyId, startDate]
+        );
+        
+        // Форматируем результат для отправки на фронтенд
+        const formattedActivity = result.rows.map(row => ({
+            date: row.date,
+            transactions: parseInt(row.transactions),
+            unique_users: parseInt(row.unique_users),
+            revenue: parseFloat(row.revenue)
+        }));
+        
+        res.json({ success: true, activity: formattedActivity });
+    } catch (error) {
+        console.error('Ошибка получения активности:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+// ============ API ДЛЯ ВЫРУЧКИ ПО АДРЕСАМ ============
 
+// ============ API ДЛЯ ВЫРУЧКИ ПО АДРЕСАМ ============
 
+app.get('/api/companies/:companyId/addresses-revenue', async (req, res) => {
+    try {
+        const companyId = parseInt(req.params.companyId);
+        const period = req.query.period || 'month';
+        
+        let startDate;
+        const now = new Date();
+        
+        switch (period) {
+            case 'month':
+                startDate = new Date(now);
+                startDate.setMonth(startDate.getMonth() - 1);
+                break;
+            case 'year':
+                startDate = new Date(now);
+                startDate.setFullYear(startDate.getFullYear() - 1);
+                break;
+            default:
+                startDate = new Date(now);
+                startDate.setMonth(startDate.getMonth() - 1);
+        }
+        
+        // Получаем все активные адреса компании
+        const addressesResult = await query(
+            `SELECT id, address, city_id, is_main 
+             FROM addresses 
+             WHERE company_id = $1 AND is_active = true`,
+            [companyId]
+        );
+        
+        if (addressesResult.rows.length === 0) {
+            return res.json({ success: true, addresses: [], totalRevenue: 0 });
+        }
+        
+        // Получаем города для адресов
+        const citiesResult = await query(
+            `SELECT id, name FROM cities WHERE company_id = $1 AND is_active = true`,
+            [companyId]
+        );
+        
+        const citiesMap = {};
+        citiesResult.rows.forEach(city => {
+            citiesMap[city.id] = city.name;
+        });
+        
+        // Получаем выручку по адресам из транзакций
+        const revenueResult = await query(
+            `SELECT 
+                t.metadata->>'address_id' as address_id,
+                COALESCE(SUM(t.amount), 0) as revenue
+             FROM transactions t
+             WHERE t.company_id = $1
+             AND t.source = 'pos'
+             AND t.amount > 0
+             AND t.created_at >= $2
+             AND t.metadata->>'address_id' IS NOT NULL
+             GROUP BY t.metadata->>'address_id'`,
+            [companyId, startDate]
+        );
+        
+        const revenueMap = {};
+        revenueResult.rows.forEach(row => {
+            revenueMap[row.address_id] = parseInt(row.revenue);
+        });
+        
+        // Формируем результат
+        let totalRevenue = 0;
+        const addresses = addressesResult.rows.map(addr => {
+            const revenue = revenueMap[String(addr.id)] || 0;
+            totalRevenue += revenue;
+            
+            return {
+                id: addr.id,
+                address: addr.address,
+                city_name: addr.city_id ? (citiesMap[addr.city_id] || null) : null,
+                is_main: addr.is_main,
+                revenue: revenue
+            };
+        });
+        
+        // Сортируем по убыванию выручки
+        addresses.sort((a, b) => b.revenue - a.revenue);
+        
+        res.json({ 
+            success: true, 
+            addresses: addresses,
+            totalRevenue: totalRevenue,
+            period: period
+        });
+    } catch (error) {
+        console.error('Ошибка получения выручки по адресам:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 const PORT = 3001;
 app.listen(PORT, () => {
     console.log(`✅ Backend running on http://localhost:${PORT}`);

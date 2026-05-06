@@ -77,7 +77,12 @@ const getCurrentTierBySpent = (spent) => {
   }
   return current;
 };
-  
+
+function getCompanyTime(date = new Date()) {
+  const offset = selectedGroup?.timezoneOffset || 0;
+  return new Date(date.getTime() + offset * 60000);
+}
+
 const getNextTierBySpent = (spent) => {
   const tiersList = tiers.length > 0 ? tiers : DEFAULT_TIERS;
   for (let i = 0; i < tiersList.length; i++) {
@@ -130,7 +135,7 @@ useEffect(() => {
         const response = await fetch(`${API_URL}/api/promotions/${selectedGroup.id}`);
         if (response.ok) {
           const allPromos = await response.json();
-          const now = new Date();
+          const now = new Date(Date.now() + (selectedGroup?.timezoneOffset || 0) * 60000);
           
           const activePromotions = allPromos.filter(promo => {
             if (!promo.active) return false;
@@ -160,7 +165,7 @@ useEffect(() => {
 }, [activeTab, userId, selectedGroup?.id]);
 useEffect(() => {
   const timer = setInterval(() => {
-    setCurrentTime(new Date());
+    setCurrentTime(new Date(Date.now() + (selectedGroup?.timezoneOffset || 0) * 60000));
   }, 1000);
   
   return () => clearInterval(timer);
@@ -476,7 +481,6 @@ const updateBalanceAndStats = async (change, type, metadata = {}) => {
   return true;
 };
   
-
 const syncBalanceFromDB = async () => {
   if (!userId || !selectedGroup) return;
   
@@ -495,15 +499,69 @@ const syncBalanceFromDB = async () => {
     if (data.success) {
       const cur = getCurrentGroupData();
       
-      // ✅ ОБНОВЛЯЕМ: totalSpent берем из БД (теперь игры увеличивают его)
+      // Загружаем историю транзакций с сервера
+      let serverHistory = [];
+      try {
+        const historyResponse = await fetch(`${API_URL}/api/users/${userId}/transactions/${selectedGroup.id}?limit=50`);
+        const historyData = await historyResponse.json();
+        
+        if (historyData.success && historyData.transactions.length > 0) {
+          // ✅ СОРТИРУЕМ ТРАНЗАКЦИИ (новые сверху)
+          const sortedTransactions = [...historyData.transactions].sort((a, b) => 
+            new Date(b.createdAt) - new Date(a.createdAt)
+          );
+          
+          // Преобразуем в формат истории
+          serverHistory = sortedTransactions.map(t => {
+            let icon = '';
+            let desc = t.description || '';
+            
+            // Определяем иконку для истории
+            if (t.type === 'earn') {
+              if (desc.includes('Покупка') || t.source === 'pos') {
+                icon = '🛒';
+              } else if (desc.includes('Задание')) {
+                icon = '✅';
+              } else if (desc.includes('Ежедневный')) {
+                icon = '📅';
+              } else {
+                icon = '➕';
+              }
+            } else {
+              if (desc.includes('акци') || desc.includes('promotion')) {
+                icon = '🎯';
+              } else if (desc.includes('Списание')) {
+                icon = '💸';
+              } else {
+                icon = '➖';
+              }
+            }
+            
+            return {
+              id: t.id,
+              desc: desc,
+              points: t.bonusChange > 0 ? `+${t.bonusChange}` : `${t.bonusChange}`,
+              date: new Date(t.createdAt).toLocaleString('ru-RU'),
+              type: t.type,
+              icon: icon
+            };
+          });
+        }
+      } catch (historyError) {
+        console.error('Ошибка загрузки истории:', historyError);
+      }
+      
+      // ✅ ОБНОВЛЯЕМ: баланс и история из БД
       const newData = {
         ...cur,
         bonusBalance: data.user.bonus_balance || 0,
         totalEarned: data.user.total_earned || 0,
-        totalSpent: data.user.total_spent || 0  // Теперь игры обновляют total_spent на сервере
+        totalSpent: data.user.total_spent || 0,
+        history: serverHistory.length > 0 ? serverHistory : cur.history || []
       };
+      
       saveCurrentGroupData(newData);
-      console.log('Баланс синхронизирован из БД:', newData.bonusBalance, 'totalSpent:', newData.totalSpent);
+      console.log('Баланс синхронизирован из БД:', newData.bonusBalance, 'totalSpent:', newData.totalSpent, 'history length:', newData.history.length);
     }
   } catch (error) {
     console.error('Ошибка синхронизации баланса:', error);
@@ -718,6 +776,16 @@ useEffect(() => {
       console.error('Ошибка загрузки приветствия:', error);
     }
     
+	// Загружаем часовой пояс компании
+try {
+  const tzResp = await fetch(`${API_URL}/api/companies/${company.id}/timezone`);
+  const tzData = await tzResp.json();
+  const timezoneOffset = tzData.success ? tzData.timezoneOffset : 0;
+  setSelectedGroup(prev => ({ ...prev, timezoneOffset }));
+} catch (e) {
+  console.error('Ошибка загрузки timezone:', e);
+}
+	
     if (userInfo?.id) {
       await loadUserData(company.id, userInfo.id, `${userInfo.first_name} ${userInfo.last_name}`);
     }
@@ -1177,7 +1245,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
         ))}
       </nav>
 
-      {activeTab === 'card' && selectedGroup && <LoyaltyCard userInfo={userInfo} selectedGroup={selectedGroup} />}
+      {activeTab === 'card' && selectedGroup && <LoyaltyCard userInfo={userInfo} selectedGroup={selectedGroup} companyTimezoneOffset={selectedGroup?.timezoneOffset || 0} />}
       
       {activeTab === 'home' && selectedGroup && (
   <>
@@ -1648,6 +1716,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
                 userId={userId} 
                 selectedGroupId={selectedGroup?.id}
                 vkId={userInfo?.id}
+				companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
             />
         </div>
         
@@ -1656,17 +1725,20 @@ const progressToNext = getProgressToNextTier(currentSpent);
             userBalance={currentBalance}
             companyId={selectedGroup?.id}
             userId={userId}
+			companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
         />
         <DiceRoll 
             onBalanceUpdate={updateBalanceAndStats} 
             userBalance={currentBalance}
             companyId={selectedGroup?.id}
+			companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
         />
         <ScratchCard 
             onBalanceUpdate={updateBalanceAndStats} 
             userBalance={currentBalance}
             companyId={selectedGroup?.id}
             userId={userId}
+			companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
         />
     </div>
 )}
@@ -1677,6 +1749,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
     userId={userId}
     userBalance={currentBalance}
     onBalanceUpdate={updateBalanceAndStats}
+	companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
   />
 )}
       
@@ -1687,10 +1760,11 @@ const progressToNext = getProgressToNextTier(currentSpent);
           userId={userId} 
           selectedGroupId={selectedGroup?.id}
           vkId={userInfo?.id}
+		  companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
         />
       )}
       
-      {activeTab === 'referral' && selectedGroup && <ReferralSystem onBalanceUpdate={updateBalanceAndStats} userId={userInfo?.id} selectedGroupId={selectedGroup?.id} />}
+      {activeTab === 'referral' && selectedGroup && <ReferralSystem onBalanceUpdate={updateBalanceAndStats} userId={userInfo?.id} selectedGroupId={selectedGroup?.id} companyTimezoneOffset={selectedGroup?.timezoneOffset || 0} />}
       
 
       {activeTab === 'history' && (
@@ -1699,8 +1773,8 @@ const progressToNext = getProgressToNextTier(currentSpent);
     <div style={{ display:'flex', flexDirection:'column', gap:12 }} id="history-container">
       {currentGroupData?.history?.length > 0 ? (
         <>
-          {/* Показываем покупки из транзакций, если они есть */}
-          {currentGroupData.history.map(item => {
+          {/* ✅ СОРТИРУЕМ ИСТОРИЮ ПО ДАТЕ (новые сверху) */}
+          {[...currentGroupData.history].sort((a, b) => new Date(b.date) - new Date(a.date)).map(item => {
             // Определяем тип операции для отображения иконки
             let icon = '';
             let itemColor = '';
@@ -1765,8 +1839,13 @@ const progressToNext = getProgressToNextTier(currentSpent);
               const response = await fetch(`${API_URL}/api/users/${userId}/transactions/${selectedGroup.id}?limit=100`);
               const data = await response.json();
               if (data.success && data.transactions.length > 0) {
+                // ✅ СОРТИРУЕМ ТРАНЗАКЦИИ ПО ДАТЕ (новые сверху)
+                const sortedTransactions = [...data.transactions].sort((a, b) => 
+                  new Date(b.createdAt) - new Date(a.createdAt)
+                );
+                
                 // Преобразуем транзакции с сервера в формат истории
-                const serverHistory = data.transactions.map(t => {
+                const serverHistory = sortedTransactions.map(t => {
                   const date = new Date(t.createdAt);
                   const formattedDate = date.toLocaleString('ru-RU');
                   
@@ -1783,13 +1862,13 @@ const progressToNext = getProgressToNextTier(currentSpent);
                   const isPromotionPurchase = metadata.promotion_id || displayDesc.includes('Покупка акции') || displayDesc.includes('Бесплатная акция');
                   
                   if (t.type === 'earn') {
-                    if (t.description.includes('Покупка') || t.source === 'pos') {
+                    if (t.description?.includes('Покупка') || t.source === 'pos') {
                       icon = '🛒';
                       itemColor = '#2ecc71';
-                    } else if (t.description.includes('Задание')) {
+                    } else if (t.description?.includes('Задание')) {
                       icon = '✅';
                       itemColor = '#3498db';
-                    } else if (t.description.includes('Ежедневный')) {
+                    } else if (t.description?.includes('Ежедневный')) {
                       icon = '📅';
                       itemColor = '#f39c12';
                     } else {
@@ -1798,12 +1877,10 @@ const progressToNext = getProgressToNextTier(currentSpent);
                     }
                   } else {
                     if (isPromotionPurchase) {
-                      // Покупка акции - показываем название из описания или метаданных
                       icon = '🎯';
                       itemColor = '#9b59b6';
-                      // Описание уже содержит название акции с бэкенда
                       displayDesc = t.description;
-                    } else if (t.description.includes('Списание')) {
+                    } else if (t.description?.includes('Списание')) {
                       icon = '💸';
                       itemColor = '#e74c3c';
                     } else {
@@ -1835,7 +1912,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
                   const existingItems = historyContainer.querySelectorAll('div[style*="background:rgba(0,0,0,0.3)"]');
                   existingItems.forEach(item => item.remove());
                   
-                  // Добавляем новые транзакции
+                  // Добавляем новые транзакции (уже отсортированные)
                   const transactionsHtml = serverHistory.slice(0, 50).map(item => `
                     <div style="background:rgba(0,0,0,0.3); border-radius:20px; padding:14px 16px; margin-bottom:12px; border-left: 4px solid ${item.color};">
                       <div style="display:flex; align-items:center; gap:10px;">

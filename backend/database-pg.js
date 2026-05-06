@@ -30,10 +30,13 @@ async function initDatabase() {
                 active BOOLEAN DEFAULT TRUE,
                 settings JSONB DEFAULT '{}',
                 tiers_settings JSONB DEFAULT '[]',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				timezone_offset INTEGER DEFAULT 0
             )
         `);
-
+		
+		await addTimezoneColumn();
+		
         await query(`
             CREATE TABLE IF NOT EXISTS promotions (
                 id SERIAL PRIMARY KEY,
@@ -233,7 +236,8 @@ async function initDatabase() {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-
+		
+		await addTimezoneColumn();
         console.log('✅ Таблицы созданы/проверены');
 		
          await initLocationTables();
@@ -2453,7 +2457,6 @@ async function getRealAnalytics(companyId, period = 'month') {
     }
     
     // Получаем реальную выручку (только POS-транзакции с amount > 0)
-    // ИСКЛЮЧАЕМ транзакции из игр (у них amount = 0)
     const revenueResult = await query(
         `SELECT 
             COUNT(*) as total_transactions,
@@ -2468,7 +2471,7 @@ async function getRealAnalytics(companyId, period = 'month') {
         [companyId, startDate]
     );
     
-    // Получаем количество активных пользователей (совершивших покупку в период)
+    // Получаем количество активных пользователей
     const activeUsersResult = await query(
         `SELECT COUNT(DISTINCT user_id) as count
          FROM transactions
@@ -2479,7 +2482,7 @@ async function getRealAnalytics(companyId, period = 'month') {
         [companyId, startDate]
     );
     
-    // Получаем количество новых пользователей (зарегистрировались в период)
+    // Получаем количество новых пользователей
     const newUsersResult = await query(
         `SELECT COUNT(*) as count
          FROM users
@@ -2502,6 +2505,7 @@ async function getRealAnalytics(companyId, period = 'month') {
          AND source = 'pos'
          AND amount > 0
          AND items != '[]'
+         AND items IS NOT NULL
          AND created_at >= $2
          GROUP BY items
          ORDER BY sales_count DESC
@@ -2539,6 +2543,88 @@ async function getRealAnalytics(companyId, period = 'month') {
         [companyId, startDate]
     );
     
+    // ========== НОВЫЙ ЗАПРОС: ВЫРУЧКА ПО АДРЕСАМ ==========
+    // Получаем выручку по адресам из metadata
+    const addressesRevenueResult = await query(
+        `SELECT 
+            t.metadata->>'address' as address,
+            t.metadata->>'address_id' as address_id,
+            COALESCE(SUM(t.amount), 0) as revenue,
+            COUNT(*) as transaction_count
+         FROM transactions t
+         WHERE t.company_id = $1
+         AND t.source = 'pos'
+         AND t.amount > 0
+         AND t.created_at >= $2
+         AND t.metadata->>'address' IS NOT NULL
+         GROUP BY t.metadata->>'address', t.metadata->>'address_id'
+         ORDER BY revenue DESC`,
+        [companyId, startDate]
+    );
+    
+    // Дополнительно получаем адреса из таблицы addresses
+    const addressesFromDb = await query(
+        `SELECT id, address, city_id 
+         FROM addresses 
+         WHERE company_id = $1 AND is_active = true`,
+        [companyId]
+    );
+    
+    // Собираем полную информацию по адресам
+    const addressesRevenue = [];
+    const addressMap = new Map();
+    
+    // Сначала добавляем адреса из транзакций
+    for (const row of addressesRevenueResult.rows) {
+        const addressId = row.address_id ? parseInt(row.address_id) : null;
+        let cityName = null;
+        
+        // Ищем город для этого адреса
+        if (addressId) {
+            const addressInfo = addressesFromDb.rows.find(a => a.id === addressId);
+            if (addressInfo && addressInfo.city_id) {
+                const cityResult = await query('SELECT name FROM cities WHERE id = $1', [addressInfo.city_id]);
+                if (cityResult.rows.length > 0) {
+                    cityName = cityResult.rows[0].name;
+                }
+            }
+        }
+        
+        addressesRevenue.push({
+            id: addressId,
+            address: row.address,
+            city_name: cityName,
+            revenue: parseInt(row.revenue),
+            transaction_count: parseInt(row.transaction_count)
+        });
+        
+        addressMap.set(row.address, true);
+    }
+    
+    // Добавляем адреса, по которым не было продаж, но они есть в системе
+    for (const addr of addressesFromDb.rows) {
+        if (!addressMap.has(addr.address)) {
+            let cityName = null;
+            if (addr.city_id) {
+                const cityResult = await query('SELECT name FROM cities WHERE id = $1', [addr.city_id]);
+                if (cityResult.rows.length > 0) {
+                    cityName = cityResult.rows[0].name;
+                }
+            }
+            
+            addressesRevenue.push({
+                id: addr.id,
+                address: addr.address,
+                city_name: cityName,
+                revenue: 0,
+                transaction_count: 0
+            });
+        }
+    }
+    
+    // Сортируем по убыванию выручки
+    addressesRevenue.sort((a, b) => b.revenue - a.revenue);
+    
     return {
         revenue: parseInt(revenueResult.rows[0].total_revenue),
         totalTransactions: parseInt(revenueResult.rows[0].total_transactions),
@@ -2550,7 +2636,8 @@ async function getRealAnalytics(companyId, period = 'month') {
         avgCheck: Math.round(parseInt(avgCheckResult.rows[0].avg_check)),
         avgBonus: Math.round(parseInt(avgCheckResult.rows[0].avg_bonus)),
         dailyActivity: dailyActivityResult.rows,
-        topProducts: topProductsResult.rows
+        topProducts: topProductsResult.rows,
+        addressesRevenue: addressesRevenue  // НОВОЕ ПОЛЕ
     };
 }
 async function addGiveawayColumns() {
@@ -3666,6 +3753,21 @@ async function addUserProgressSpentColumn() {
     } catch (error) {
         console.error('Ошибка добавления total_spent в user_progress:', error);
     }
+}
+async function addTimezoneColumn() {
+  try {
+    const check = await query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'companies' AND column_name = 'timezone_offset'
+    `);
+    if (check.rows.length === 0) {
+      console.log('📝 Добавляем колонку timezone_offset в таблицу companies...');
+      await query(`ALTER TABLE companies ADD COLUMN timezone_offset INTEGER DEFAULT 0`);
+      console.log('✅ Колонка timezone_offset добавлена');
+    }
+  } catch (error) {
+    console.error('❌ Ошибка добавления timezone_offset:', error);
+  }
 }
 async function getUserFullData(userId, companyId) {
     try {

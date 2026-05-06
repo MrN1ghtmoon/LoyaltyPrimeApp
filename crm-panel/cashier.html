@@ -410,7 +410,16 @@
             <h3>📊 Информация о пользователе</h3>
             <div id="userInfo"></div>
         </div>
-
+		<!-- Выбор адреса заведения -->
+<div class="card" id="addressSection" style="display:none;">
+    <h3>📍 Выберите адрес заведения</h3>
+    <div id="addressList" style="max-height: 250px; overflow-y: auto;">
+        <div class="info">Загрузка адресов...</div>
+    </div>
+    <div id="selectedAddressInfo" style="display: none; margin-top: 12px; padding: 10px; background: #e8f5e9; border-radius: 12px;">
+        ✅ Выбран адрес: <strong id="selectedAddressText"></strong>
+    </div>
+</div>
         <!-- Order Section -->
         <div class="card" id="orderSection" style="display:none;">
         
@@ -1226,9 +1235,12 @@
                     document.getElementById('orderSection').style.display = 'block';
                     document.getElementById('promotionSection').style.display = 'block';
                     
+					
                     // Load promotions and history
                     await loadAvailablePromotions();
                     await loadUserHistory();
+					await loadAddressesForCashier();
+					updateConfirmButtonState();
                     
                     // If no promotions available, disable the promotion radio
                     if (availablePromotions.length === 0) {
@@ -1344,11 +1356,12 @@
         }
         
         // ============ ОБНОВЛЕНИЕ ИТОГОВОЙ СУММЫ ============
-        function updateFinalOrderSummary() {
+function updateFinalOrderSummary() {
     const orderAmount = currentOrderAmount;
     
     if (!orderAmount || orderAmount <= 0) {
         document.getElementById('finalOrderCard').style.display = 'none';
+        updateConfirmButtonState(); // ✅ ДОБАВИТЬ
         return;
     }
     
@@ -1404,6 +1417,39 @@
     } else {
         confirmBtn.disabled = false;
         confirmBtn.style.opacity = '1';
+    }
+    
+    // ✅ ДОБАВИТЬ ВЫЗОВ В КОНЦЕ
+    updateConfirmButtonState();
+}
+// ============ УПРАВЛЕНИЕ КНОПКОЙ ПОДТВЕРЖДЕНИЯ ============
+function updateConfirmButtonState() {
+    const confirmBtn = document.getElementById('confirmBtn');
+    const orderAmount = currentOrderAmount;
+    const hasAddress = selectedAddress !== null;
+    
+    if (!confirmBtn) return;
+    
+    // Проверяем все условия для блокировки кнопки
+    const noAmount = !orderAmount || orderAmount <= 0;
+    const noAddress = !hasAddress;
+    
+    if (noAmount || noAddress) {
+        confirmBtn.disabled = true;
+        confirmBtn.style.opacity = '0.5';
+        confirmBtn.style.cursor = 'not-allowed';
+        
+        // Устанавливаем подсказку
+        if (noAddress) {
+            confirmBtn.title = '📍 Сначала выберите адрес заведения';
+        } else if (noAmount) {
+            confirmBtn.title = '💰 Введите сумму заказа';
+        }
+    } else {
+        confirmBtn.disabled = false;
+        confirmBtn.style.opacity = '1';
+        confirmBtn.style.cursor = 'pointer';
+        confirmBtn.title = '✅ Подтвердить заказ';
     }
 }
         
@@ -1685,6 +1731,10 @@ async function loadAvailablePromotions() {
         return;
     }
     
+    if (!checkAddressSelected()) {
+        return;
+    }
+    
     const confirmBtn = document.getElementById('confirmBtn');
     const originalText = confirmBtn.innerText;
     confirmBtn.innerText = '⏳ Оформление...';
@@ -1703,7 +1753,7 @@ async function loadAvailablePromotions() {
                 body: JSON.stringify({ 
                     qrData: JSON.stringify(currentQrData),
                     bonusToSpend: currentSpendBonuses,
-                    storeId: 'POS_Terminal_001',
+                    storeId: 'Касса',
                     cashierId: 'cashier_' + Math.random().toString(36).substr(2, 6)
                 })
             });
@@ -1736,17 +1786,20 @@ async function loadAvailablePromotions() {
             // Просто применяем скидку к заказу
         }
         
-        // 2. Начисляем бонусы за покупку
-        const earnResponse = await fetch(`${API_URL}/api/pos/apply-bonus-v2`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                qrData: JSON.stringify(currentQrData),
-                amount: currentOrderAmount,
-                storeId: 'POS_Terminal_001',
-                cashierId: 'cashier_' + Math.random().toString(36).substr(2, 6)
-            })
-        });
+// 2. Начисляем бонусы за покупку
+const earnResponse = await fetch(`${API_URL}/api/pos/apply-bonus-v2`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+        qrData: JSON.stringify(currentQrData),
+        amount: currentOrderAmount,
+        storeId: selectedAddress ? `${selectedAddress.address}${selectedAddress.city_name ? ` (${selectedAddress.city_name})` : ''}` : 'Касса',
+        cashierId: 'cashier_' + Math.random().toString(36).substr(2, 6),
+        addressId: selectedAddress ? selectedAddress.id : null,
+        address: selectedAddress ? selectedAddress.address : null,
+        cityName: selectedAddress ? selectedAddress.city_name : null  // ✅ ДОБАВИТЬ город
+    })
+});
         
         const earnResult = await earnResponse.json();
         
@@ -1816,15 +1869,7 @@ async function loadAvailablePromotions() {
             let totalEarned = 0, totalSpent = 0;
             
             // Фильтруем транзакции (убираем дубли)
-            const filteredTransactions = result.transactions.filter(t => {
-                // Скрываем дублирующиеся "Списание баллов" с плюсом
-                if (t.description === 'Списание баллов' && t.bonusChange > 0) {
-                    return false;
-                }
-                // Скрываем обычные "Списание бонусов", если есть связанная покупка акции
-                // (т.к. теперь покупка акции создает одну транзакцию с названием акции)
-                return true;
-            });
+            const filteredTransactions = result.transactions; // больше не фильтруем
             
             const historyHtml = filteredTransactions.map(t => {
                 // Определяем тип транзакции через metadata или описание
@@ -1974,6 +2019,188 @@ async function loadAvailablePromotions() {
                 finalAmount: orderAmount
             };
         }
+		
+		// ========== ВЫБОР АДРЕСА ДЛЯ ЗАКАЗА (ОБЯЗАТЕЛЬНО) ==========
+
+let selectedAddress = null;
+let availableAddresses = [];
+
+// Функция для экранирования HTML
+function escapeHtmlForCashier(text) {
+    if (!text) return '';
+    return text.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+// Загрузка доступных адресов компании
+async function loadAddressesForCashier() {
+    if (!currentCompanyId) {
+        console.log('Нет companyId, пропускаем загрузку адресов');
+        return;
+    }
+    
+    console.log('Загрузка адресов для компании:', currentCompanyId);
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentCompanyId}/addresses`);
+        const data = await response.json();
+        
+        console.log('Ответ от сервера по адресам:', data);
+        
+        if (data.success && data.addresses && data.addresses.length > 0) {
+            availableAddresses = data.addresses;
+            renderAddressList();
+            document.getElementById('addressSection').style.display = 'block';
+            
+            // Скрываем предупреждение
+            hideAddressWarning();
+            
+            // Автоматически выбираем основной адрес, если он есть
+            const mainAddress = availableAddresses.find(a => a.is_main === true);
+            if (mainAddress) {
+                selectAddressForOrder(mainAddress.id);
+            }
+        } else {
+            console.warn('Нет доступных адресов для компании');
+            document.getElementById('addressSection').style.display = 'block';
+            document.getElementById('addressList').innerHTML = '<div class="error">❌ Нет доступных адресов. Обратитесь к администратору.</div>';
+            showAddressRequiredWarning();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки адресов:', error);
+        document.getElementById('addressSection').style.display = 'block';
+        document.getElementById('addressList').innerHTML = '<div class="error">❌ Ошибка загрузки адресов</div>';
+        showAddressRequiredWarning();
+    }
+}
+
+// Отображение списка адресов
+function renderAddressList() {
+    const container = document.getElementById('addressList');
+    if (!container) return;
+    
+    if (availableAddresses.length === 0) {
+        container.innerHTML = '<div class="error">❌ Нет доступных адресов. Обратитесь к администратору.</div>';
+        showAddressRequiredWarning();
+        return;
+    }
+    
+    container.innerHTML = availableAddresses.map(addr => `
+        <div class="address-option ${selectedAddress?.id === addr.id ? 'selected' : ''}" 
+             onclick="selectAddressForOrder(${addr.id})"
+             style="
+                padding: 12px;
+                margin-bottom: 8px;
+                border: 2px solid ${selectedAddress?.id === addr.id ? '#27ae60' : '#ddd'};
+                border-radius: 12px;
+                cursor: pointer;
+                transition: all 0.2s;
+                background: ${selectedAddress?.id === addr.id ? '#e8f5e9' : 'white'};
+             "
+             onmouseenter="this.style.borderColor='#667eea'"
+             onmouseleave="this.style.borderColor='${selectedAddress?.id === addr.id ? '#27ae60' : '#ddd'}'">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="font-size: 24px;">${addr.is_main ? '⭐' : '📍'}</div>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600;">${escapeHtmlForCashier(addr.address)}</div>
+                    <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                        ${addr.city_name ? `🏙️ ${escapeHtmlForCashier(addr.city_name)}` : ''}
+                        ${addr.phone ? ` • 📞 ${addr.phone}` : ''}
+                        ${addr.is_main ? '<span style="color: #f39c12; margin-left: 8px;">Основной</span>' : ''}
+                    </div>
+                    ${addr.working_hours ? `<div style="font-size: 11px; color: #888; margin-top: 4px;">⏰ ${escapeHtmlForCashier(addr.working_hours)}</div>` : ''}
+                </div>
+                ${selectedAddress?.id === addr.id ? '<div style="font-size: 20px; color: #27ae60;">✓</div>' : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+// Выбор адреса для заказа
+function selectAddressForOrder(addressId) {
+    const address = availableAddresses.find(a => a.id === addressId);
+    if (!address) return;
+    
+    selectedAddress = address;
+    
+    // Обновляем стили списка
+    document.querySelectorAll('.address-option').forEach(el => {
+        el.style.borderColor = '#ddd';
+        el.style.background = 'white';
+    });
+    const selectedEl = document.querySelector(`.address-option[onclick="selectAddressForOrder(${addressId})"]`);
+    if (selectedEl) {
+        selectedEl.style.borderColor = '#27ae60';
+        selectedEl.style.background = '#e8f5e9';
+    }
+    
+    // Показываем информацию о выбранном адресе
+    const addressInfo = document.getElementById('selectedAddressInfo');
+    const addressText = document.getElementById('selectedAddressText');
+    if (addressInfo && addressText) {
+        addressText.innerHTML = `${escapeHtmlForCashier(address.address)}${address.city_name ? ` (${escapeHtmlForCashier(address.city_name)})` : ''}`;
+        addressInfo.style.display = 'block';
+    }
+    
+    // Скрываем предупреждение
+    hideAddressWarning();
+    
+    console.log('✅ Выбран адрес:', address.address);
+    
+    // ✅ ДОБАВЬТЕ ЭТУ СТРОКУ - ОБНОВЛЯЕМ СОСТОЯНИЕ КНОПКИ
+    updateConfirmButtonState();
+}
+
+// Показать предупреждение о необходимости выбора адреса
+function showAddressRequiredWarning() {
+    const warning = document.getElementById('addressRequiredWarning');
+    if (warning) {
+        warning.style.display = 'block';
+    }
+}
+
+// Скрыть предупреждение
+function hideAddressWarning() {
+    const warning = document.getElementById('addressRequiredWarning');
+    if (warning) {
+        warning.style.display = 'none';
+    }
+}
+
+// Проверка выбран ли адрес перед подтверждением заказа (ОБЯЗАТЕЛЬНО)
+function checkAddressSelected() {
+    if (!selectedAddress) {
+        showAddressRequiredWarning();
+        showNotification('❌ Пожалуйста, выберите адрес заведения!', 'error');
+        document.getElementById('addressSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Анимируем предупреждение
+        const warning = document.getElementById('addressRequiredWarning');
+        if (warning) {
+            warning.style.animation = 'shake 0.5s ease';
+            setTimeout(() => {
+                if (warning) warning.style.animation = '';
+            }, 500);
+        }
+        return false;
+    }
+    return true;
+}
+
+// Добавляем CSS анимацию для предупреждения
+const shakeStyle = document.createElement('style');
+shakeStyle.textContent = `
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+`;
+document.head.appendChild(shakeStyle);
     </script>
 </body>
 </html>
