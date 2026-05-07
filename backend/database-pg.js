@@ -1045,10 +1045,12 @@ async function getPromotions(companyId) {
 async function addPromotion(companyId, promotionData) {
     const { name, emoji, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price } = promotionData;
 	// Проверка минимальной длительности акции (12 часов)
+if (startDate && endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffMs = end - start;
     const diffHours = diffMs / (1000 * 60 * 60);
+    if (diffHours < 12) {
         throw new Error('Акция должна длиться минимум 12 часов');
     }
 }
