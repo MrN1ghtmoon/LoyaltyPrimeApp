@@ -648,7 +648,6 @@ function renderActivityChart(period) {
 }
 
 // Функция для добавления кнопок переключения периода (без иконок, с улучшенным стилем)
-// Функция для добавления кнопок переключения периода (без иконок, с улучшенным стилем)
 function ensureActivityButtons() {
     // Проверяем, есть ли уже кнопки
     if (document.querySelector('.activity-period-buttons')) {
@@ -813,9 +812,6 @@ function showEmptyAnalytics() {
         `;
     }
 }
-
-/// ========== МОДУЛЬ АНАЛИТИКИ ПО АДРЕСАМ ==========
-
 // ========== МОДУЛЬ АНАЛИТИКИ ПО АДРЕСАМ ==========
 
 let currentRevenuePeriod = 'month';
@@ -971,8 +967,6 @@ function createRevenueButtons(container) {
     
     container.appendChild(buttonContainer);
 }
-
-
 // ========== МОДУЛЬ 2: ЛОЯЛЬНОСТЬ (УРОВНИ) ==========
 async function loadTiersSettings() {
     if (!currentBusiness) return;

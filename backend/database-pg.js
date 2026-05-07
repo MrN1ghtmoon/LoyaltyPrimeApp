@@ -1044,6 +1044,14 @@ async function getPromotions(companyId) {
 
 async function addPromotion(companyId, promotionData) {
     const { name, emoji, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price } = promotionData;
+	// Проверка минимальной длительности акции (12 часов)
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffMs = end - start;
+    const diffHours = diffMs / (1000 * 60 * 60);
+        throw new Error('Акция должна длиться минимум 12 часов');
+    }
+}
     const result = await query(
         `INSERT INTO promotions (company_id, name, emoji, description, start_date, end_date, active, reward_type, reward_value, products, is_free, price, created_at, updated_at) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()) 
@@ -1055,6 +1063,16 @@ async function addPromotion(companyId, promotionData) {
 
 async function updatePromotion(promotionId, promotionData) {
     const { name, emoji, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price } = promotionData;
+	// Проверка минимальной длительности акции (12 часов)
+if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffMs = end - start;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    if (diffHours < 12) {
+        throw new Error('Акция должна длиться минимум 12 часов');
+    }
+}
     const result = await query(
         `UPDATE promotions 
          SET name = $1, emoji = $2, description = $3, start_date = $4, end_date = $5, active = $6, reward_type = $7, reward_value = $8, products = $9, is_free = $10, price = $11, updated_at = NOW()
@@ -1062,6 +1080,8 @@ async function updatePromotion(promotionId, promotionData) {
          RETURNING *`,
         [name, emoji, description, startDate || null, endDate || null, active, reward_type || 'discount', reward_value || 0, products || '', is_free || false, price || 100, promotionId]
     );
+	// Удаляем все предыдущие покупки этой акции, чтобы требовалась новая покупка
+await query('DELETE FROM user_purchased_promotions WHERE promotion_id = $1', [promotionId]);
     return result.rows[0];
 }
 
@@ -1961,10 +1981,11 @@ async function addSpendTransaction(userId, companyId, bonusSpent, description, s
     );
     return result.rows[0];
 }
+
 // Получение всех транзакций пользователя с деталями
 async function getUserTransactions(userId, companyId, limit = 100) {
     const result = await query(
-        `SELECT id, amount, bonus_earned, bonus_spent, description, store_id, cashier_id, source, created_at 
+        `SELECT id, amount, bonus_earned, bonus_spent, description, store_id, cashier_id, source, created_at, metadata 
          FROM transactions 
          WHERE user_id = $1 AND company_id = $2 
          ORDER BY created_at DESC 
@@ -2428,7 +2449,6 @@ async function getClassificationStats(companyId) {
     return stats;
 }
 
-// ============ Функции для Реальной Аналитики CRM ============
 async function getRealAnalytics(companyId, period = 'month') {
     const now = new Date();
     let startDate;

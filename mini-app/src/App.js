@@ -56,6 +56,18 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [greetingSettings, setGreetingSettings] = useState({ text: 'Добро пожаловать!', emoji: '👋' });
   
+// Получение смещения пользователя (положительное для восточных поясов, напр. Москва = 180)
+const getUserOffset = () => -(new Date().getTimezoneOffset());
+
+// Преобразование даты, сохранённой в часовом поясе компании, в локальное время пользователя
+const adjustDateToLocal = (dateString, companyOffset) => {
+    if (!dateString) return null;
+    const parsed = new Date(dateString); // интерпретируется как локальное время браузера (может быть неверно)
+    const userOffset = getUserOffset();
+    // Исправляем: к исходному timestamp добавляем (userOffset - companyOffset) минут
+    const correctedTime = parsed.getTime() + (userOffset - companyOffset) * 60000;
+    return new Date(correctedTime);
+};
 
 const getCurrentTierBySpent = (spent) => {
   if (tiers && tiers.length > 0) {
@@ -137,12 +149,13 @@ useEffect(() => {
           const allPromos = await response.json();
           const now = new Date(Date.now() + (selectedGroup?.timezoneOffset || 0) * 60000);
           
+		  const companyOffset = selectedGroup?.timezoneOffset || 0;
           const activePromotions = allPromos.filter(promo => {
             if (!promo.active) return false;
             if (!promo.start_date || !promo.end_date) return false;
             
-            const startDate = new Date(promo.start_date);
-            const endDate = new Date(promo.end_date);
+            const startDate = adjustDateToLocal(promo.start_date, companyOffset);
+            const endDate = adjustDateToLocal(promo.end_date, companyOffset);
             
             // Проверяем с учетом времени
             return now >= startDate && now <= endDate;
@@ -323,6 +336,7 @@ const loadUserData = async (companyId, vkUserId, userName) => {
           
           // Фильтруем ТОЛЬКО активные акции для VK Mini App (с учетом времени)
           const now = new Date();
+		  const companyOffset = selectedGroup?.timezoneOffset || 0;
           
           const activePromotions = allPromos.filter(promo => {
             // 1. Проверяем флаг активности
@@ -331,8 +345,8 @@ const loadUserData = async (companyId, vkUserId, userName) => {
             // 2. Проверяем наличие дат
             if (!promo.start_date || !promo.end_date) return false;
             
-            const startDate = new Date(promo.start_date);
-            const endDate = new Date(promo.end_date);
+            const startDate = adjustDateToLocal(promo.start_date, companyOffset);
+            const endDate = adjustDateToLocal(promo.end_date, companyOffset);
             
             // 3. Проверяем, что текущее время в диапазоне (с учетом часов и минут)
             const isActive = now >= startDate && now <= endDate;
@@ -404,7 +418,7 @@ const loadUserData = async (companyId, vkUserId, userName) => {
     saveAllGroupsData(userInfo.id, updated);
   };
   
-  const addHistory = (desc, pointsChange, type) => {
+const addHistory = (desc, pointsChange, type) => {
     if (!selectedGroup) return;
     const cur = getCurrentGroupData();
     const sign = type === 'earn' ? '+' : '-';
@@ -481,6 +495,7 @@ const updateBalanceAndStats = async (change, type, metadata = {}) => {
   return true;
 };
   
+
 const syncBalanceFromDB = async () => {
   if (!userId || !selectedGroup) return;
   
@@ -1952,7 +1967,6 @@ const progressToNext = getProgressToNextTier(currentSpent);
     </div>
   </div>
 )}
-
       {showTiersModal && (
   <div style={{ position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000, padding:20 }} onClick={() => setShowTiersModal(false)}>
     <div style={{ background:'linear-gradient(135deg,#1e2538,#131825)', borderRadius:32, maxWidth:400, width:'100%', maxHeight:'80vh', overflow:'auto', position:'relative' }} onClick={e=>e.stopPropagation()}>

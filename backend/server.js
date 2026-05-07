@@ -1725,7 +1725,6 @@ app.post('/api/pos/spend-bonus-v2', async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
-
 app.post('/api/users/:userId/quests/check-reset', async (req, res) => {
     try {
         const { userId } = req.params;
@@ -3023,78 +3022,6 @@ app.post('/api/companies/:companyId/greeting-settings', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-// API для получения данных активности по периодам (неделя, месяц, год)
-app.get('/api/companies/:companyId/analytics/activity', async (req, res) => {
-    try {
-        const { companyId } = req.params;
-        const period = req.query.period || 'week';
-        
-        let startDate;
-        let groupByFormat;
-        const now = new Date();
-        
-        switch (period) {
-            case 'week':
-                startDate = new Date(now);
-                startDate.setDate(startDate.getDate() - 7);
-                groupByFormat = 'YYYY-MM-DD';
-                break;
-            case 'month':
-                startDate = new Date(now);
-                startDate.setMonth(startDate.getMonth() - 1);
-                groupByFormat = 'YYYY-MM-DD';
-                break;
-            case 'year':
-                startDate = new Date(now);
-                startDate.setFullYear(startDate.getFullYear() - 1);
-                groupByFormat = 'YYYY-MM';
-                break;
-            default:
-                startDate = new Date(now);
-                startDate.setDate(startDate.getDate() - 7);
-                groupByFormat = 'YYYY-MM-DD';
-        }
-        
-        // Для PostgreSQL используем to_char для форматирования дат
-        let groupBySql;
-        if (period === 'year') {
-            groupBySql = `to_char(created_at, 'YYYY-MM')`;
-        } else {
-            groupBySql = `to_char(created_at, 'YYYY-MM-DD')`;
-        }
-        
-        const result = await query(
-            `SELECT 
-                ${groupBySql} as date,
-                COUNT(*) as transactions,
-                COUNT(DISTINCT user_id) as unique_users,
-                COALESCE(SUM(amount), 0) as revenue
-             FROM transactions
-             WHERE company_id = $1
-             AND source = 'pos'
-             AND amount > 0
-             AND created_at >= $2
-             GROUP BY ${groupBySql}
-             ORDER BY date ASC`,
-            [companyId, startDate]
-        );
-        
-        // Форматируем результат для отправки на фронтенд
-        const formattedActivity = result.rows.map(row => ({
-            date: row.date,
-            transactions: parseInt(row.transactions),
-            unique_users: parseInt(row.unique_users),
-            revenue: parseFloat(row.revenue)
-        }));
-        
-        res.json({ success: true, activity: formattedActivity });
-    } catch (error) {
-        console.error('Ошибка получения активности:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-// ============ API ДЛЯ ВЫРУЧКИ ПО АДРЕСАМ ============
-
 // ============ API ДЛЯ ВЫРУЧКИ ПО АДРЕСАМ ============
 
 app.get('/api/companies/:companyId/addresses-revenue', async (req, res) => {
