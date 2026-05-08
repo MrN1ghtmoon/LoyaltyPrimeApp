@@ -502,7 +502,8 @@ async function getGameSettings(companyId, gameType) {
                     { name: 'x15', value: 15, multiplier: 15, color: '#e67e22', icon: '🏆', weight: 10 }
                 ],
                 maxSpinsPerDay: 10,
-                freeSpinDaily: false
+                freeSpinDaily: false,
+				maxPlaysPerDay: 0
             };
         } else if (gameType === 'scratch') {
             defaultSettings = {
@@ -519,7 +520,8 @@ async function getGameSettings(companyId, gameType) {
                     { id: '🎰', name: 'ДЖЕКПОТ', value: 500, multiplier: 50, color: '#ff4d4d', prob: 3 }
                 ],
                 hintCost: 15,
-                freeHintDaily: false
+                freeHintDaily: false,
+				maxPlaysPerDay: 0
             };
         } else if (gameType === 'dice') {
             defaultSettings = {
@@ -543,7 +545,8 @@ async function getGameSettings(companyId, gameType) {
                     'odd': { name: 'Нечетная сумма', multiplier: 1.2, icon: '🎯', color: '#1abc9c', description: 'Неплохо!', enabled: true }
                 },
                 jackpotChance: 1,
-                jackpotContribution: 10
+                jackpotContribution: 10,
+				maxPlaysPerDay: 0
             };
         }
         

@@ -2571,6 +2571,7 @@ let wheelSettings = {
     ],
     maxSpinsPerDay: 10,
     freeSpinDaily: false,
+	maxPlaysPerDay: 0,
     active: true
 };
 
@@ -2588,7 +2589,8 @@ async function loadWheelSettings() {
                 spinCost: data.settings.spinCost || 25,
                 sectors: data.settings.sectors || wheelSettings.sectors,
                 maxSpinsPerDay: data.settings.maxSpinsPerDay || 10,
-                freeSpinDaily: data.settings.freeSpinDaily || false
+                freeSpinDaily: data.settings.freeSpinDaily || false,
+				maxPlaysPerDay: data.settings.maxPlaysPerDay || 0
             };
             wheelSettings.active = data.active;
         }
@@ -2621,6 +2623,10 @@ function renderWheelSettings() {
                     <label>💰 Стоимость вращения (бонусов)</label>
                     <input type="number" id="wheelSpinCost" value="${wheelSettings.spinCost}" min="1" max="1000" onchange="updateWheelSpinCost(this.value)">
                 </div>
+				<div class="wheel-setting-group">
+    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
+    <input type="number" id="wheelMaxPlays" value="${wheelSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateWheelMaxPlays(this.value)">
+</div>
                 <div class="wheel-setting-group">
                     <label>🔄 Максимум вращений в день</label>
                     <input type="number" id="wheelMaxSpins" value="${wheelSettings.maxSpinsPerDay}" min="1" max="100" onchange="updateWheelMaxSpins(this.value)">
@@ -2784,6 +2790,11 @@ function updateWheelSpinCost(value) {
     saveWheelSettingsDebounced();
 }
 
+function updateWheelMaxPlays(value) {
+    wheelSettings.maxPlaysPerDay = parseInt(value) || 0;
+    saveWheelSettingsDebounced();
+}
+
 function updateWheelMaxSpins(value) {
     wheelSettings.maxSpinsPerDay = parseInt(value) || 10;
     saveWheelSettingsDebounced();
@@ -2864,6 +2875,7 @@ let scratchSettings = {
     ],
     hintCost: 15,
     freeHintDaily: false,
+	maxPlaysPerDay: 0,
     active: true
 };
 
@@ -2882,7 +2894,8 @@ async function loadScratchSettings() {
                 maxAttempts: data.settings.maxAttempts || 3,
                 symbols: data.settings.symbols || scratchSettings.symbols,
                 hintCost: data.settings.hintCost || 15,
-                freeHintDaily: data.settings.freeHintDaily || false
+                freeHintDaily: data.settings.freeHintDaily || false,
+				maxPlaysPerDay: data.settings.maxPlaysPerDay || 0
             };
             scratchSettings.active = data.active;
         }
@@ -2915,6 +2928,10 @@ function renderScratchSettings() {
                     <label>💰 Стоимость игры (бонусов)</label>
                     <input type="number" id="scratchCost" value="${scratchSettings.cost}" min="1" max="500" onchange="updateScratchCost(this.value)">
                 </div>
+				<div class="scratch-setting-group">
+    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
+    <input type="number" id="scratchMaxPlays" value="${scratchSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateScratchMaxPlays(this.value)">
+</div>
                 <div class="scratch-setting-group">
                     <label>🖱️ Максимум попыток</label>
                     <input type="number" id="scratchMaxAttempts" value="${scratchSettings.maxAttempts}" min="1" max="10" onchange="updateScratchMaxAttempts(this.value)">
@@ -3067,6 +3084,11 @@ function updateScratchCost(value) {
     saveScratchSettingsDebounced();
 }
 
+function updateScratchMaxPlays(value) {
+    scratchSettings.maxPlaysPerDay = parseInt(value) || 0;
+    saveScratchSettingsDebounced();
+}
+
 function updateScratchMaxAttempts(value) {
     scratchSettings.maxAttempts = parseInt(value) || 3;
     saveScratchSettingsDebounced();
@@ -3154,6 +3176,7 @@ let diceSettings = {
     },
     jackpotChance: 1,
     jackpotContribution: 10,
+	maxPlaysPerDay: 0,
     active: true
 };
 
@@ -3173,7 +3196,8 @@ async function loadDiceSettings() {
                 betMultipliers: data.settings.betMultipliers || [1, 2, 3, 5, 10],
                 combinations: data.settings.combinations || diceSettings.combinations,
                 jackpotChance: data.settings.jackpotChance || 1,
-                jackpotContribution: data.settings.jackpotContribution || 10
+                jackpotContribution: data.settings.jackpotContribution || 10,
+				maxPlaysPerDay: data.settings.maxPlaysPerDay || 0
             };
             diceSettings.active = data.active;
         }
@@ -3204,6 +3228,10 @@ function renderDiceSettings() {
                     <label>💰 Стоимость игры (бонусов)</label>
                     <input type="number" id="diceCost" value="${diceSettings.cost}" min="1" max="500" onchange="updateDiceCost(this.value)">
                 </div>
+				<div class="dice-setting-group">
+    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
+    <input type="number" id="diceMaxPlays" value="${diceSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateDiceMaxPlays(this.value)">
+</div>
                 <div class="dice-setting-group">
                     <label>💎 Базовый джекпот</label>
                     <input type="number" id="diceJackpotBase" value="${diceSettings.jackpotBase}" min="100" max="10000" onchange="updateDiceJackpotBase(this.value)">
@@ -3496,6 +3524,11 @@ function updateDiceCombo(key, field, value) {
 function updateDiceCost(value) {
     diceSettings.cost = parseInt(value) || 25;
     renderDiceStatsInfo();
+    saveDiceSettingsDebounced();
+}
+
+function updateDiceMaxPlays(value) {
+    diceSettings.maxPlaysPerDay = parseInt(value) || 0;
     saveDiceSettingsDebounced();
 }
 

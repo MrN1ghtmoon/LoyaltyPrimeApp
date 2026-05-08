@@ -147,7 +147,7 @@ useEffect(() => {
         const response = await fetch(`${API_URL}/api/promotions/${selectedGroup.id}`);
         if (response.ok) {
           const allPromos = await response.json();
-          const now = new Date(Date.now() + (selectedGroup?.timezoneOffset || 0) * 60000);
+          const now = new Date();
           
 		  const companyOffset = selectedGroup?.timezoneOffset || 0;
           const activePromotions = allPromos.filter(promo => {
@@ -749,6 +749,12 @@ useEffect(() => {
     }
 }, [selectedGroup?.id, userId]);
 
+useEffect(() => {
+  if (activeTab === 'history' && userId && selectedGroup) {
+    syncBalanceFromDB();
+  }
+}, [activeTab, userId, selectedGroup]);
+
   const handleSelectGroup = async (company) => {
     // Извлекаем цвет бренда из компании (поддерживаем оба формата)
     const color = company.brand_color || company.brandColor || '#ff4d4d';
@@ -1307,6 +1313,62 @@ const progressToNext = getProgressToNextTier(currentSpent);
         <span>Дата регистрации:</span>
         <span style={{ fontWeight:700, color:'#ffd966' }}>{currentGroupData?.regDate}</span>
       </div>
+	      {/* Блок с уведомлением о боте */}
+<div style={{ 
+  marginTop: 16, 
+  background: 'rgba(52, 152, 219, 0.15)', 
+  borderRadius: 20, 
+  padding: '16px',
+  border: `1px solid ${selectedGroup?.color || '#3498db'}40`
+}}>
+  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+    <span style={{ fontSize: 28 }}>🤖</span>
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: '#ffd966', marginBottom: 6 }}>
+        💡 Важно для получения уведомлений!
+      </div>
+      <div style={{ fontSize: 13, color: 'white', opacity: 0.85, marginBottom: 16, lineHeight: 1.5 }}>
+        Если вы зашли в приложение не через бота, но при этом хотите получать уведомления или персонализированные скидки — необходимо перейти в бота и начать диалог.
+      </div>
+      <button
+        onClick={() => {
+          // Открывает диалог с ботом (сообществом)
+          // ID сообщества: 237231570
+          // Формат ссылки: https://vk.com/im?sel=-237231570
+          vkBridge.send('VKWebAppOpenLink', { 
+            url: 'https://vk.com/im?sel=-237231570'
+          }).catch(err => {
+            console.error('Ошибка открытия диалога:', err);
+            // Fallback: открыть в новой вкладке если VK Bridge не сработал
+            window.open('https://vk.com/im?sel=-237231570', '_blank');
+          });
+        }}
+        style={{
+          background: 'linear-gradient(135deg, #4a76a8, #3b5998)',
+          border: 'none',
+          padding: '12px 20px',
+          borderRadius: 24,
+          color: 'white',
+          fontWeight: 600,
+          cursor: 'pointer',
+          fontSize: 14,
+          width: '100%',
+          transition: 'transform 0.2s, box-shadow 0.2s'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(74,118,168,0.4)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = 'none';
+        }}
+      >
+        📨 Перейти в бота
+      </button>
+    </div>
+  </div>
+</div>
     </div>
 	{/* Блок с выбранным адресом */}
     {selectedLocation && (
@@ -1349,7 +1411,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
         <h3 style={{ fontSize:18, marginBottom:12, color:'white' }}>🎁 Активные акции</h3>
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {promotions.slice(0, 3).map(offer => {
-            const endDate = offer.end_date ? new Date(offer.end_date) : null;
+            const endDate = adjustDateToLocal(offer.end_date, selectedGroup?.timezoneOffset || 0);
             const now = currentTime;
             
             const timeLeftMs = endDate ? endDate - now : 0;
@@ -1549,8 +1611,8 @@ const progressToNext = getProgressToNextTier(currentSpent);
           const rewardValue = offer.reward_value || 0;
           const rewardText = rewardType === 'bonus' ? `+${rewardValue} бонусов` : `${rewardValue}% скидка`;
           
-          const startDate = offer.start_date ? new Date(offer.start_date) : null;
-          const endDate = offer.end_date ? new Date(offer.end_date) : null;
+          const startDate = adjustDateToLocal(offer.start_date, selectedGroup?.timezoneOffset || 0);
+          const endDate = adjustDateToLocal(offer.end_date, selectedGroup?.timezoneOffset || 0);
           const now = currentTime;
           
           // Вычисляем оставшееся время
