@@ -2623,13 +2623,10 @@ function renderWheelSettings() {
                     <label>💰 Стоимость вращения (бонусов)</label>
                     <input type="number" id="wheelSpinCost" value="${wheelSettings.spinCost}" min="1" max="1000" onchange="updateWheelSpinCost(this.value)">
                 </div>
-				<div class="wheel-setting-group">
-    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
-    <input type="number" id="wheelMaxPlays" value="${wheelSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateWheelMaxPlays(this.value)">
-</div>
                 <div class="wheel-setting-group">
-                    <label>🔄 Максимум вращений в день</label>
-                    <input type="number" id="wheelMaxSpins" value="${wheelSettings.maxSpinsPerDay}" min="1" max="100" onchange="updateWheelMaxSpins(this.value)">
+                    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
+                    <input type="number" id="wheelMaxPlays" value="${wheelSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateWheelMaxPlays(this.value)">
+                    <small style="display: block; margin-top: 4px; color: #666;">Ограничение на количество вращений в день для одного пользователя</small>
                 </div>
                 <div class="wheel-setting-group">
                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
@@ -2795,11 +2792,6 @@ function updateWheelMaxPlays(value) {
     saveWheelSettingsDebounced();
 }
 
-function updateWheelMaxSpins(value) {
-    wheelSettings.maxSpinsPerDay = parseInt(value) || 10;
-    saveWheelSettingsDebounced();
-}
-
 function updateWheelFreeSpin(checked) {
     wheelSettings.freeSpinDaily = checked;
     
@@ -2836,7 +2828,7 @@ async function saveWheelSettings() {
                 settings: {
                     spinCost: wheelSettings.spinCost,
                     sectors: wheelSettings.sectors,
-                    maxSpinsPerDay: wheelSettings.maxSpinsPerDay,
+                    maxPlaysPerDay: wheelSettings.maxPlaysPerDay || 0,
                     freeSpinDaily: wheelSettings.freeSpinDaily
                 },
                 active: wheelSettings.active
@@ -2895,9 +2887,10 @@ async function loadScratchSettings() {
                 symbols: data.settings.symbols || scratchSettings.symbols,
                 hintCost: data.settings.hintCost || 15,
                 freeHintDaily: data.settings.freeHintDaily || false,
-				maxPlaysPerDay: data.settings.maxPlaysPerDay || 0
+                maxPlaysPerDay: data.settings.maxPlaysPerDay || 0  // ← ДОБАВЛЯЕМ ЭТУ СТРОКУ
             };
             scratchSettings.active = data.active;
+            console.log('✅ Scratch settings loaded, maxPlaysPerDay:', scratchSettings.maxPlaysPerDay);
         }
     } catch (error) {
         console.error('Ошибка загрузки настроек скретч-карты:', error);
@@ -3086,6 +3079,7 @@ function updateScratchCost(value) {
 
 function updateScratchMaxPlays(value) {
     scratchSettings.maxPlaysPerDay = parseInt(value) || 0;
+    console.log('🎫 maxPlaysPerDay updated to:', scratchSettings.maxPlaysPerDay);
     saveScratchSettingsDebounced();
 }
 
@@ -3137,7 +3131,8 @@ async function saveScratchSettings() {
                     maxAttempts: scratchSettings.maxAttempts,
                     symbols: scratchSettings.symbols,
                     hintCost: scratchSettings.hintCost,
-                    freeHintDaily: scratchSettings.freeHintDaily
+                    freeHintDaily: scratchSettings.freeHintDaily,
+                    maxPlaysPerDay: scratchSettings.maxPlaysPerDay || 0  // ← ДОБАВЛЯЕМ ЭТУ СТРОКУ
                 },
                 active: scratchSettings.active
             })
@@ -3146,6 +3141,7 @@ async function saveScratchSettings() {
         const data = await response.json();
         if (data.success) {
             showSaveIndicator();
+            console.log('✅ Scratch settings saved, maxPlaysPerDay:', scratchSettings.maxPlaysPerDay);
         }
     } catch (error) {
         console.error('Ошибка сохранения настроек скретч-карты:', error);
@@ -3529,6 +3525,7 @@ function updateDiceCost(value) {
 
 function updateDiceMaxPlays(value) {
     diceSettings.maxPlaysPerDay = parseInt(value) || 0;
+    console.log('🎲 maxPlaysPerDay updated to:', diceSettings.maxPlaysPerDay);
     saveDiceSettingsDebounced();
 }
 
@@ -3573,7 +3570,8 @@ async function saveDiceSettings() {
                     betMultipliers: diceSettings.betMultipliers,
                     combinations: diceSettings.combinations,
                     jackpotChance: diceSettings.jackpotChance,
-                    jackpotContribution: diceSettings.jackpotContribution
+                    jackpotContribution: diceSettings.jackpotContribution,
+                    maxPlaysPerDay: diceSettings.maxPlaysPerDay || 0  // ← ДОБАВИТЬ ЭТУ СТРОКУ
                 },
                 active: diceSettings.active
             })
@@ -3582,6 +3580,7 @@ async function saveDiceSettings() {
         const data = await response.json();
         if (data.success) {
             showSaveIndicator();
+            console.log('✅ Dice settings saved, maxPlaysPerDay:', diceSettings.maxPlaysPerDay);
         }
     } catch (error) {
         console.error('Ошибка сохранения настроек костей:', error);
