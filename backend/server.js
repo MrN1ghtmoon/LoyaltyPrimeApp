@@ -95,7 +95,8 @@ const {
     // Greeting settings
     saveGreetingSettings,
     getGreetingSettings,
-	clearPromotionPurchases
+	clearPromotionPurchases,
+	shouldClearPurchasesForPromotion
 } = require('./database-pg');
 
 const app = express();
@@ -283,44 +284,144 @@ app.put('/api/promotions/:id', async (req, res) => {
         
         console.log(`📝 [UPDATE] Обновление акции ${req.params.id}`, { reward_value, price, is_free, endDate });
         
-        // Получаем старые данные
-        const oldPromotion = await query('SELECT reward_value, is_free, price, end_date FROM promotions WHERE id = $1', [req.params.id]);
+        // Получаем старые данные (нужно больше полей для анализа)
+        const oldPromotion = await query('SELECT * FROM promotions WHERE id = $1', [req.params.id]);
+        
+        if (oldPromotion.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Акция не найдена' });
+        }
+        
+        const old = oldPromotion.rows[0];
+        const now = new Date();
+        
+        // ========== НОВАЯ ПРОВЕРКА: 12 ЧАСОВ ==========
+        // Проверяем минимальную длительность акции (12 часов) при обновлении
+        if (startDate !== undefined || endDate !== undefined) {
+            // Используем новые даты, если они переданы, иначе старые
+            const effectiveStartDate = startDate !== undefined ? new Date(startDate) : (old.start_date ? new Date(old.start_date) : null);
+            const effectiveEndDate = endDate !== undefined ? new Date(endDate) : (old.end_date ? new Date(old.end_date) : null);
+            
+            if (effectiveStartDate && effectiveEndDate) {
+                // Базовая проверка: дата начала должна быть раньше даты окончания
+                if (effectiveStartDate >= effectiveEndDate) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: 'Дата начала должна быть раньше даты окончания' 
+                    });
+                }
+                
+                const diffMs = effectiveEndDate - effectiveStartDate;
+                const diffHours = diffMs / (1000 * 60 * 60);
+                
+                // Определяем, является ли это ПРОДЛЕНИЕМ уже существующей активной акции
+                const oldStartDate = old.start_date ? new Date(old.start_date) : null;
+                const oldEndDate = old.end_date ? new Date(old.end_date) : null;
+                const isActiveNow = oldStartDate && oldEndDate && 
+                                    oldStartDate <= now && oldEndDate >= now;
+                const isExtendingEndDate = oldEndDate && effectiveEndDate > oldEndDate;
+                const isExtendingStartDate = oldStartDate && effectiveStartDate < oldStartDate;
+                
+                // Если это просто продление (акция активна и мы увеличиваем дату окончания) - пропускаем проверку 12 часов
+                const isJustExtension = isActiveNow && isExtendingEndDate && !isExtendingStartDate;
+                
+                // Если это уменьшение длительности - проверяем строго
+                const isReducingDuration = oldStartDate && oldEndDate && 
+                    (effectiveEndDate < oldEndDate || effectiveStartDate > oldStartDate);
+                
+                if (!isJustExtension && diffHours < 12) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: `Акция должна длиться минимум 12 часов. Текущая длительность: ${Math.round(diffHours * 10) / 10} часов.`,
+                        details: {
+                            currentDuration: diffHours,
+                            requiredDuration: 12,
+                            startDate: effectiveStartDate.toISOString(),
+                            endDate: effectiveEndDate.toISOString()
+                        }
+                    });
+                }
+                
+                // Дополнительная проверка: если мы УМЕНЬШАЕМ длительность активной акции до менее 12 часов
+                if (isReducingDuration && diffHours < 12) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: 'Нельзя уменьшить длительность активной акции до менее 12 часов' 
+                    });
+                }
+                
+                if (isJustExtension) {
+                    console.log(`✅ [UPDATE] Простое продление акции: длительность ${Math.round(diffHours * 10) / 10} часов, проверка 12 часов пропущена`);
+                } else {
+                    console.log(`✅ [UPDATE] Проверка длительности пройдена: ${Math.round(diffHours * 10) / 10} часов >= 12 часов`);
+                }
+            }
+        }
+        // ========== КОНЕЦ ПРОВЕРКИ 12 ЧАСОВ ==========
         
         let shouldClearPurchases = false;
         let changedFields = [];
         
-        if (oldPromotion.rows.length > 0) {
-            const old = oldPromotion.rows[0];
-            console.log(`📊 [UPDATE] Старые данные: reward_value=${old.reward_value}, price=${old.price}, is_free=${old.is_free}, end_date=${old.end_date}`);
-            
-            // Проверяем изменения
-            if (reward_value !== undefined && old.reward_value !== reward_value) {
+        const oldEndDate = old.end_date ? new Date(old.end_date) : null;
+        const newEndDateObj = endDate ? new Date(endDate) : null;
+        const oldStartDate = old.start_date ? new Date(old.start_date) : null;
+        const newStartDateObj = startDate ? new Date(startDate) : null;
+        
+        console.log(`📊 [UPDATE] Старые данные: reward_value=${old.reward_value}, price=${old.price}, is_free=${old.is_free}, end_date=${old.end_date}`);
+        console.log(`📊 [UPDATE] Текущее время: ${now.toISOString()}, старая дата окончания: ${oldEndDate?.toISOString()}`);
+        
+        // Проверяем, была ли акция ИСТЕКШЕЙ (end_date < now)
+        const wasExpired = oldEndDate && oldEndDate < now;
+        const willBeActive = newEndDateObj && newEndDateObj > now;
+        
+        // 1. Очищаем покупки ТОЛЬКО если акция была истекшей и теперь снова становится активной
+        if (wasExpired && willBeActive) {
+            shouldClearPurchases = true;
+            changedFields.push(`акция была истекшей (до ${oldEndDate.toLocaleDateString()}), теперь активна до ${newEndDateObj.toLocaleDateString()}`);
+            console.log(`⚠️ [UPDATE] Акция была истекшей, теперь снова активна — очищаем покупки`);
+        }
+        
+        // 2. Проверяем изменение даты начала (если акция ещё не началась, но дату изменили)
+        if (startDate !== undefined && oldStartDate && newStartDateObj) {
+            const oldStartStr = oldStartDate.toISOString();
+            const newStartStr = newStartDateObj.toISOString();
+            if (oldStartStr !== newStartStr && !wasExpired && now < oldStartDate) {
                 shouldClearPurchases = true;
-                changedFields.push(`скидка (${old.reward_value}% → ${reward_value}%)`);
-                console.log(`⚠️ [UPDATE] Изменена скидка`);
+                changedFields.push(`дата начала (${oldStartDate.toLocaleDateString()} → ${newStartDateObj.toLocaleDateString()})`);
+                console.log(`⚠️ [UPDATE] Изменена дата начала до старта акции — очищаем покупки`);
             }
-            
-            if (price !== undefined && old.price !== price) {
-                shouldClearPurchases = true;
-                changedFields.push(`цена (${old.price} → ${price} баллов)`);
-                console.log(`⚠️ [UPDATE] Изменена цена`);
-            }
-            
-            if (is_free !== undefined && old.is_free !== is_free) {
-                shouldClearPurchases = true;
-                changedFields.push(`тип (${old.is_free ? 'бесплатная' : 'платная'} → ${is_free ? 'бесплатная' : 'платная'})`);
-                console.log(`⚠️ [UPDATE] Изменен тип`);
-            }
-            
-            if (endDate !== undefined) {
-                const oldEndDate = old.end_date ? new Date(old.end_date).toISOString() : null;
-                const newEndDate = endDate ? new Date(endDate).toISOString() : null;
-                if (oldEndDate !== newEndDate) {
-                    shouldClearPurchases = true;
-                    changedFields.push(`дата окончания`);
-                    console.log(`⚠️ [UPDATE] Изменена дата окончания: ${oldEndDate} → ${newEndDate}`);
-                }
-            }
+        }
+        
+        // 3. Проверяем изменение скидки
+        if (reward_value !== undefined && old.reward_value !== reward_value) {
+            shouldClearPurchases = true;
+            changedFields.push(`скидка (${old.reward_value}% → ${reward_value}%)`);
+            console.log(`⚠️ [UPDATE] Изменена скидка`);
+        }
+        
+        // 4. Проверяем изменение цены
+        if (price !== undefined && old.price !== price) {
+            shouldClearPurchases = true;
+            changedFields.push(`цена (${old.price} → ${price} баллов)`);
+            console.log(`⚠️ [UPDATE] Изменена цена`);
+        }
+        
+        // 5. Проверяем изменение типа (бесплатная/платная)
+        if (is_free !== undefined && old.is_free !== is_free) {
+            shouldClearPurchases = true;
+            changedFields.push(`тип (${old.is_free ? 'бесплатная' : 'платная'} → ${is_free ? 'бесплатная' : 'платная'})`);
+            console.log(`⚠️ [UPDATE] Изменен тип`);
+        }
+        
+        // 6. ПРОДЛЕНИЕ ДАТЫ ОКОНЧАНИЯ — НЕ ОЧИЩАЕМ!
+        if (endDate !== undefined && oldEndDate && newEndDateObj && !wasExpired && newEndDateObj > oldEndDate) {
+            console.log(`✅ [UPDATE] Простое продление акции: ${oldEndDate.toLocaleDateString()} → ${newEndDateObj.toLocaleDateString()}, покупки НЕ очищаем`);
+        }
+        
+        // 7. УКОРОЧЕНИЕ ДАТЫ ОКОНЧАНИЯ — очищаем (условия изменились)
+        if (endDate !== undefined && oldEndDate && newEndDateObj && !wasExpired && newEndDateObj < oldEndDate) {
+            shouldClearPurchases = true;
+            changedFields.push(`дата окончания укорочена (${oldEndDate.toLocaleDateString()} → ${newEndDateObj.toLocaleDateString()})`);
+            console.log(`⚠️ [UPDATE] Дата окончания укорочена — очищаем покупки`);
         }
         
         console.log(`📊 [UPDATE] shouldClearPurchases = ${shouldClearPurchases}, changes: ${changedFields.join(', ')}`);
@@ -382,7 +483,6 @@ app.put('/api/promotions/:id', async (req, res) => {
         console.log(`📝 [UPDATE] Выполняем SQL: ${queryText}`);
         
         const result = await query(queryText, values);
-        // ========== КОНЕЦ КОДА ОБНОВЛЕНИЯ ==========
         
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Акция не найдена' });
@@ -397,13 +497,19 @@ app.put('/api/promotions/:id', async (req, res) => {
         
         console.log(`✅ [UPDATE] Акция ${req.params.id} успешно обновлена`);
         
+        // Формируем понятное сообщение
+        let responseMessage = 'Акция обновлена';
+        if (shouldClearPurchases) {
+            responseMessage = `Акция обновлена. ${changedFields.join(', ')} — покупки пользователей сброшены.`;
+        } else if (endDate !== undefined && !shouldClearPurchases) {
+            responseMessage = `Акция обновлена. Дата действия продлена. Купленные акции остаются действительными.`;
+        }
+        
         res.json({ 
             success: true, 
             promotion: result.rows[0],
             purchasesCleared: shouldClearPurchases,
-            message: shouldClearPurchases 
-                ? `Акция обновлена. ${changedFields.join(', ')} — покупки пользователей сброшены.`
-                : 'Акция обновлена'
+            message: responseMessage
         });
     } catch (error) {
         console.error('❌ [UPDATE] Ошибка:', error);
@@ -828,45 +934,41 @@ app.post('/api/users/:userId/promotions/:promotionId/purchase', async (req, res)
         const { userId, promotionId } = req.params;
         const { companyId } = req.body;
         
-        console.log(`📝 Покупка акции: userId=${userId}, promotionId=${promotionId}, companyId=${companyId}`);
-        
-        if (!companyId) {
-            return res.status(400).json({ success: false, message: 'companyId обязателен' });
-        }
-        
-        // Получаем информацию об акции
         const promoResult = await query('SELECT * FROM promotions WHERE id = $1 AND company_id = $2', [promotionId, companyId]);
         if (promoResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Акция не найдена' });
         }
         
         const promotion = promoResult.rows[0];
-        
-        // Проверяем, бесплатная ли акция
         const isFree = promotion.is_free === true;
         
-        // ✅ ИСПРАВЛЕНО: используем query вместо client.query
-        const alreadyPurchased = await query(
-            'SELECT id FROM user_purchased_promotions WHERE user_id = $1 AND promotion_id = $2',
-            [userId, promotionId]
-        );
+        // ✅ ПОЛУЧАЕМ НАЧАЛО ЦИКЛА (дата начала акции)
+        let promotionCycleStart = null;
+        if (promotion.start_date) {
+            promotionCycleStart = new Date(promotion.start_date);
+            promotionCycleStart.setHours(0, 0, 0, 0);
+        } else {
+            // Если дата не указана, используем начало текущего дня
+            promotionCycleStart = new Date();
+            promotionCycleStart.setHours(0, 0, 0, 0);
+        }
         
-        console.log(`🔍 Проверка покупки: найдено ${alreadyPurchased.rows.length} записей`);
+        // ✅ Проверяем, покупал ли пользователь эту акцию в ТЕКУЩЕМ цикле
+        const alreadyPurchased = await query(
+            `SELECT id FROM user_purchased_promotions 
+             WHERE user_id = $1 AND promotion_id = $2 AND promotion_cycle_start = $3`,
+            [userId, promotionId, promotionCycleStart]
+        );
         
         if (alreadyPurchased.rows.length > 0) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'Вы уже купили эту акцию' 
+                message: 'Вы уже покупали эту акцию в текущем периоде' 
             });
         }
         
-        // Цена покупки
         const bonusCost = isFree ? 0 : (promotion.price || promotion.reward_value * 10);
-        
-        // Покупаем акцию
-        const purchase = await purchasePromotion(userId, promotionId, companyId, bonusCost, isFree, promotion.name);
-        
-        console.log(`✅ Покупка успешна! ID: ${purchase.id}`);
+        const purchase = await purchasePromotion(userId, promotionId, companyId, bonusCost, isFree, promotion.name, promotionCycleStart);
         
         res.json({ 
             success: true, 
@@ -929,42 +1031,88 @@ app.post('/api/pos/check-purchased-promotion', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Пользователь не найден' });
         }
         
-        // Получаем информацию о цикле акции
-        const promoInfo = await checkPromotionCycle(promotionId);
-        if (!promoInfo) {
+        // Получаем информацию об акции
+        const promoResult = await query(
+            'SELECT id, name, products, reward_value, reward_type, start_date, end_date, active FROM promotions WHERE id = $1',
+            [promotionId]
+        );
+        
+        if (promoResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Акция не найдена' });
         }
         
-        const cycleStart = promoInfo.start_date;
+        const promotion = promoResult.rows[0];
+        const now = new Date();
+        const startDate = promotion.start_date ? new Date(promotion.start_date) : null;
+        const endDate = promotion.end_date ? new Date(promotion.end_date) : null;
         
-        // Проверяем, куплена ли акция
-        const purchased = await getUserPurchasedPromotions(user.id, userData.companyId);
-        const matchingPromo = purchased.find(p => 
-            p.promotion_id === parseInt(promotionId) && 
-            p.promotion_cycle_start.getTime() === new Date(cycleStart).getTime() &&
-            !p.used
-        );
+        // Проверяем, активна ли акция по датам СЕЙЧАС
+        const isActiveByDate = startDate && endDate && now >= startDate && now <= endDate;
         
-        if (!matchingPromo) {
+        if (!promotion.active || !isActiveByDate) {
+            let message = '';
+            if (!promotion.active) {
+                message = 'Эта акция отключена администратором';
+            } else if (endDate && now > endDate) {
+                message = 'Срок действия этой акции истёк';
+            } else if (startDate && now < startDate) {
+                message = 'Эта акция ещё не началась';
+            }
+            
             return res.json({ 
                 success: true, 
                 hasPromotion: false,
-                message: 'Акция не куплена или уже использована' 
+                message: message,
+                isExpired: endDate && now > endDate
             });
         }
         
-        // Получаем информацию о продуктах из акции
-        const promoDetails = await query('SELECT products FROM promotions WHERE id = $1', [promotionId]);
-        const products = promoDetails.rows.length > 0 ? promoDetails.rows[0].products : '';
+        // ✅ Проверяем неиспользованные и непросроченные экземпляры
+        const availableResult = await query(
+            `SELECT upp.id, upp.purchased_at
+             FROM user_purchased_promotions upp
+             WHERE upp.user_id = $1 
+               AND upp.promotion_id = $2 
+               AND upp.used = false
+             ORDER BY upp.purchased_at ASC
+             LIMIT 1`,
+            [user.id, promotionId]
+        );
+        
+        if (availableResult.rows.length === 0) {
+            return res.json({ 
+                success: true, 
+                hasPromotion: false,
+                availableCount: 0,
+                message: 'Нет доступных экземпляров этой акции'
+            });
+        }
+        
+        // Получаем количество доступных
+        const countResult = await query(
+            `SELECT COUNT(*) as count
+             FROM user_purchased_promotions upp
+             WHERE upp.user_id = $1 
+               AND upp.promotion_id = $2 
+               AND upp.used = false`,
+            [user.id, promotionId]
+        );
+        
+        const availableCount = parseInt(countResult.rows[0].count);
         
         res.json({ 
             success: true, 
             hasPromotion: true,
-            promotion: matchingPromo,
-            discount: matchingPromo.reward_value,
-            products: products,
-            message: `Акция "${matchingPromo.name}" активна. Скидка: ${matchingPromo.reward_value}%`
+            availableCount: availableCount,
+            discount: promotion.reward_value,
+            rewardType: promotion.reward_type,
+            products: promotion.products || '',
+            promotionName: promotion.name,
+            promotionId: promotion.id,
+            validUntil: endDate ? endDate.toISOString() : null,
+            message: `Акция "${promotion.name}" доступна! Осталось использований: ${availableCount}`
         });
+        
     } catch (error) {
         console.error('Ошибка проверки купленной акции:', error);
         res.status(500).json({ success: false, error: error.message });
@@ -987,33 +1135,98 @@ app.post('/api/pos/use-purchased-promotion', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Пользователь не найден' });
         }
         
-        // Получаем информацию о цикле акции
-        const promoInfo = await checkPromotionCycle(promotionId);
-        if (!promoInfo) {
+        // Проверяем активность акции по датам
+        const promoResult = await query(
+            'SELECT start_date, end_date, active, name FROM promotions WHERE id = $1',
+            [promotionId]
+        );
+        
+        if (promoResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Акция не найдена' });
         }
         
-        const cycleStart = promoInfo.start_date;
+        const promotion = promoResult.rows[0];
+        const now = new Date();
+        const startDate = promotion.start_date ? new Date(promotion.start_date) : null;
+        const endDate = promotion.end_date ? new Date(promotion.end_date) : null;
+        const isActiveByDate = startDate && endDate && now >= startDate && now <= endDate;
+        
+        if (!promotion.active || !isActiveByDate) {
+            let message = '';
+            if (!promotion.active) message = 'Акция отключена';
+            else if (endDate && now > endDate) message = 'Срок действия акции истёк';
+            else if (startDate && now < startDate) message = 'Акция ещё не началась';
+            
+            return res.status(400).json({ success: false, message });
+        }
+        
+        // Находим неиспользованный экземпляр
+        const checkResult = await query(
+            `SELECT id 
+             FROM user_purchased_promotions 
+             WHERE user_id = $1 
+               AND promotion_id = $2 
+               AND used = false
+             ORDER BY purchased_at ASC
+             LIMIT 1`,
+            [user.id, promotionId]
+        );
+        
+        if (checkResult.rows.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Нет доступных экземпляров этой акции' 
+            });
+        }
         
         // Используем акцию
-        const used = await usePurchasedPromotion(user.id, promotionId, cycleStart);
-        if (!used) {
+        const used = await query(
+            `UPDATE user_purchased_promotions 
+             SET used = TRUE, used_at = NOW() 
+             WHERE id = $1 AND used = FALSE
+             RETURNING *`,
+            [checkResult.rows[0].id]
+        );
+        
+        if (used.rows.length === 0) {
             return res.status(400).json({ success: false, message: 'Не удалось использовать акцию' });
         }
         
-        // Отмечаем выполнение задания "Воспользоваться акцией"
+        // Получаем, сколько осталось
+        const remainingResult = await query(
+            `SELECT COUNT(*) as remaining 
+             FROM user_purchased_promotions 
+             WHERE user_id = $1 AND promotion_id = $2 AND used = false`,
+            [user.id, promotionId]
+        );
+        const remaining = parseInt(remainingResult.rows[0].remaining);
+        
+        const promoName = promotion.name;
+        
+        // Отмечаем выполнение задания
         await trackPromotionUsage(user.id, user.company_id);
+        
+        function getDeclension(number, one, two, five) {
+            const n = Math.abs(number) % 100;
+            const n1 = n % 10;
+            if (n > 10 && n < 20) return five;
+            if (n1 > 1 && n1 < 5) return two;
+            if (n1 === 1) return one;
+            return five;
+        }
         
         res.json({ 
             success: true, 
-            message: `Акция успешно использована. Скидка применена.`
+            message: `✅ "${promoName}" использована! Осталось: ${remaining} ${getDeclension(remaining, 'использование', 'использования', 'использований')}`,
+            remainingCount: remaining,
+            usedPromotion: used.rows[0]
         });
+        
     } catch (error) {
         console.error('Ошибка использования акции:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
 // ============ АНАЛИТИКА ============
 app.get('/api/analytics/dashboard', async (req, res) => {
     try {
