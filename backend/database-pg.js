@@ -742,7 +742,6 @@ async function addMissingColumns() {
         
         if (checkTiers.rows.length === 0) {
             console.log('📝 Добавляем колонку tiers_settings в таблицу companies...');
-            // ИСПРАВЛЕНО: убрали multiplier, оставили только cashback
             const defaultTiers = JSON.stringify([
                 {"name": "🌱 Новичок", "threshold": 0, "cashback": 3, "color": "#95a5a6", "icon": "🌱"},
                 {"name": "🥉 Бронза", "threshold": 500, "cashback": 5, "color": "#cd7f32", "icon": "🥉"},
@@ -756,7 +755,6 @@ async function addMissingColumns() {
             `, [defaultTiers]);
             console.log('✅ Колонка tiers_settings добавлена');
         } else {
-            // Обновляем существующие записи: удаляем multiplier, оставляем cashback
             console.log('📝 Обновляем существующие tiers_settings, удаляем multiplier...');
             const companies = await query('SELECT id, tiers_settings FROM companies WHERE tiers_settings IS NOT NULL');
             for (const company of companies.rows) {
@@ -770,7 +768,6 @@ async function addMissingColumns() {
                         if (tier.multiplier !== undefined) {
                             updated = true;
                             const { multiplier, ...rest } = tier;
-                            // Если cashback не задан, используем multiplier * 5 как fallback
                             if (rest.cashback === undefined) {
                                 rest.cashback = Math.min(30, (multiplier || 1) * 5);
                             }
@@ -838,7 +835,6 @@ async function addMissingColumns() {
             console.log('✅ Колонка emoji добавлена');
         }
         
-        // Добавляем колонки reward_type и reward_value
         const checkRewardType = await query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -852,7 +848,6 @@ async function addMissingColumns() {
             console.log('✅ Колонки reward_type и reward_value добавлены');
         }
         
-        // Добавляем колонку birthday_date
         const checkBirthday = await query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -865,7 +860,7 @@ async function addMissingColumns() {
             console.log('✅ Колонка birthday_date добавлена');
         }
         
-        // Создаем таблицу user_purchased_promotions если не существует
+        // ========== ОБНОВЛЕННАЯ ТАБЛИЦА user_purchased_promotions ==========
         const checkPurchasedTable = await query(`
             SELECT table_name 
             FROM information_schema.tables 
@@ -873,7 +868,7 @@ async function addMissingColumns() {
         `);
         
         if (checkPurchasedTable.rows.length === 0) {
-            console.log('📝 Создаем таблицу user_purchased_promotions...');
+            console.log('📝 Создаем таблицу user_purchased_promotions (НОВАЯ СТРУКТУРА)...');
             await query(`
                 CREATE TABLE user_purchased_promotions (
                     id SERIAL PRIMARY KEY,
@@ -881,16 +876,54 @@ async function addMissingColumns() {
                     promotion_id INTEGER REFERENCES promotions(id) ON DELETE CASCADE,
                     company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
                     purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    promotion_cycle_start TIMESTAMP NOT NULL,
                     used BOOLEAN DEFAULT FALSE,
                     used_at TIMESTAMP,
-                    UNIQUE(user_id, promotion_id, promotion_cycle_start)
+                    UNIQUE(user_id, promotion_id)
                 )
             `);
-            console.log('✅ Таблица user_purchased_promotions создана');
+            console.log('✅ Таблица user_purchased_promotions создана с новой структурой');
+        } else {
+            // МИГРАЦИЯ: обновляем существующую таблицу
+            console.log('📝 Обновляем существующую таблицу user_purchased_promotions...');
+            
+            // Проверяем и удаляем колонку promotion_cycle_start если она есть
+            const checkCycleStart = await query(`
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'user_purchased_promotions' AND column_name = 'promotion_cycle_start'
+            `);
+            
+            if (checkCycleStart.rows.length > 0) {
+                console.log('📝 Удаляем колонку promotion_cycle_start...');
+                await query(`ALTER TABLE user_purchased_promotions DROP COLUMN promotion_cycle_start`);
+                console.log('✅ Колонка promotion_cycle_start удалена');
+            }
+            
+            // Удаляем старое уникальное ограничение если оно было
+            try {
+                await query(`ALTER TABLE user_purchased_promotions DROP CONSTRAINT IF EXISTS user_purchased_promotions_user_id_promotion_id_promotion_cycle_start_key`);
+                console.log('✅ Старое ограничение удалено');
+            } catch (e) {
+                console.log('⚠️ Старое ограничение не найдено');
+            }
+            
+            // Добавляем новое уникальное ограничение
+            try {
+                await query(`
+                    ALTER TABLE user_purchased_promotions 
+                    ADD CONSTRAINT unique_user_promotion 
+                    UNIQUE (user_id, promotion_id)
+                `);
+                console.log('✅ Новое уникальное ограничение добавлено');
+            } catch (e) {
+                if (!e.message.includes('already exists')) {
+                    console.error('Ошибка добавления ограничения:', e.message);
+                } else {
+                    console.log('⚠️ Уникальное ограничение уже существует');
+                }
+            }
         }
         
-        // Добавляем колонку products
         const checkProducts = await query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -903,7 +936,6 @@ async function addMissingColumns() {
             console.log('✅ Колонка products добавлена');
         }
         
-        // Добавляем колонку is_free (вместо requires_purchase)
         const checkIsFree = await query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -916,7 +948,6 @@ async function addMissingColumns() {
             console.log('✅ Колонка is_free добавлена');
         }
         
-        // Добавляем колонку price
         const checkPrice = await query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -929,7 +960,6 @@ async function addMissingColumns() {
             console.log('✅ Колонка price добавлена');
         }
         
-        // Удаляем устаревшую колонку requires_purchase если она есть
         const checkRequiresPurchase = await query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -2021,10 +2051,20 @@ async function getUserBirthday(userId) {
 }
 
 // ============ Функции для купленных акций ============
-async function purchasePromotion(userId, promotionId, companyId, promotionCycleStart, bonusCost, isFree, promotionName) {
+async function purchasePromotion(userId, promotionId, companyId, bonusCost, isFree, promotionName) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        
+        // ✅ Проверяем, покупал ли пользователь эту акцию ранее (только по ID)
+        const existing = await client.query(
+            'SELECT id FROM user_purchased_promotions WHERE user_id = $1 AND promotion_id = $2',
+            [userId, promotionId]
+        );
+        
+        if (existing.rows.length > 0) {
+            throw new Error('Вы уже покупали эту акцию');
+        }
         
         // Для бесплатных акций не списываем бонусы
         if (!isFree && bonusCost > 0) {
@@ -2041,15 +2081,15 @@ async function purchasePromotion(userId, promotionId, companyId, promotionCycleS
             );
         }
         
-        // Записываем покупку
+        // ✅ Записываем покупку (БЕЗ promotion_cycle_start)
         const result = await client.query(
-            `INSERT INTO user_purchased_promotions (user_id, promotion_id, company_id, promotion_cycle_start) 
-             VALUES ($1, $2, $3, $4) 
+            `INSERT INTO user_purchased_promotions (user_id, promotion_id, company_id, purchased_at) 
+             VALUES ($1, $2, $3, NOW()) 
              RETURNING *`,
-            [userId, promotionId, companyId, promotionCycleStart]
+            [userId, promotionId, companyId]
         );
         
-        // Добавляем транзакцию (только одну!) с названием акции
+        // Добавляем транзакцию с названием акции
         const description = isFree ? `Бесплатная акция: ${promotionName}` : `Покупка акции: ${promotionName}`;
         const transactionBonusSpent = isFree ? 0 : bonusCost;
         
@@ -3866,10 +3906,26 @@ async function createUserGamePlaysTable() {
                 game_type VARCHAR(50) NOT NULL,
                 plays_today INTEGER DEFAULT 0,
                 last_play_date DATE DEFAULT CURRENT_DATE,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, company_id, game_type)
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        
+        // Добавляем уникальное ограничение, если его нет
+        try {
+            await query(`
+                ALTER TABLE user_game_plays 
+                ADD CONSTRAINT unique_user_game_play 
+                UNIQUE (user_id, company_id, game_type)
+            `);
+            console.log('✅ Уникальное ограничение добавлено для user_game_plays');
+        } catch (e) {
+            if (e.code === '42P07' || e.message.includes('already exists')) {
+                console.log('⚠️ Уникальное ограничение уже существует');
+            } else {
+                console.error('Ошибка добавления ограничения:', e.message);
+            }
+        }
+        
         console.log('✅ Таблица user_game_plays создана/проверена');
     } catch (error) {
         console.error('❌ Ошибка создания user_game_plays:', error);
@@ -3936,7 +3992,29 @@ async function incrementUserGamePlays(userId, companyId, gameType) {
         return 0;
     }
 }
-
+// Добавьте эту функцию после функции updatePromotion
+async function clearPromotionPurchases(promotionId) {
+    try {
+        console.log(`🔍 [clearPromotionPurchases] Начинаем очистку для акции ${promotionId}`);
+        
+        // Сначала проверяем, есть ли записи
+        const checkResult = await query('SELECT COUNT(*) FROM user_purchased_promotions WHERE promotion_id = $1', [promotionId]);
+        console.log(`🔍 [clearPromotionPurchases] Найдено записей: ${checkResult.rows[0].count}`);
+        
+        // Удаляем записи
+        const result = await query('DELETE FROM user_purchased_promotions WHERE promotion_id = $1 RETURNING id', [promotionId]);
+        console.log(`🗑️ [clearPromotionPurchases] Удалено ${result.rowCount} записей для акции ${promotionId}`);
+        
+        // Проверяем после удаления
+        const afterCheck = await query('SELECT COUNT(*) FROM user_purchased_promotions WHERE promotion_id = $1', [promotionId]);
+        console.log(`✅ [clearPromotionPurchases] После удаления осталось: ${afterCheck.rows[0].count}`);
+        
+        return { success: true, deletedCount: result.rowCount };
+    } catch (error) {
+        console.error('❌ [clearPromotionPurchases] Ошибка:', error);
+        throw error;
+    }
+}
 
 module.exports = {
     pool,
@@ -4052,5 +4130,6 @@ module.exports = {
     getGreetingSettings,
 	createUserGamePlaysTable,
 	getUserGamePlaysToday,
-	incrementUserGamePlays
+	incrementUserGamePlays,
+	clearPromotionPurchases
 };

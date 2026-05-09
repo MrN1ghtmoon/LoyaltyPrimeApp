@@ -94,7 +94,8 @@ const {
     findCashierByLogin,
     // Greeting settings
     saveGreetingSettings,
-    getGreetingSettings
+    getGreetingSettings,
+	clearPromotionPurchases
 } = require('./database-pg');
 
 const app = express();
@@ -275,10 +276,56 @@ app.post('/api/promotions', async (req, res) => {
     }
 });
 
+// Найдите существующий маршрут PUT /api/promotions/:id и замените его на этот:
 app.put('/api/promotions/:id', async (req, res) => {
     try {
         const { name, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price } = req.body;
         
+        console.log(`📝 [UPDATE] Обновление акции ${req.params.id}`, { reward_value, price, is_free, endDate });
+        
+        // Получаем старые данные
+        const oldPromotion = await query('SELECT reward_value, is_free, price, end_date FROM promotions WHERE id = $1', [req.params.id]);
+        
+        let shouldClearPurchases = false;
+        let changedFields = [];
+        
+        if (oldPromotion.rows.length > 0) {
+            const old = oldPromotion.rows[0];
+            console.log(`📊 [UPDATE] Старые данные: reward_value=${old.reward_value}, price=${old.price}, is_free=${old.is_free}, end_date=${old.end_date}`);
+            
+            // Проверяем изменения
+            if (reward_value !== undefined && old.reward_value !== reward_value) {
+                shouldClearPurchases = true;
+                changedFields.push(`скидка (${old.reward_value}% → ${reward_value}%)`);
+                console.log(`⚠️ [UPDATE] Изменена скидка`);
+            }
+            
+            if (price !== undefined && old.price !== price) {
+                shouldClearPurchases = true;
+                changedFields.push(`цена (${old.price} → ${price} баллов)`);
+                console.log(`⚠️ [UPDATE] Изменена цена`);
+            }
+            
+            if (is_free !== undefined && old.is_free !== is_free) {
+                shouldClearPurchases = true;
+                changedFields.push(`тип (${old.is_free ? 'бесплатная' : 'платная'} → ${is_free ? 'бесплатная' : 'платная'})`);
+                console.log(`⚠️ [UPDATE] Изменен тип`);
+            }
+            
+            if (endDate !== undefined) {
+                const oldEndDate = old.end_date ? new Date(old.end_date).toISOString() : null;
+                const newEndDate = endDate ? new Date(endDate).toISOString() : null;
+                if (oldEndDate !== newEndDate) {
+                    shouldClearPurchases = true;
+                    changedFields.push(`дата окончания`);
+                    console.log(`⚠️ [UPDATE] Изменена дата окончания: ${oldEndDate} → ${newEndDate}`);
+                }
+            }
+        }
+        
+        console.log(`📊 [UPDATE] shouldClearPurchases = ${shouldClearPurchases}, changes: ${changedFields.join(', ')}`);
+        
+        // ========== КОД ОБНОВЛЕНИЯ ПОЛЕЙ ==========
         const updates = [];
         const values = [];
         let paramIndex = 1;
@@ -332,28 +379,37 @@ app.put('/api/promotions/:id', async (req, res) => {
         values.push(req.params.id);
         
         const queryText = `UPDATE promotions SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+        console.log(`📝 [UPDATE] Выполняем SQL: ${queryText}`);
+        
         const result = await query(queryText, values);
+        // ========== КОНЕЦ КОДА ОБНОВЛЕНИЯ ==========
         
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Акция не найдена' });
         }
         
-        res.json({ success: true, promotion: result.rows[0] });
+        // Если были критические изменения — очищаем историю покупок
+        if (shouldClearPurchases) {
+            console.log(`🗑️ [UPDATE] Вызываем clearPromotionPurchases для акции ${req.params.id}`);
+            await clearPromotionPurchases(req.params.id);
+            console.log(`✅ [UPDATE] Покупки очищены`);
+        }
+        
+        console.log(`✅ [UPDATE] Акция ${req.params.id} успешно обновлена`);
+        
+        res.json({ 
+            success: true, 
+            promotion: result.rows[0],
+            purchasesCleared: shouldClearPurchases,
+            message: shouldClearPurchases 
+                ? `Акция обновлена. ${changedFields.join(', ')} — покупки пользователей сброшены.`
+                : 'Акция обновлена'
+        });
     } catch (error) {
-        console.error('Ошибка обновления акции:', error);
+        console.error('❌ [UPDATE] Ошибка:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
-app.delete('/api/promotions/:id', async (req, res) => {
-    try {
-        await deletePromotion(req.params.id);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // ============ API ДЛЯ ПРЕДУСТАНОВЛЕННЫХ ЗАДАНИЙ ============
 
 app.get('/api/preset-quests', async (req, res) => {
@@ -772,6 +828,8 @@ app.post('/api/users/:userId/promotions/:promotionId/purchase', async (req, res)
         const { userId, promotionId } = req.params;
         const { companyId } = req.body;
         
+        console.log(`📝 Покупка акции: userId=${userId}, promotionId=${promotionId}, companyId=${companyId}`);
+        
         if (!companyId) {
             return res.status(400).json({ success: false, message: 'companyId обязателен' });
         }
@@ -787,23 +845,28 @@ app.post('/api/users/:userId/promotions/:promotionId/purchase', async (req, res)
         // Проверяем, бесплатная ли акция
         const isFree = promotion.is_free === true;
         
-        // Проверяем цикл акции (дата начала + active статус)
-        const cycleStart = promotion.start_date;
-        if (!cycleStart) {
-            return res.status(400).json({ success: false, message: 'У акции не указана дата начала' });
+        // ✅ ИСПРАВЛЕНО: используем query вместо client.query
+        const alreadyPurchased = await query(
+            'SELECT id FROM user_purchased_promotions WHERE user_id = $1 AND promotion_id = $2',
+            [userId, promotionId]
+        );
+        
+        console.log(`🔍 Проверка покупки: найдено ${alreadyPurchased.rows.length} записей`);
+        
+        if (alreadyPurchased.rows.length > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Вы уже купили эту акцию' 
+            });
         }
         
-        // Проверяем, покупал ли пользователь уже эту акцию в текущем цикле
-        const alreadyPurchased = await hasUserPurchasedPromotion(userId, promotionId, cycleStart);
-        if (alreadyPurchased) {
-            return res.status(400).json({ success: false, message: 'Вы уже купили эту акцию. Повторная покупка возможна только после перезапуска акции.' });
-        }
-        
-        // Цена покупки: для бесплатных акций = 0, для платных = price из БД (или fallback на reward_value * 10)
+        // Цена покупки
         const bonusCost = isFree ? 0 : (promotion.price || promotion.reward_value * 10);
         
-        // Покупаем акцию (передаем isFree и promotion.name)
-        const purchase = await purchasePromotion(userId, promotionId, companyId, cycleStart, bonusCost, isFree, promotion.name);
+        // Покупаем акцию
+        const purchase = await purchasePromotion(userId, promotionId, companyId, bonusCost, isFree, promotion.name);
+        
+        console.log(`✅ Покупка успешна! ID: ${purchase.id}`);
         
         res.json({ 
             success: true, 
@@ -811,7 +874,28 @@ app.post('/api/users/:userId/promotions/:promotionId/purchase', async (req, res)
             message: `Акция "${promotion.name}" успешно куплена за ${bonusCost} баллов` 
         });
     } catch (error) {
-        console.error('Ошибка покупки акции:', error);
+        console.error('❌ Ошибка покупки акции:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Отладочный эндпоинт - проверить покупки акции
+app.get('/api/debug/promotion-purchases/:promotionId', async (req, res) => {
+    try {
+        const { promotionId } = req.params;
+        
+        const purchases = await query(
+            'SELECT * FROM user_purchased_promotions WHERE promotion_id = $1',
+            [promotionId]
+        );
+        
+        res.json({
+            success: true,
+            promotionId: promotionId,
+            purchaseCount: purchases.rows.length,
+            purchases: purchases.rows
+        });
+    } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -3220,6 +3304,8 @@ app.post('/api/users/:userId/games/increment', async (req, res) => {
     try {
         const { userId } = req.params;
         const { companyId, gameType } = req.body;
+        
+        console.log('📊 increment game play:', { userId, companyId, gameType });
         
         if (!companyId || !gameType) {
             return res.status(400).json({ success: false, message: 'companyId и gameType обязательны' });
