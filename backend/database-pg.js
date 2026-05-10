@@ -3977,9 +3977,11 @@ async function createUserGamePlaysTable() {
 }
 
 // Функция для получения количества игр сегодня
-async function getUserGamePlaysToday(userId, companyId, gameType) {
+async function getUserGamePlaysToday(userId, companyId, gameType, timezoneOffset = 0) {
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        // Вычисляем "сегодня" по часовому поясу компании
+        const now = new Date(Date.now() + timezoneOffset * 60000);
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10);
         
         const result = await query(
             `SELECT plays_today, last_play_date 
@@ -3992,7 +3994,6 @@ async function getUserGamePlaysToday(userId, companyId, gameType) {
             const lastDate = result.rows[0].last_play_date;
             const lastDateStr = lastDate instanceof Date ? lastDate.toISOString().slice(0, 10) : lastDate;
             
-            // Если последняя игра была не сегодня, сбрасываем счетчик
             if (lastDateStr !== today) {
                 await query(
                     `UPDATE user_game_plays 
@@ -4014,9 +4015,10 @@ async function getUserGamePlaysToday(userId, companyId, gameType) {
 }
 
 // Функция для увеличения счетчика игр сегодня
-async function incrementUserGamePlays(userId, companyId, gameType) {
+async function incrementUserGamePlays(userId, companyId, gameType, timezoneOffset = 0) {
     try {
-        const today = new Date().toISOString().slice(0, 10);
+        const now = new Date(Date.now() + timezoneOffset * 60000);
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10);
         
         const result = await query(
             `INSERT INTO user_game_plays (user_id, company_id, game_type, plays_today, last_play_date, updated_at)

@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import vkBridge from '@vkontakte/vk-bridge';
 import './App.css';
 import { GameWheel } from './components/GameWheel';
-import { DailyQuests } from './components/DailyQuests';
-import { ReferralSystem } from './components/ReferralSystem';
+import { DailyQuests } from './components/DailyQuests';	
 import { LoyaltyCard } from './components/LoyaltyCard';
 import { DiceRoll } from './components/DiceRoll';
 import { ScratchCard } from './components/ScratchCard';
@@ -1272,7 +1271,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
 </header>
 
       <nav style={{ display:'flex', gap:8, background:'rgba(0,0,0,0.3)', padding:6, borderRadius:60, marginBottom:24, flexWrap:'wrap', justifyContent:'center' }}>
-        {['home','card','offers','giveaways','games','quests','referral','history'].map(tab => (
+        {['home','card','offers','giveaways','games','quests','history'].map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex:'0 1 auto', background:activeTab===tab ? brandColor : 'transparent', border:'none', padding:'10px 12px', borderRadius:40, fontSize:12, fontWeight:600, color:activeTab===tab ? 'white' : '#aaa', cursor:'pointer', whiteSpace:'nowrap' }}>
             {tab==='home'?'🏠 Главная':tab==='card'?'🎫 Карта':tab==='offers'?'🎁 Акции':tab==='giveaways'?'🎰 Розыгрыши':tab==='games'?'🎮 Игры':tab==='quests'?'📋 Задания':tab==='referral'?'👥 Друзья':'📜 История'}
           </button>
@@ -1821,11 +1820,12 @@ const progressToNext = getProgressToNextTier(currentSpent);
 			companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
         />
         <DiceRoll 
-            onBalanceUpdate={updateBalanceAndStats} 
-            userBalance={currentBalance}
-            companyId={selectedGroup?.id}
-			companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
-        />
+    onBalanceUpdate={updateBalanceAndStats} 
+    userBalance={currentBalance}
+    companyId={selectedGroup?.id}
+    userId={userId}  
+    companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
+/>
         <ScratchCard 
             onBalanceUpdate={updateBalanceAndStats} 
             userBalance={currentBalance}
@@ -1856,8 +1856,6 @@ const progressToNext = getProgressToNextTier(currentSpent);
 		  companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
         />
       )}
-      
-      {activeTab === 'referral' && selectedGroup && <ReferralSystem onBalanceUpdate={updateBalanceAndStats} userId={userInfo?.id} selectedGroupId={selectedGroup?.id} companyTimezoneOffset={selectedGroup?.timezoneOffset || 0} />}
       
 
       {activeTab === 'history' && (

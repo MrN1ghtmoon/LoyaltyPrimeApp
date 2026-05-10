@@ -1,10 +1,10 @@
-// ScratchCard.js - Добавляем maxPlaysPerDay
+// ScratchCard.js - Исправленная версия с единым стилем индикатора игр
 import { useState, useEffect } from 'react';
 import './ScratchCard.css';
 
 const API_URL = 'http://localhost:3001';
 
-// Символы по умолчанию (оставляем без изменений)
+// Символы по умолчанию
 const DEFAULT_SYMBOLS = [
     { id: '🍒', name: 'Вишня', value: 10, multiplier: 1, color: '#e74c3c', prob: 15 },
     { id: '🍋', name: 'Лимон', value: 15, multiplier: 1.5, color: '#f1c40f', prob: 14 },
@@ -86,7 +86,7 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
     const [attemptsLeft, setAttemptsLeft] = useState(3);
     const [foundWinning, setFoundWinning] = useState(0);
     const [selectedSymbol, setSelectedSymbol] = useState(null);
-    const [playsToday, setPlaysToday] = useState(0);
+    const [playsToday, setPlaysToday] = useState(null);
     
     // Состояние для бесплатной подсказки
     const [freeHintAvailable, setFreeHintAvailable] = useState(false);
@@ -99,38 +99,12 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
         symbols: DEFAULT_SYMBOLS,
         hintCost: 15,
         freeHintDaily: false,
-        maxPlaysPerDay: 0,  // ← ДОБАВЛЕНО
+        maxPlaysPerDay: 0,
         active: true
     });
     const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-    // Загрузка количества сыгранных игр сегодня
-    useEffect(() => {
-        if (!userId || !companyId) return;
-        
-        const loadPlaysToday = async () => {
-            try {
-                const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}`);
-                const data = await response.json();
-                if (data.success) {
-                    setPlaysToday(data.plays.scratch);
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки количества игр:', error);
-            }
-        };
-        
-        loadPlaysToday();
-    }, [userId, companyId]);
-    
-    // Проверка лимита игр
-    const getRemainingPlays = () => {
-        const maxPlays = settings.maxPlaysPerDay || 0;
-        if (maxPlays === 0) return Infinity;
-        return Math.max(0, maxPlays - playsToday);
-    };
-
-    // Загрузка настроек с сервера
+    // ✅ ЗАГРУЗКА НАСТРОЕК С СЕРВЕРА
     useEffect(() => {
         const loadSettings = async () => {
             if (!companyId) return;
@@ -139,6 +113,8 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
                 const response = await fetch(`${API_URL}/api/games/${companyId}/scratch`);
                 const data = await response.json();
                 
+                console.log('🎫 Scratch API response:', data);
+                
                 if (data.success && data.active !== false) {
                     setSettings({
                         cost: data.settings.cost || 20,
@@ -146,9 +122,10 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
                         symbols: data.settings.symbols || DEFAULT_SYMBOLS,
                         hintCost: data.settings.hintCost || 15,
                         freeHintDaily: data.settings.freeHintDaily || false,
-                        maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,  // ← ДОБАВЛЕНО
+                        maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
                         active: data.active
                     });
+                    console.log('🎫 Loaded maxPlaysPerDay:', data.settings.maxPlaysPerDay);
                 }
             } catch (error) {
                 console.error('Ошибка загрузки настроек скретч-карты:', error);
@@ -158,6 +135,45 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
         
         loadSettings();
     }, [companyId]);
+
+    // ✅ ЗАГРУЗКА КОЛИЧЕСТВА СЫГРАННЫХ ИГР СЕГОДНЯ
+    useEffect(() => {
+        if (!userId || !companyId) {
+            console.log('⏳ ScratchCard: ждём userId для загрузки статистики игр');
+            return;
+        }
+        
+        const loadPlaysToday = async () => {
+            try {
+                console.log('🎫 ScratchCard: загружаем статистику игр для userId:', userId);
+                const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=scratch`);
+                const data = await response.json();
+                if (data.success) {
+                    setPlaysToday(data.plays?.scratch || 0);
+                    console.log('🎫 ScratchCard: игр сегодня:', data.plays?.scratch);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки количества игр для Scratch:', error);
+                setPlaysToday(0);
+            }
+        };
+        
+        loadPlaysToday();
+    }, [userId, companyId]);
+
+    // ✅ ПРОВЕРКА ЛИМИТА ИГР
+    const isLimitReached = () => {
+        if (playsToday === null) return true;
+        const maxPlays = settings.maxPlaysPerDay || 0;
+        if (maxPlays === 0) return false;
+        return playsToday >= maxPlays;
+    };
+
+    const getRemainingPlays = () => {
+        const maxPlays = settings.maxPlaysPerDay || 0;
+        if (maxPlays === 0) return null;
+        return Math.max(0, maxPlays - (playsToday || 0));
+    };
 
     // Загрузка состояния бесплатной подсказки из localStorage
     useEffect(() => {
@@ -199,54 +215,54 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
 
     // Новая игра
     const newGame = async () => {
-    if (isRevealing) return;
-    if (!settings.active) {
-        alert('Игра временно недоступна');
-        return;
-    }
-    
-    const maxPlays = settings.maxPlaysPerDay || 0;
-    if (maxPlays > 0 && playsToday >= maxPlays) {
-        alert(`❌ Вы исчерпали лимит игр на сегодня (${maxPlays}/${maxPlays}). Завтра будет новый лимит!`);
-        return;
-    }
-    
-    if (userBalance < settings.cost) {
-        alert(`❌ Недостаточно бонусов! Нужно ${settings.cost} бонусов.`);
-        return;
-    }
-    
-    await onBalanceUpdate(-settings.cost, 'spend', { source: 'game', gameType: 'scratch', action: 'newGame' });
-    
-    // ✅ СОХРАНЯЕМ СЧЁТЧИК В БД
-    try {
-        const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ companyId, gameType: 'scratch' })
-        });
-        const data = await response.json();
-        if (data.success) {
-            setPlaysToday(data.playsToday);
+        if (isRevealing) return;
+        if (!settings.active) {
+            alert('Игра временно недоступна');
+            return;
         }
-    } catch (error) {
-        console.error('Ошибка сохранения счетчика игр:', error);
-        // Fallback
-        setPlaysToday(prev => prev + 1);
-    }
-    
-    const newBoard = createBoard(settings.symbols);
-    const winningSym = newBoard.find(cell => cell.isWinning)?.symbol;
-    
-    setBoard(newBoard);
-    setSelectedSymbol(winningSym);
-    setGameActive(true);
-    setResult(null);
-    setLastWin(null);
-    setShowConfetti(false);
-    setAttemptsLeft(settings.maxAttempts);
-    setFoundWinning(0);
-};
+        
+        if (isLimitReached()) {
+            alert(`❌ Вы исчерпали лимит игр на сегодня (${settings.maxPlaysPerDay}/${settings.maxPlaysPerDay}). Завтра будет новый лимит!`);
+            return;
+        }
+        
+        if (userBalance < settings.cost) {
+            alert(`❌ Недостаточно бонусов! Нужно ${settings.cost} бонусов.`);
+            return;
+        }
+        
+        await onBalanceUpdate(-settings.cost, 'spend', { source: 'game', gameType: 'scratch', action: 'newGame' });
+        
+        // ✅ СОХРАНЯЕМ СЧЁТЧИК В БД
+        try {
+            const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ companyId, gameType: 'scratch' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                setPlaysToday(data.playsToday);
+                console.log('✅ Scratch plays incremented to:', data.playsToday);
+            }
+        } catch (error) {
+            console.error('Ошибка сохранения счетчика игр:', error);
+            setPlaysToday(prev => (prev || 0) + 1);
+        }
+        
+        const newBoard = createBoard(settings.symbols);
+        const winningSym = newBoard.find(cell => cell.isWinning)?.symbol;
+        
+        setBoard(newBoard);
+        setSelectedSymbol(winningSym);
+        setGameActive(true);
+        setResult(null);
+        setLastWin(null);
+        setShowConfetti(false);
+        setAttemptsLeft(settings.maxAttempts);
+        setFoundWinning(0);
+    };
+
     // Открыть ячейку
     const revealCell = (index, isFreeHint = false) => {
         if (!gameActive) return;
@@ -344,10 +360,17 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
         }
     };
     
-    if (!settingsLoaded) {
+    // ✅ Показываем загрузку, если нет userId или не загрузились настройки
+    if (!userId || !settingsLoaded || playsToday === null) {
         return (
-            <div className="scratch-card-3x3" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
-                <div style={{ color: 'white' }}>Загрузка...</div>
+            <div className="scratch-card-3x3" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ color: 'white', fontSize: '24px' }}>🎫</div>
+                <div style={{ color: 'white' }}>Загрузка игры...</div>
+                <div style={{ color: '#aaa', fontSize: '12px' }}>
+                    {!userId && 'Ожидание авторизации...'}
+                    {userId && !settingsLoaded && 'Загрузка настроек...'}
+                    {userId && settingsLoaded && playsToday === null && 'Загрузка статистики...'}
+                </div>
             </div>
         );
     }
@@ -363,16 +386,14 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
     }
     
     const remainingPlays = getRemainingPlays();
-    const remainingPlaysText = settings.maxPlaysPerDay > 0 
-        ? `Осталось игр сегодня: ${remainingPlays === Infinity ? settings.maxPlaysPerDay : remainingPlays}/${settings.maxPlaysPerDay}`
-        : null;
+    const limitReached = isLimitReached();
 
     return (
         <div className="scratch-card-3x3">
-            {/* Баннер лимита игр */}
-            {settings.maxPlaysPerDay > 0 && remainingPlays <= 3 && remainingPlays > 0 && (
-                <div className="limit-warning" style={{
-                    background: remainingPlays === 0 ? '#e74c3c' : '#f39c12',
+            {/* ✅ БАННЕР ЛИМИТА ИГР (как в DiceRoll) */}
+            {settings.maxPlaysPerDay > 0 && playsToday !== null && (
+                <div style={{ 
+                    background: limitReached ? '#e74c3c' : (remainingPlays <= 3 ? '#f39c12' : 'rgba(255,255,255,0.1)'),
                     borderRadius: '30px',
                     padding: '8px 16px',
                     marginBottom: '16px',
@@ -381,7 +402,10 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
                     fontSize: '13px',
                     fontWeight: 'bold'
                 }}>
-                    ⚠️ {remainingPlays === 0 ? 'Лимит игр на сегодня исчерпан!' : `Осталось ${remainingPlays} игр на сегодня`}
+                    {limitReached 
+                        ? `❌ Лимит игр на сегодня исчерпан! (${playsToday}/${settings.maxPlaysPerDay})`
+                        : `🎰 Игр сегодня: ${playsToday} / ${settings.maxPlaysPerDay}${remainingPlays <= 3 ? ` • Осталось: ${remainingPlays}` : ''}`
+                    }
                 </div>
             )}
             
@@ -409,12 +433,6 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
                     <span className="cost-value">{settings.cost}</span>
                 </div>
             </div>
-            
-            {remainingPlaysText && (
-                <div className="remaining-plays" style={{ fontSize: '11px', color: '#aaa', textAlign: 'center', marginBottom: '8px' }}>
-                    {remainingPlaysText}
-                </div>
-            )}
             
             {/* Баннер бесплатной подсказки */}
             {settings.freeHintDaily && freeHintAvailable && !freeHintUsed && (
@@ -535,11 +553,15 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
                 <button
                     className="new-game-btn"
                     onClick={newGame}
-                    disabled={isRevealing || (settings.maxPlaysPerDay > 0 && playsToday >= settings.maxPlaysPerDay)}
+                    disabled={isRevealing || playsToday === null || limitReached}
+                    style={{
+                        opacity: (playsToday === null || limitReached) ? 0.6 : 1,
+                        cursor: (playsToday === null || limitReached) ? 'not-allowed' : 'pointer'
+                    }}
                 >
                     🎲 НОВАЯ ИГРА
                 </button>
-                {gameActive && attemptsLeft > 0 && foundWinning < 3 && (
+                {gameActive && attemptsLeft > 0 && foundWinning < 3 && !limitReached && (
                     <button
                         className="hint-btn"
                         onClick={showHint}
