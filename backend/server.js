@@ -98,7 +98,8 @@ const {
 	clearPromotionPurchases,
 	shouldClearPurchasesForPromotion,
 	incrementUserGamePlays,
-getUserGamePlaysToday	
+getUserGamePlaysToday,
+getTodayString	
 } = require('./database-pg');
 
 const app = express();

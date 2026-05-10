@@ -103,6 +103,55 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
         active: true
     });
     const [settingsLoaded, setSettingsLoaded] = useState(false);
+	// В начале компонента, после объявления useState, добавьте:
+
+// Загрузка количества игр при монтировании и при фокусе окна
+useEffect(() => {
+    if (!userId || !companyId) return;
+    
+    const loadPlaysToday = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=scratch`);
+            const data = await response.json();
+            if (data.success) {
+                setPlaysToday(data.plays?.scratch || 0);
+                console.log('🎫 ScratchCard: игр сегодня (загружено):', data.plays?.scratch);
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки количества игр:', error);
+        }
+    };
+    
+    loadPlaysToday();
+}, [userId, companyId]);
+
+// Добавьте обработчик видимости страницы
+useEffect(() => {
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && userId && companyId) {
+            const reloadPlays = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=scratch`);
+                    const data = await response.json();
+                    if (data.success) {
+                        setPlaysToday(data.plays?.scratch || 0);
+                    }
+                } catch (error) {
+                    console.error('Ошибка перезагрузки:', error);
+                }
+            };
+            reloadPlays();
+        }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    
+    return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleVisibilityChange);
+    };
+}, [userId, companyId]);
 
     // ✅ ЗАГРУЗКА НАСТРОЕК С СЕРВЕРА
     useEffect(() => {
@@ -201,6 +250,28 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
         }
     }, [userId, companyId, settings.freeHintDaily]);
 
+useEffect(() => {
+    const handleRefreshPlays = () => {
+        if (userId && companyId) {
+            const loadPlays = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=scratch`);
+                    const data = await response.json();
+                    if (data.success) {
+                        setPlaysToday(data.plays?.scratch || 0);
+                        console.log('🎫 Счётчик обновлён по событию refreshGamePlays');
+                    }
+                } catch (error) {
+                    console.error('Ошибка обновления счётчика:', error);
+                }
+            };
+            loadPlays();
+        }
+    };
+    
+    window.addEventListener('refreshGamePlays', handleRefreshPlays);
+    return () => window.removeEventListener('refreshGamePlays', handleRefreshPlays);
+}, [userId, companyId]);
     // Сохранение состояния бесплатной подсказки
     const saveFreeHintState = (used) => {
         const today = new Date().toDateString();
@@ -236,10 +307,10 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
         // ✅ СОХРАНЯЕМ СЧЁТЧИК В БД
         try {
             const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ companyId, gameType: 'scratch' })
-            });
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyId, gameType: 'scratch', timezoneOffset: companyTimezoneOffset })
+});
             const data = await response.json();
             if (data.success) {
                 setPlaysToday(data.playsToday);

@@ -48,7 +48,60 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
         maxPlaysPerDay: 0,
         active: true
     });
+    // Найдите существующий useEffect для загрузки статистики и замените его на:
+
+// ✅ ЗАГРУЗКА КОЛИЧЕСТВА ИГР (только когда есть userId)
+useEffect(() => {
+    if (!userId || !companyId) {
+        console.log('⏳ Ждём userId для загрузки статистики игр');
+        return;
+    }
     
+    const loadPlaysToday = async () => {
+        try {
+            console.log('🎲 Загружаем статистику игр для userId:', userId);
+            const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice`);
+            const data = await response.json();
+            if (data.success) {
+                setPlaysToday(data.plays?.dice || 0);
+                console.log('🎲 Игр сегодня (при монтировании):', data.plays?.dice);
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки количества игр для Dice:', error);
+            setPlaysToday(0);
+        }
+    };
+    
+    loadPlaysToday();
+}, [userId, companyId]);
+
+// Добавьте обработчик видимости страницы
+useEffect(() => {
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible' && userId && companyId) {
+            const reloadPlays = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice`);
+                    const data = await response.json();
+                    if (data.success) {
+                        setPlaysToday(data.plays?.dice || 0);
+                    }
+                } catch (error) {
+                    console.error('Ошибка перезагрузки:', error);
+                }
+            };
+            reloadPlays();
+        }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    
+    return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleVisibilityChange);
+    };
+}, [userId, companyId]);
     // ✅ ЗАГРУЗКА НАСТРОЕК
     useEffect(() => {
         const loadSettings = async () => {
@@ -104,6 +157,29 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
         
         loadPlaysToday();
     }, [userId, companyId]);
+	
+useEffect(() => {
+    const handleRefreshPlays = () => {
+        if (userId && companyId) {
+            const loadPlays = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice`);
+                    const data = await response.json();
+                    if (data.success) {
+                        setPlaysToday(data.plays?.dice || 0);
+                        console.log('🎲 Счётчик обновлён по событию refreshGamePlays');
+                    }
+                } catch (error) {
+                    console.error('Ошибка обновления счётчика:', error);
+                }
+            };
+            loadPlays();
+        }
+    };
+    
+    window.addEventListener('refreshGamePlays', handleRefreshPlays);
+    return () => window.removeEventListener('refreshGamePlays', handleRefreshPlays);
+}, [userId, companyId]);
     
     // Проверка лимита
     const isLimitReached = () => {
@@ -243,10 +319,10 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
         try {
             console.log('🎲 Увеличиваем счётчик игр для userId:', userId);
             const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ companyId, gameType: 'dice' })
-            });
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyId, gameType: 'dice', timezoneOffset: companyTimezoneOffset })
+});
             const data = await response.json();
             if (data.success) {
                 setPlaysToday(data.playsToday);

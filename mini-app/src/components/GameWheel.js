@@ -16,7 +16,7 @@ const DEFAULT_SECTORS = [
     { name: 'x15', value: 15, multiplier: 15, color: '#e67e22', icon: '🏆', weight: 10 }
 ];
 
-export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
+export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId, companyTimezoneOffset = 0 }) {
     const [isSpinning, setIsSpinning] = useState(false);
     const [result, setResult] = useState(null);
     const [lastWin, setLastWin] = useState(null);
@@ -42,7 +42,6 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
     // Состояние для бесплатного вращения
     const [freeSpinAvailable, setFreeSpinAvailable] = useState(false);
     const [freeSpinUsed, setFreeSpinUsed] = useState(false);
-    const [lastFreeSpinDate, setLastFreeSpinDate] = useState(null);
 
     // Загрузка настроек с сервера
     useEffect(() => {
@@ -87,11 +86,9 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
                 if (data.date === today) {
                     setFreeSpinUsed(data.used);
                     setFreeSpinAvailable(false);
-                    setLastFreeSpinDate(data.date);
                 } else {
                     setFreeSpinUsed(false);
                     setFreeSpinAvailable(settings.freeSpinDaily);
-                    setLastFreeSpinDate(null);
                 }
             } catch(e) {}
         } else {
@@ -100,6 +97,7 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
         }
     }, [userId, companyId, settings.freeSpinDaily]);
 
+    // Загрузка истории (spinCount, bestWin)
     useEffect(() => {
         const saved = localStorage.getItem('wheel_spin_history');
         if (saved) {
@@ -111,7 +109,7 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
         }
     }, []);
     
-    // ✅ ЗАГРУЗКА КОЛИЧЕСТВА СЫГРАННЫХ ИГР СЕГОДНЯ
+    // ✅ ЗАГРУЗКА КОЛИЧЕСТВА СЫГРАННЫХ ИГР СЕГОДНЯ (при монтировании)
     useEffect(() => {
         if (!userId || !companyId) {
             console.log('⏳ GameWheel: ждём userId для загрузки статистики игр');
@@ -135,6 +133,58 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
         
         loadPlaysToday();
     }, [userId, companyId]);
+
+    // ✅ ОБРАБОТЧИК ВИДИМОСТИ СТРАНИЦЫ (при возвращении в приложение)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && userId && companyId) {
+                const reloadPlays = async () => {
+                    try {
+                        const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=wheel`);
+                        const data = await response.json();
+                        if (data.success) {
+                            setPlaysToday(data.plays?.wheel || 0);
+                            console.log('🎡 GameWheel: перезагружено игр сегодня:', data.plays?.wheel);
+                        }
+                    } catch (error) {
+                        console.error('Ошибка перезагрузки:', error);
+                    }
+                };
+                reloadPlays();
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('focus', handleVisibilityChange);
+        
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleVisibilityChange);
+        };
+    }, [userId, companyId]);
+	
+	useEffect(() => {
+    const handleRefreshPlays = () => {
+        if (userId && companyId) {
+            const loadPlays = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=wheel`);
+                    const data = await response.json();
+                    if (data.success) {
+                        setPlaysToday(data.plays?.wheel || 0);
+                        console.log('🎡 Счётчик обновлён по событию refreshGamePlays');
+                    }
+                } catch (error) {
+                    console.error('Ошибка обновления счётчика:', error);
+                }
+            };
+            loadPlays();
+        }
+    };
+    
+    window.addEventListener('refreshGamePlays', handleRefreshPlays);
+    return () => window.removeEventListener('refreshGamePlays', handleRefreshPlays);
+}, [userId, companyId]);
     
     const saveStats = (winAmount) => {
         const newSpinCount = spinCount + 1;
@@ -156,7 +206,6 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
         }));
         setFreeSpinUsed(used);
         setFreeSpinAvailable(!used && settings.freeSpinDaily);
-        setLastFreeSpinDate(today);
     };
 
     const createParticles = (x, y) => {
@@ -237,11 +286,12 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
         
         setIsSpinning(true);
         
+        // ✅ Увеличиваем счётчик игр на сервере
         try {
             const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ companyId, gameType: 'wheel' })
+                body: JSON.stringify({ companyId, gameType: 'wheel', timezoneOffset: companyTimezoneOffset })
             });
             const data = await response.json();
             if (data.success) {
@@ -357,7 +407,7 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId }) {
 
     return (
         <div className="game-wheel-classic">
-            {/* ✅ БАННЕР ЛИМИТА ИГР (как в DiceRoll) */}
+            {/* ✅ БАННЕР ЛИМИТА ИГР */}
             {settings.maxPlaysPerDay > 0 && playsToday !== null && (
                 <div style={{ 
                     background: limitReached ? '#e74c3c' : (remainingPlays <= 3 ? '#f39c12' : 'rgba(255,255,255,0.1)'),
