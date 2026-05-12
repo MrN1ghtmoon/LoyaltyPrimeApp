@@ -1,5 +1,4 @@
-// DiceRoll.js - Исправленная версия
-
+// DiceRoll.js - Полностью исправленная версия
 import { useState, useEffect } from 'react';
 import './DiceRoll.css';
 
@@ -35,9 +34,10 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
     const [comboHistory, setComboHistory] = useState([]);
     const [particles, setParticles] = useState([]);
     const [playsToday, setPlaysToday] = useState(null);
+	const [playsLoaded, setPlaysLoaded] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
     
-    // Настройки игры
+    // Настройки игры (загружаются с сервера)
     const [settings, setSettings] = useState({
         cost: 25,
         jackpotBase: 1000,
@@ -48,61 +48,8 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
         maxPlaysPerDay: 0,
         active: true
     });
-    // Найдите существующий useEffect для загрузки статистики и замените его на:
-
-// ✅ ЗАГРУЗКА КОЛИЧЕСТВА ИГР (только когда есть userId)
-useEffect(() => {
-    if (!userId || !companyId) {
-        console.log('⏳ Ждём userId для загрузки статистики игр');
-        return;
-    }
     
-    const loadPlaysToday = async () => {
-        try {
-            console.log('🎲 Загружаем статистику игр для userId:', userId);
-            const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice`);
-            const data = await response.json();
-            if (data.success) {
-                setPlaysToday(data.plays?.dice || 0);
-                console.log('🎲 Игр сегодня (при монтировании):', data.plays?.dice);
-            }
-        } catch (error) {
-            console.error('Ошибка загрузки количества игр для Dice:', error);
-            setPlaysToday(0);
-        }
-    };
-    
-    loadPlaysToday();
-}, [userId, companyId]);
-
-// Добавьте обработчик видимости страницы
-useEffect(() => {
-    const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible' && userId && companyId) {
-            const reloadPlays = async () => {
-                try {
-                    const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice`);
-                    const data = await response.json();
-                    if (data.success) {
-                        setPlaysToday(data.plays?.dice || 0);
-                    }
-                } catch (error) {
-                    console.error('Ошибка перезагрузки:', error);
-                }
-            };
-            reloadPlays();
-        }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
-    
-    return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('focus', handleVisibilityChange);
-    };
-}, [userId, companyId]);
-    // ✅ ЗАГРУЗКА НАСТРОЕК
+    // ✅ ЗАГРУЗКА НАСТРОЕК С СЕРВЕРА
     useEffect(() => {
         const loadSettings = async () => {
             if (!companyId) return;
@@ -111,8 +58,10 @@ useEffect(() => {
                 const response = await fetch(`${API_URL}/api/games/${companyId}/dice`);
                 const data = await response.json();
                 
+                console.log('🎲 Dice API response:', data);
+                
                 if (data.success) {
-                    setSettings({
+                    const newSettings = {
                         cost: data.settings.cost || 25,
                         jackpotBase: data.settings.jackpotBase || 1000,
                         betMultipliers: data.settings.betMultipliers || [1, 2, 3, 5, 10],
@@ -121,8 +70,13 @@ useEffect(() => {
                         jackpotContribution: data.settings.jackpotContribution || 10,
                         maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
                         active: data.active !== false
-                    });
+                    };
+                    
+                    console.log('🎲 Loaded maxPlaysPerDay:', newSettings.maxPlaysPerDay);
+                    setSettings(newSettings);
                     setJackpot(data.settings.jackpotBase || 1000);
+                } else {
+                    console.error('Failed to load dice settings:', data);
                 }
             } catch (error) {
                 console.error('Ошибка загрузки настроек костей:', error);
@@ -133,68 +87,40 @@ useEffect(() => {
         loadSettings();
     }, [companyId]);
     
-    // ✅ ЗАГРУЗКА КОЛИЧЕСТВА ИГР (только когда есть userId)
+    // ✅ ЗАГРУЗКА КОЛИЧЕСТВА СЫГРАННЫХ ИГР СЕГОДНЯ
     useEffect(() => {
-        if (!userId || !companyId) {
-            console.log('⏳ Ждём userId для загрузки статистики игр');
-            return;
-        }
-        
-        const loadPlaysToday = async () => {
-            try {
-                console.log('🎲 Загружаем статистику игр для userId:', userId);
-                const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice`);
-                const data = await response.json();
-                if (data.success) {
-                    setPlaysToday(data.plays?.dice || 0);
-                    console.log('🎲 Игр сегодня:', data.plays?.dice);
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки количества игр для Dice:', error);
-                setPlaysToday(0);
+    if (!userId || !companyId) return;
+    const loadPlaysToday = async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice&timezoneOffset=${companyTimezoneOffset}`);
+            const data = await response.json();
+            if (data.success) {
+                setPlaysToday(data.plays.dice);
             }
-        };
-        
-        loadPlaysToday();
-    }, [userId, companyId]);
-	
-useEffect(() => {
-    const handleRefreshPlays = () => {
-        if (userId && companyId) {
-            const loadPlays = async () => {
-                try {
-                    const response = await fetch(`${API_URL}/api/users/${userId}/games/plays/${companyId}?gameType=dice`);
-                    const data = await response.json();
-                    if (data.success) {
-                        setPlaysToday(data.plays?.dice || 0);
-                        console.log('🎲 Счётчик обновлён по событию refreshGamePlays');
-                    }
-                } catch (error) {
-                    console.error('Ошибка обновления счётчика:', error);
-                }
-            };
-            loadPlays();
+        } catch (error) {
+            console.error('Ошибка загрузки количества игр для Dice:', error);
+        } finally {
+            setPlaysLoaded(true);
         }
     };
-    
-    window.addEventListener('refreshGamePlays', handleRefreshPlays);
-    return () => window.removeEventListener('refreshGamePlays', handleRefreshPlays);
+    loadPlaysToday();
 }, [userId, companyId]);
     
-    // Проверка лимита
+    // ✅ ПРОВЕРКА ЛИМИТА ИГР
     const isLimitReached = () => {
-        if (playsToday === null) return true;
-        const maxPlays = settings.maxPlaysPerDay || 0;
-        if (maxPlays === 0) return false;
-        return playsToday >= maxPlays;
-    };
+    if (playsToday === null) return true; // ещё не загружено — блокируем
+    const maxPlays = settings.maxPlaysPerDay || 0;
+    if (maxPlays === 0) return false;
+    return playsToday >= maxPlays;
+};
     
     const getRemainingPlays = () => {
         const maxPlays = settings.maxPlaysPerDay || 0;
         if (maxPlays === 0) return null;
-        return Math.max(0, maxPlays - (playsToday || 0));
+        return Math.max(0, maxPlays - playsToday);
     };
     
+    // Создание частиц для эффекта выигрыша
     const createParticles = () => {
         const newParticles = [];
         for (let i = 0; i < 30; i++) {
@@ -223,11 +149,13 @@ useEffect(() => {
         setTimeout(() => clearInterval(interval), 1500);
     };
     
+    // Сохранение джекпота
     const saveJackpot = (value) => {
         setJackpot(value);
         localStorage.setItem('dice_jackpot', value);
     };
     
+    // Загрузка сохранённых данных
     useEffect(() => {
         const saved = localStorage.getItem('dice_jackpot');
         if (saved) setJackpot(parseInt(saved));
@@ -240,6 +168,7 @@ useEffect(() => {
         }
     }, []);
     
+    // Получение комбинации из настроек
     const getCombo = (sum, isDouble) => {
         const combos = settings.combinations;
         
@@ -261,6 +190,7 @@ useEffect(() => {
         return null;
     };
     
+    // Определение комбинации и расчет выигрыша
     const evaluateRoll = (val1, val2) => {
         const sum = val1 + val2;
         const isDouble = val1 === val2;
@@ -288,121 +218,112 @@ useEffect(() => {
     };
     
     const rollDice = async () => {
-        console.log('🎲 rollDice called, userId:', userId, 'playsToday:', playsToday);
-        
-        if (isRolling) return;
-        if (!settings.active) {
-            alert('Игра временно недоступна');
-            return;
-        }
-        
-        if (!userId) {
-            console.error('❌ userId отсутствует!');
-            alert('Ошибка: пользователь не авторизован');
-            return;
-        }
-        
-        if (isLimitReached()) {
-            alert(`❌ Вы исчерпали лимит игр на сегодня (${settings.maxPlaysPerDay}/${settings.maxPlaysPerDay}). Завтра будет новый лимит!`);
-            return;
-        }
-        
-        const totalCost = settings.cost * betMultiplier;
-        if (userBalance < totalCost) {
-            alert(`❌ Недостаточно бонусов! Нужно ${totalCost} бонусов.`);
-            return;
-        }
-        
-        await onBalanceUpdate(-totalCost, 'spend', { source: 'game', gameType: 'dice' });
-        
-        // ✅ Увеличиваем счётчик
-        try {
-            console.log('🎲 Увеличиваем счётчик игр для userId:', userId);
-            const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ companyId, gameType: 'dice', timezoneOffset: companyTimezoneOffset })
-});
-            const data = await response.json();
-            if (data.success) {
-                setPlaysToday(data.playsToday);
-                console.log('✅ Счётчик увеличен до:', data.playsToday);
-            }
-        } catch (error) {
-            console.error('Ошибка сохранения счетчика игр:', error);
-            setPlaysToday(prev => (prev || 0) + 1);
-        }
-        
-        setIsRolling(true);
-        setResult(null);
-        
-        let rollCount = 0;
-        const maxRolls = 12;
-        const final1 = Math.floor(Math.random() * 6) + 1;
-        const final2 = Math.floor(Math.random() * 6) + 1;
-        
-        const interval = setInterval(() => {
-            setDice1(Math.floor(Math.random() * 6) + 1);
-            setDice2(Math.floor(Math.random() * 6) + 1);
-            rollCount++;
-            
-            if (rollCount >= maxRolls) {
-                clearInterval(interval);
-                setDice1(final1);
-                setDice2(final2);
-                
-                const { winAmount, combo, isJackpot } = evaluateRoll(final1, final2);
-                
-                setTimeout(async () => {
-                    if (winAmount > 0) {
-                        await onBalanceUpdate(winAmount, 'earn', { source: 'game', gameType: 'dice' });
-                        setLastWin(winAmount);
-                        createParticles();
-                        
-                        const newHistory = [{
-                            id: Date.now(),
-                            dice1: final1,
-                            dice2: final2,
-                            combo: combo?.name || 'Выигрыш',
-                            win: winAmount,
-                            multiplier: betMultiplier
-                        }, ...comboHistory].slice(0, 10);
-                        setComboHistory(newHistory);
-                        localStorage.setItem('dice_history', JSON.stringify(newHistory));
-                        
-                        setResult({
-                            win: true,
-                            amount: winAmount,
-                            combo: combo,
-                            message: `${combo?.icon || '🎉'} ${combo?.name || 'Выигрыш'}! +${winAmount} бонусов!`,
-                            isJackpot
-                        });
-                        
-                        if (winAmount > 100) {
-                            try { navigator.vibrate?.(200); } catch(e) {}
-                        }
-                    } else {
-                        setResult({
-                            win: false,
-                            amount: 0,
-                            message: `😢 Выпало ${final1} и ${final2} (сумма ${final1 + final2}). Попробуйте ещё раз!`
-                        });
-                    }
-                    
-                    setIsRolling(false);
-                    
-                    if (typeof window.updateQuestProgress === 'function') {
-                        window.updateQuestProgress('play_dice', 1);
-                    } else {
-                        window.dispatchEvent(new CustomEvent('questProgress', { 
-                            detail: { type: 'play_dice', increment: 1 } 
-                        }));
-                    }
-                }, 200);
-            }
-        }, 80);
-    };
+    if (isRolling) return;
+    if (!settings.active) {
+        alert('Игра временно недоступна');
+        return;
+    }
     
+    if (isLimitReached()) {
+        alert(`❌ Вы исчерпали лимит игр на сегодня (${settings.maxPlaysPerDay}/${settings.maxPlaysPerDay}). Завтра будет новый лимит!`);
+        return;
+    }
+    
+    const totalCost = settings.cost * betMultiplier;
+    if (userBalance < totalCost) {
+        alert(`❌ Недостаточно бонусов! Нужно ${totalCost} бонусов.`);
+        return;
+    }
+    
+    await onBalanceUpdate(-totalCost, 'spend', { source: 'game', gameType: 'dice' });
+    
+    // ✅ СОХРАНЯЕМ СЧЁТЧИК В БД
+    try {
+        const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ companyId, gameType: 'dice', timezoneOffset: companyTimezoneOffset })
+        });
+        const data = await response.json();
+        if (data.success) {
+            setPlaysToday(data.playsToday);
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения счетчика игр:', error);
+        setPlaysToday(prev => prev + 1);
+    }
+    
+    setIsRolling(true);
+    setResult(null);
+    
+    let rollCount = 0;
+    const maxRolls = 12;
+    const final1 = Math.floor(Math.random() * 6) + 1;
+    const final2 = Math.floor(Math.random() * 6) + 1;
+    
+    const interval = setInterval(() => {
+        setDice1(Math.floor(Math.random() * 6) + 1);
+        setDice2(Math.floor(Math.random() * 6) + 1);
+        rollCount++;
+        
+        if (rollCount >= maxRolls) {
+            clearInterval(interval);
+            setDice1(final1);
+            setDice2(final2);
+            
+            const { winAmount, combo, isJackpot } = evaluateRoll(final1, final2);
+            
+            setTimeout(async () => {
+                if (winAmount > 0) {
+                    await onBalanceUpdate(winAmount, 'earn', { source: 'game', gameType: 'dice' });
+                    setLastWin(winAmount);
+                    createParticles();
+                    
+                    const newHistory = [{
+                        id: Date.now(),
+                        dice1: final1,
+                        dice2: final2,
+                        combo: combo?.name || 'Выигрыш',
+                        win: winAmount,
+                        multiplier: betMultiplier
+                    }, ...comboHistory].slice(0, 10);
+                    setComboHistory(newHistory);
+                    localStorage.setItem('dice_history', JSON.stringify(newHistory));
+                    
+                    setResult({
+                        win: true,
+                        amount: winAmount,
+                        combo: combo,
+                        message: `${combo?.icon || '🎉'} ${combo?.name || 'Выигрыш'}! +${winAmount} бонусов!`,
+                        isJackpot
+                    });
+                    
+                    if (winAmount > 100) {
+                        try { navigator.vibrate?.(200); } catch(e) {}
+                    }
+                } else {
+                    setResult({
+                        win: false,
+                        amount: 0,
+                        message: `😢 Выпало ${final1} и ${final2} (сумма ${final1 + final2}). Попробуйте ещё раз!`
+                    });
+                }
+                
+                setIsRolling(false);
+                
+                if (typeof window.updateQuestProgress === 'function') {
+                    window.updateQuestProgress('play_dice', 1);
+                } else {
+                    window.dispatchEvent(new CustomEvent('questProgress', { 
+                        detail: { type: 'play_dice', increment: 1 } 
+                    }));
+                }
+            }, 200);
+        }
+    }, 80);
+};
+    
+    // Функция для отображения точек на кубике
     const renderDiceDots = (value) => {
         const dotPositions = {
             1: [[1, 1]],
@@ -432,18 +353,10 @@ useEffect(() => {
         );
     };
     
-    // Показываем загрузку, если нет userId или не загрузились настройки
-    if (!userId || !settingsLoaded || playsToday === null) {
-        console.log('🎲 Состояние загрузки:', { userId, settingsLoaded, playsToday });
+    if (!settingsLoaded) {
         return (
-            <div className="dice-roll-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ color: 'white', fontSize: '24px' }}>🎲</div>
-                <div style={{ color: 'white' }}>Загрузка игры...</div>
-                <div style={{ color: '#aaa', fontSize: '12px' }}>
-                    {!userId && 'Ожидание авторизации...'}
-                    {userId && !settingsLoaded && 'Загрузка настроек...'}
-                    {userId && settingsLoaded && playsToday === null && 'Загрузка статистики...'}
-                </div>
+            <div className="dice-roll-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+                <div style={{ color: 'white' }}>Загрузка...</div>
             </div>
         );
     }
@@ -460,13 +373,16 @@ useEffect(() => {
     
     const remainingPlays = getRemainingPlays();
     const limitReached = isLimitReached();
+    const showLimitWarning = settings.maxPlaysPerDay > 0 && remainingPlays !== null && remainingPlays <= 3;
+    
+    const activeCombinations = Object.entries(settings.combinations).filter(([_, combo]) => combo.enabled !== false);
     
     return (
         <div className="dice-roll-container">
-            {/* Баннер лимита */}
-            {settings.maxPlaysPerDay > 0 && playsToday !== null && (
-                <div style={{ 
-                    background: limitReached ? '#e74c3c' : (remainingPlays <= 3 ? '#f39c12' : 'rgba(255,255,255,0.1)'),
+            {/* ✅ БАННЕР ЛИМИТА ИГР */}
+            {showLimitWarning && (
+                <div className="limit-warning" style={{
+                    background: limitReached ? '#e74c3c' : '#f39c12',
                     borderRadius: '30px',
                     padding: '8px 16px',
                     marginBottom: '16px',
@@ -476,8 +392,8 @@ useEffect(() => {
                     fontWeight: 'bold'
                 }}>
                     {limitReached 
-                        ? `❌ Лимит игр на сегодня исчерпан! (${playsToday}/${settings.maxPlaysPerDay})`
-                        : `🎲 Игр сегодня: ${playsToday} / ${settings.maxPlaysPerDay}${remainingPlays <= 3 ? ` • Осталось: ${remainingPlays}` : ''}`
+                        ? `❌ Лимит игр на сегодня исчерпан! (${settings.maxPlaysPerDay}/${settings.maxPlaysPerDay})`
+                        : `⚠️ Осталось ${remainingPlays} игр на сегодня из ${settings.maxPlaysPerDay}`
                     }
                 </div>
             )}
@@ -502,7 +418,6 @@ useEffect(() => {
                 />
             ))}
             
-            {/* ... остальной UI остаётся без изменений ... */}
             <div className="dice-header">
                 <div className="dice-title">
                     <span className="dice-main-emoji">🎲</span>
@@ -516,6 +431,7 @@ useEffect(() => {
                 </div>
             </div>
             
+            {/* Множитель ставки */}
             <div className="bet-multiplier-section">
                 <div className="multiplier-label">Множитель ставки:</div>
                 <div className="multiplier-buttons">
@@ -533,8 +449,14 @@ useEffect(() => {
                 <div className="total-cost">
                     Стоимость: <span className="cost-value">{settings.cost * betMultiplier}</span> бонусов
                 </div>
+                {settings.maxPlaysPerDay > 0 && playsToday !== null && (
+                    <div className="remaining-plays" style={{ fontSize: '11px', color: '#aaa', marginTop: '8px', textAlign: 'center' }}>
+                        🎲 Игр сегодня: {playsToday} / {settings.maxPlaysPerDay}
+                    </div>
+                )}
             </div>
             
+            {/* Игровая область с костями */}
             <div className="dice-game-area">
                 <div className="dice-table">
                     <div className={`dice-wrapper ${isRolling ? 'rolling' : ''}`}>
@@ -551,11 +473,12 @@ useEffect(() => {
                 </div>
             </div>
             
+            {/* Кнопка броска */}
             <div className="dice-controls">
                 <button
                     className={`roll-btn ${isRolling ? 'spinning' : ''}`}
                     onClick={rollDice}
-                    disabled={isRolling || userBalance < settings.cost * betMultiplier || limitReached}
+                    disabled={playsToday === null || isRolling || userBalance < settings.cost * betMultiplier || limitReached}
                 >
                     {isRolling ? (
                         <><span className="spinner-icon">🎲</span> Бросаем...</>
@@ -565,6 +488,7 @@ useEffect(() => {
                 </button>
             </div>
             
+            {/* Результат */}
             {result && (
                 <div className={`dice-result ${result.win ? 'win' : 'lose'} ${result.isJackpot ? 'jackpot' : ''}`}>
                     <div className="result-emoji">{result.win ? (result.isJackpot ? '💎' : '🎉') : '😢'}</div>
@@ -577,6 +501,7 @@ useEffect(() => {
                 </div>
             )}
             
+            {/* Последний выигрыш */}
             {lastWin !== null && !result && lastWin > 0 && (
                 <div className="last-win-card">
                     <span className="trophy-icon">🏆</span>
@@ -584,6 +509,7 @@ useEffect(() => {
                 </div>
             )}
             
+            {/* Таблица комбинаций */}
             <div className="combinations-section">
                 <button 
                     className="combinations-toggle"
@@ -594,7 +520,7 @@ useEffect(() => {
                 
                 {showCombinations && (
                     <div className="combinations-grid">
-                        {Object.entries(settings.combinations).filter(([_, combo]) => combo.enabled !== false).map(([key, combo]) => (
+                        {activeCombinations.map(([key, combo]) => (
                             <div key={key} className="combo-card" style={{ borderColor: combo.color }}>
                                 <div className="combo-icon">{combo.icon}</div>
                                 <div className="combo-name">{combo.name}</div>
@@ -606,6 +532,7 @@ useEffect(() => {
                 )}
             </div>
             
+            {/* История комбинаций */}
             {comboHistory.length > 0 && (
                 <div className="history-section">
                     <div className="history-title">📜 Последние выигрыши</div>

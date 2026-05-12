@@ -106,7 +106,26 @@ const app = express();
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 app.use(express.static('crm-panel'));
+const multer = require('multer');
+const path = require('path');
 
+// Настройка хранилища multer
+const storage = multer.diskStorage({
+    destination: './uploads/',
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB
+
+// Статическая раздача загруженных файлов
+app.use('/uploads', express.static('uploads'));
+
+// Эндпоинт для загрузки изображений (возвращает URL)
+app.post('/api/upload', upload.single('image'), (req, res) => {
+    if (!req.file) return res.status(400).json({ success: false, message: 'Файл не загружен' });
+    res.json({ success: true, url: `/uploads/${req.file.filename}` });
+});
 
 app.use((req, res, next) => {
     console.log(`📨 ${req.method} ${req.url}`);
@@ -163,6 +182,19 @@ async function createDefaultCampaignsForCompany(companyId) {
 // ============ HEALTH CHECK ============
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend работает на PostgreSQL!' });
+});
+
+app.put('/api/companies/:companyId/logo', upload.single('logo'), async (req, res) => {
+    try {
+        const companyId = parseInt(req.params.companyId);
+        if (!req.file) return res.status(400).json({ success: false, message: 'Файл не загружен' });
+        const logoUrl = `/uploads/${req.file.filename}`;
+        await query('UPDATE companies SET logo_url = $1 WHERE id = $2', [logoUrl, companyId]);
+        res.json({ success: true, logoUrl });
+    } catch (error) {
+        console.error('Ошибка загрузки логотипа:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // ============ API ДЛЯ КОМПАНИЙ ============
@@ -2485,10 +2517,13 @@ app.get('/api/giveaways/:companyId/active', async (req, res) => {
         // Фильтруем по дате окончания
         const now = new Date();
         giveaways = giveaways.filter(g => {
-            if (!g.active) return false;
-            if (g.end_date && new Date(g.end_date) < now) return false;
-            return true;
-        });
+    if (!g.active) return false;
+    if (g.end_date) {
+        const endPlusMonth = new Date(new Date(g.end_date).getTime() + 30 * 24 * 60 * 60 * 1000);
+        if (endPlusMonth < now) return false; // скрыть только через 30 дней после окончания
+    }
+    return true;
+});
         
         // Если передан userId, проверяем для каждого розыгрыша, куплен ли он
         if (userId) {
@@ -3322,28 +3357,45 @@ app.post('/api/companies/:companyId/greeting-settings', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 // ============ API ДЛЯ ВЫРУЧКИ ПО АДРЕСАМ ============
 
 app.get('/api/companies/:companyId/addresses-revenue', async (req, res) => {
     try {
         const companyId = parseInt(req.params.companyId);
         const period = req.query.period || 'month';
+        const month = parseInt(req.query.month);
+        const year = parseInt(req.query.year);
         
-        let startDate;
         const now = new Date();
+        let startDate;
+        let endDate;
         
-        switch (period) {
-            case 'month':
-                startDate = new Date(now);
-                startDate.setMonth(startDate.getMonth() - 1);
-                break;
-            case 'year':
-                startDate = new Date(now);
-                startDate.setFullYear(startDate.getFullYear() - 1);
-                break;
-            default:
-                startDate = new Date(now);
-                startDate.setMonth(startDate.getMonth() - 1);
+        // Определяем даты в зависимости от параметров
+        if (period === 'month' && month && year) {
+            // Конкретный месяц
+            startDate = new Date(year, month - 1, 1);
+            endDate = new Date(year, month, 0); // последний день месяца
+            endDate.setHours(23, 59, 59, 999);
+            console.log(`📊 Запрос за месяц: ${month}/${year}`);
+        } else if (period === 'year' && year) {
+            // Конкретный год
+            startDate = new Date(year, 0, 1);
+            endDate = new Date(year, 11, 31);
+            endDate.setHours(23, 59, 59, 999);
+            console.log(`📊 Запрос за год: ${year}`);
+        } else if (period === 'month') {
+            // Текущий месяц (по умолчанию)
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            endDate.setHours(23, 59, 59, 999);
+            console.log(`📊 Запрос за текущий месяц`);
+        } else {
+            // Текущий год (по умолчанию)
+            startDate = new Date(now.getFullYear(), 0, 1);
+            endDate = new Date(now.getFullYear(), 11, 31);
+            endDate.setHours(23, 59, 59, 999);
+            console.log(`📊 Запрос за текущий год`);
         }
         
         // Получаем все активные адреса компании
@@ -3369,7 +3421,7 @@ app.get('/api/companies/:companyId/addresses-revenue', async (req, res) => {
             citiesMap[city.id] = city.name;
         });
         
-        // Получаем выручку по адресам из транзакций
+        // Получаем выручку по адресам из транзакций за указанный период
         const revenueResult = await query(
             `SELECT 
                 t.metadata->>'address_id' as address_id,
@@ -3379,9 +3431,10 @@ app.get('/api/companies/:companyId/addresses-revenue', async (req, res) => {
              AND t.source = 'pos'
              AND t.amount > 0
              AND t.created_at >= $2
+             AND t.created_at <= $3
              AND t.metadata->>'address_id' IS NOT NULL
              GROUP BY t.metadata->>'address_id'`,
-            [companyId, startDate]
+            [companyId, startDate, endDate]
         );
         
         const revenueMap = {};
@@ -3411,44 +3464,12 @@ app.get('/api/companies/:companyId/addresses-revenue', async (req, res) => {
             success: true, 
             addresses: addresses,
             totalRevenue: totalRevenue,
-            period: period
+            period: period,
+            startDate: startDate,
+            endDate: endDate
         });
     } catch (error) {
         console.error('Ошибка получения выручки по адресам:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-
-// ============ API ДЛЯ ОГРАНИЧЕНИЯ ИГР ============
-
-// Получение количества сыгранных игр сегодня для пользователя
-app.get('/api/users/:userId/games/plays/:companyId', async (req, res) => {
-    try {
-        const { userId, companyId } = req.params;
-        const { gameType } = req.query; // ✅ Добавляем поддержку gameType
-        
-        // Получаем часовой пояс компании
-        const companyResult = await query('SELECT timezone_offset FROM companies WHERE id = $1', [companyId]);
-        const timezoneOffset = companyResult.rows[0]?.timezone_offset || 0;
-        
-        // Если указан конкретный тип игры - используем user_game_plays таблицу
-        if (gameType) {
-            const plays = await getUserGamePlaysToday(userId, companyId, gameType, timezoneOffset);
-            return res.json({ success: true, plays: { [gameType]: plays } });
-        }
-        
-        // Иначе возвращаем все игры (для обратной совместимости)
-        const wheel = await getUserGamePlaysToday(userId, companyId, 'wheel', timezoneOffset);
-        const scratch = await getUserGamePlaysToday(userId, companyId, 'scratch', timezoneOffset);
-        const dice = await getUserGamePlaysToday(userId, companyId, 'dice', timezoneOffset);
-        
-        res.json({ 
-            success: true, 
-            plays: { wheel, scratch, dice }
-        });
-    } catch (error) {
-        console.error('Ошибка получения количества игр:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -3488,29 +3509,22 @@ app.get('/api/users/:userId/games/settings/:companyId', async (req, res) => {
 app.get('/api/users/:userId/games/plays/:companyId', async (req, res) => {
     try {
         const { userId, companyId } = req.params;
-        const { gameType } = req.query; // опционально - можно получить конкретную игру
-        
+        const { gameType } = req.query;
+        const timezoneOffset = parseInt(req.query.timezoneOffset) || 0;  // <-- добавить
+
         if (gameType) {
-			// Получаем часовой пояс компании
-			const companyResult = await query('SELECT timezone_offset FROM companies WHERE id = $1', [companyId]);
-			const timezoneOffset = companyResult.rows[0]?.timezone_offset || 0;
             const plays = await getUserGamePlaysToday(userId, companyId, gameType, timezoneOffset);
-            res.json({ success: true, plays: { [gameType]: plays } });
-        } else {
-            // Получаем все игры
-            const wheel = await getUserGamePlaysToday(userId, companyId, 'wheel', timezoneOffset);
-            const scratch = await getUserGamePlaysToday(userId, companyId, 'scratch', timezoneOffset);
-            const dice = await getUserGamePlaysToday(userId, companyId, 'dice', timezoneOffset);
-            
-            res.json({ 
-                success: true, 
-                plays: { wheel, scratch, dice }
-            });
+            return res.json({ success: true, plays: { [gameType]: plays } });
         }
+        // Если запрашиваются все игры (без gameType)
+        const wheel = await getUserGamePlaysToday(userId, companyId, 'wheel', timezoneOffset);
+        const scratch = await getUserGamePlaysToday(userId, companyId, 'scratch', timezoneOffset);
+        const dice = await getUserGamePlaysToday(userId, companyId, 'dice', timezoneOffset);
+        res.json({ success: true, plays: { wheel, scratch, dice } });
     } catch (error) {
-        console.error('Ошибка получения количества игр:', error);
+		console.error('Ошибка получения количества игр:', error);
         res.status(500).json({ success: false, error: error.message });
-    }
+	}
 });
 
 // Увеличение счетчика игр (вызывается после каждой игры)

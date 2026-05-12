@@ -161,6 +161,72 @@ let currentEditingGiveawayId = null;
 
 const API_URL = 'http://localhost:3001';
 
+function initImageUpload(dropZoneId, fileInputId, previewId, removeBtnId, urlInputId) {
+    const dropZone = document.getElementById(dropZoneId);
+    const fileInput = document.getElementById(fileInputId);
+    const preview = document.getElementById(previewId);
+    const urlInput = document.getElementById(urlInputId);
+	const removeBtn = document.getElementById(removeBtnId);
+
+    if (!dropZone || !fileInput || !preview || !urlInput) return;
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#667eea'; });
+    dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#ccc'; });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#ccc';
+        const file = e.dataTransfer.files[0];
+        if (file) handleImageFile(file);
+    });
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleImageFile(file);
+    });
+
+    async function handleImageFile(file) {
+        // Показываем превью
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+
+        // Загружаем на сервер
+        const formData = new FormData();
+        formData.append('image', file);
+        try {
+            const resp = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.success) {
+                urlInput.value = data.url;
+				removeBtn.style.display = 'block';
+		removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        preview.src = '';
+        preview.style.display = 'none';
+        removeBtn.style.display = 'none';
+        urlInput.value = '';
+        fileInput.value = '';  // очистить input file
+    });
+            } else {
+                alert('Ошибка загрузки изображения');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Ошибка загрузки');
+        }
+		
+    }
+}
+
+// Вызвать инициализацию после загрузки DOM (или в конце скрипта)
+document.addEventListener('DOMContentLoaded', () => {
+    initImageUpload('notifImageUpload', 'notifImageFile', 'notifImagePreview', 'notifImageRemove', 'notifImageUrl');
+	initImageUpload('campaignImageUpload', 'campaignImageFile', 'campaignImagePreview', 'campaignImageRemove', 'campaignImageUrl');
+});
+
 // ========== ФУНКЦИИ ДЛЯ РАБОТЫ С COOKIE ==========
 function setCookie(name, value, days = 7) {
     const expires = new Date(Date.now() + days * 864e5).toUTCString();
@@ -432,7 +498,13 @@ async function loadAnalytics(period = 'month') {
     if (!currentBusiness) return;
     
     try {
-        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/analytics?period=${period}`);
+        // Для недели запрашиваем данные за последние 30 дней (чтобы хватило для отображения текущей недели)
+        let requestPeriod = period;
+        if (period === 'week') {
+            requestPeriod = 'month'; // Запрашиваем больше данных для расчета недели
+        }
+        
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/analytics?period=${requestPeriod}`);
         const data = await response.json();
         
         if (data.success && data.analytics) {
@@ -448,7 +520,7 @@ async function loadAnalytics(period = 'month') {
                     { name: 'Новичок', desc: '1 покупка, ≤14 дней', count: classif.new || 0, percent: total > 0 ? Math.round((classif.new / total) * 100) : 0, color: '#3498db' },
                     { name: 'Активный', desc: '2+ покупок, ≤7 дней между', count: classif.active || 0, percent: total > 0 ? Math.round((classif.active / total) * 100) : 0, color: '#2ecc71' },
                     { name: 'Постоянный', desc: '2+ покупок, ≤3 дней между', count: classif.regular || 0, percent: total > 0 ? Math.round((classif.regular / total) * 100) : 0, color: '#f39c12' },
-                    { name: 'Спящий', desc: '1+ покупок, ≥20 дней', count: classif.dormant || 0, percent: total > 0 ? Math.round((classif.dormant / total) * 100) : 0, color: '#e74c3c' }
+                    { name: 'Спящий', desc: '1+ покупок, ≥15 дней', count: classif.dormant || 0, percent: total > 0 ? Math.round((classif.dormant / total) * 100) : 0, color: '#e74c3c' }
                 ];
                 
                 segmentsList.innerHTML = segments.map(seg => `
@@ -473,7 +545,7 @@ async function loadAnalytics(period = 'month') {
             renderActivityChart(currentActivityPeriod);
             
             // Загружаем выручку по адресам
-            await loadAddressesRevenue(currentRevenuePeriod);
+            await loadAddressesRevenueForMonth(currentRevenueMonth, currentRevenueYear);
             
             // Обновляем топ продуктов
             const topProducts = document.getElementById('topProducts');
@@ -536,12 +608,12 @@ async function loadAnalytics(period = 'month') {
     }
 }
 
-// Функция для отображения графика активности
+// Функция для отображения графика активности (неделя - 7 дней, месяц - 12 месяцев)
 function renderActivityChart(period) {
     const activityChart = document.getElementById('activityChart');
     if (!activityChart) return;
     
-    // Сначала добавляем кнопки, если их нет
+    // Добавляем кнопки, если их нет
     ensureActivityButtons();
     
     // Обновляем активные кнопки
@@ -564,55 +636,78 @@ function renderActivityChart(period) {
         return;
     }
     
-    let activity = [...cachedAnalytics.dailyActivity];
+    let chartData = [];
+    let totalTransactions = 0;
+    const currentYear = new Date().getFullYear();
     
     if (period === 'week') {
-        // Последние 7 дней
-        activity = activity.slice(-7);
-    } else if (period === 'month') {
-        // Последние 30 дней
-        activity = activity.slice(-30);
-    } else if (period === 'year') {
-        // Группируем по месяцам
-        const monthlyData = {};
-        activity.forEach(item => {
-            const date = new Date(item.date);
-            const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-            const monthName = date.toLocaleDateString('ru-RU', { month: 'short' });
-            
-            if (!monthlyData[monthKey]) {
-                monthlyData[monthKey] = {
-                    month: monthName,
-                    transactions: 0,
-                    fullDate: date
-                };
-            }
-            monthlyData[monthKey].transactions += parseInt(item.transactions) || 0;
+        // === НЕДЕЛЯ: показываем текущую неделю (пн-вс) ===
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = вс, 1 = пн...
+        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - diffToMonday);
+        monday.setHours(0, 0, 0, 0);
+        
+        // Создаем массив дней недели (пн-вс)
+        const weekDays = [];
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + i);
+            weekDays.push(date);
+        }
+        
+        // Создаем карту данных по датам
+        const dataByDate = {};
+        cachedAnalytics.dailyActivity.forEach(item => {
+            const dateKey = item.date.slice(0, 10);
+            dataByDate[dateKey] = parseInt(item.transactions) || 0;
         });
         
-        activity = Object.values(monthlyData).slice(-12);
-        const maxValue = Math.max(...activity.map(d => d.transactions), 1);
+        // Формируем данные для графика
+        chartData = weekDays.map(date => {
+            const dateKey = date.toISOString().slice(0, 10);
+            const transactions = dataByDate[dateKey] || 0;
+            totalTransactions += transactions;
+            return {
+                date: date,
+                transactions: transactions,
+                label: date.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric' })
+            };
+        });
         
-        activityChart.innerHTML = `
-            <div class="activity-chart">
-                ${activity.map((item, i) => {
-                    const height = (item.transactions / maxValue) * 150;
-                    return `
-                        <div class="bar-container">
-                            <div class="bar" style="height: ${height}px">
-                                <span class="bar-value">${item.transactions}</span>
-                            </div>
-                            <div class="bar-label">${item.month}</div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        `;
-        return;
+    } else if (period === 'month') {
+        // === МЕСЯЦ: показываем ВСЕ 12 месяцев текущего года ===
+        const months = [];
+        for (let i = 0; i < 12; i++) {
+            months.push(new Date(currentYear, i, 1));
+        }
+        
+        // Создаем карту данных по месяцам
+        const dataByMonth = {};
+        cachedAnalytics.dailyActivity.forEach(item => {
+            const date = new Date(item.date);
+            const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+            if (!dataByMonth[monthKey]) {
+                dataByMonth[monthKey] = 0;
+            }
+            dataByMonth[monthKey] += parseInt(item.transactions) || 0;
+        });
+        
+        // Формируем данные для графика по месяцам
+        chartData = months.map((date, idx) => {
+            const monthKey = `${currentYear}-${idx + 1}`;
+            const transactions = dataByMonth[monthKey] || 0;
+            totalTransactions += transactions;
+            return {
+                date: date,
+                transactions: transactions,
+                label: date.toLocaleDateString('ru-RU', { month: 'short' })
+            };
+        });
     }
     
-    // Для недели и месяца
-    if (activity.length === 0) {
+    if (chartData.length === 0) {
         activityChart.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #999;">
                 <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
@@ -622,32 +717,44 @@ function renderActivityChart(period) {
         return;
     }
     
-    const maxValue = Math.max(...activity.map(d => parseInt(d.transactions) || 0), 1);
-    let dateFormat = { day: 'numeric', month: 'short' };
-    if (period === 'week') {
-        dateFormat = { weekday: 'short', day: 'numeric' };
-    }
+    const maxValue = Math.max(...chartData.map(d => d.transactions), 1);
+    const barMaxHeight = 150;
     
     activityChart.innerHTML = `
-        <div class="activity-chart">
-            ${activity.map((item, i) => {
-                const date = new Date(item.date);
-                let label = date.toLocaleDateString('ru-RU', dateFormat);
-                const height = (parseInt(item.transactions) / maxValue) * 150;
+        <div class="activity-chart" style="display: flex; align-items: flex-end; gap: ${period === 'week' ? '8px' : '16px'}; justify-content: center; min-height: 240px; overflow-x: ${period === 'month' ? 'auto' : 'hidden'}; padding: 20px 10px;">
+            ${chartData.map((item, i) => {
+                const height = Math.max(4, (item.transactions / maxValue) * barMaxHeight);
+                
+                // Цвет в зависимости от значения
+                let barColor = '#667eea';
+                if (item.transactions === 0) barColor = '#e0e0e0';
+                else if (item.transactions > maxValue * 0.7) barColor = '#e74c3c';
+                else if (item.transactions > maxValue * 0.4) barColor = '#f39c12';
+                
+                // Для месяца ширина столбцов больше
+                const barWidth = period === 'week' ? '30px' : '45px';
+                
                 return `
-                    <div class="bar-container">
-                        <div class="bar" style="height: ${height}px">
-                            <span class="bar-value">${item.transactions}</span>
+                    <div class="bar-container" style="display: flex; flex-direction: column; align-items: center; width: ${barWidth}; flex-shrink: 0;">
+                        <div style="position: relative; width: 100%; display: flex; justify-content: center;">
+                            <div class="bar" style="height: ${height}px; width: ${period === 'week' ? '28px' : '40px'}; background: linear-gradient(180deg, ${barColor}, ${barColor}CC); border-radius: 8px 8px 4px 4px; cursor: pointer; transition: transform 0.2s;" 
+                                 onmouseenter="this.style.transform='scaleX(1.1)'" onmouseleave="this.style.transform='scaleX(1)'">
+                                ${item.transactions > 0 ? `<span class="bar-value" style="position: absolute; bottom: ${height + 5}px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #333; background: white; padding: 2px 8px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap;">${item.transactions}</span>` : ''}
+                            </div>
                         </div>
-                        <div class="bar-label">${label}</div>
+                        <div class="bar-label" style="font-size: ${period === 'week' ? '10px' : '12px'}; font-weight: ${period === 'month' ? '500' : '400'}; color: ${period === 'month' ? '#555' : '#888'}; margin-top: 10px; text-align: center;">
+                            ${item.label}
+                        </div>
                     </div>
                 `;
             }).join('')}
         </div>
+        <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee; font-size: 13px; color: #666;">
+            📊 Всего транзакций за ${period === 'week' ? 'неделю' : 'год'}: <strong style="color: #667eea; font-size: 16px;">${totalTransactions.toLocaleString()}</strong>
+        </div>
     `;
 }
-
-// Функция для добавления кнопок переключения периода (без иконок, с улучшенным стилем)
+// Функция для добавления кнопок переключения периода
 function ensureActivityButtons() {
     // Проверяем, есть ли уже кнопки
     if (document.querySelector('.activity-period-buttons')) {
@@ -663,19 +770,16 @@ function ensureActivityButtons() {
         chartCard = activityChart.parentElement;
     }
     
-    // Создаем контейнер с кнопками - все кнопки одинаковые, без активного состояния
+    // Создаем контейнер с кнопками
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'activity-period-buttons';
     buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-bottom: 24px; justify-content: center; padding: 8px 0;';
     buttonContainer.innerHTML = `
-        <button class="activity-period-btn" data-period="week" style="padding: 8px 24px; border-radius: 30px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; background: white; color: #495057; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <button class="activity-period-btn" data-period="week" style="padding: 10px 28px; border-radius: 40px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.25s ease; background: #f8f9fa; color: #495057; font-family: inherit; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             Неделя
         </button>
-        <button class="activity-period-btn" data-period="month" style="padding: 8px 24px; border-radius: 30px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; background: white; color: #495057; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <button class="activity-period-btn" data-period="month" style="padding: 10px 28px; border-radius: 40px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.25s ease; background: #f8f9fa; color: #495057; font-family: inherit; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             Месяц
-        </button>
-        <button class="activity-period-btn" data-period="year" style="padding: 8px 24px; border-radius: 30px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; background: white; color: #495057; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            Год
         </button>
     `;
     
@@ -684,20 +788,20 @@ function ensureActivityButtons() {
     style.textContent = `
         .activity-period-btn {
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
         }
         .activity-period-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            background: #f8f9fa !important;
+            box-shadow: 0 4px 12px rgba(102,126,234,0.2);
+            background: #e9ecef !important;
         }
         .activity-period-btn.active {
-            background: #667eea !important;
+            background: linear-gradient(135deg, #667eea, #764ba2) !important;
             color: white !important;
-            box-shadow: 0 2px 8px rgba(102,126,234,0.3);
+            box-shadow: 0 4px 12px rgba(102,126,234,0.4);
         }
         .activity-period-btn.active:hover {
-            background: #5a67d8 !important;
+            background: linear-gradient(135deg, #5a67d8, #6c3f8f) !important;
             transform: translateY(-2px);
         }
     `;
@@ -718,8 +822,6 @@ function ensureActivityButtons() {
             renderActivityChart(period);
         });
     });
-    
-    // НЕ активируем никакую кнопку по умолчанию - все остаются белыми
 }
 
 // Показать пустую аналитику
@@ -775,7 +877,7 @@ function showEmptyAnalytics() {
                     <div class="segment-color" style="background-color: #e74c3c"></div>
                     <div>
                         <div class="segment-name">Спящий</div>
-                        <div style="font-size: 11px; color: #999; margin-top: 2px;">1+ покупок, ≥20 дней</div>
+                        <div style="font-size: 11px; color: #999; margin-top: 2px;">1+ покупок, ≥15 дней</div>
                     </div>
                     <div class="segment-count">0 чел.</div>
                     <div class="segment-percent">0%</div>
@@ -814,41 +916,34 @@ function showEmptyAnalytics() {
 }
 // ========== МОДУЛЬ АНАЛИТИКИ ПО АДРЕСАМ ==========
 
-let currentRevenuePeriod = 'month';
-let addressesRevenueData = [];
-let revenueButtonsCreated = false;
+let currentRevenueYear = new Date().getFullYear();
+let currentRevenueMonth = new Date().getMonth() + 1;
+let revenueSelectCreated = false;
 
-async function loadAddressesRevenue(period = 'month') {
+// Загрузка выручки за конкретный месяц
+async function loadAddressesRevenueForMonth(month, year) {
     if (!currentBusiness) return;
     
-    currentRevenuePeriod = period;
+    currentRevenueMonth = month;
+    currentRevenueYear = year;
+    
+    const container = document.getElementById('addressesRevenueList');
+    if (!container) {
+        console.error('Контейнер addressesRevenueList не найден');
+        return;
+    }
+    
+    // Создаем выпадающий список, если его нет
+    if (!revenueSelectCreated) {
+        createRevenueSelect(container);
+        revenueSelectCreated = true;
+    }
     
     try {
-        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/addresses-revenue?period=${period}`);
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/addresses-revenue?period=month&month=${month}&year=${year}`);
         const data = await response.json();
         
-        const container = document.getElementById('addressesRevenueList');
-        if (!container) {
-            console.error('Контейнер addressesRevenueList не найден');
-            return;
-        }
-        
-        // Создаем или обновляем кнопки
-        if (!revenueButtonsCreated) {
-            createRevenueButtons(container);
-            revenueButtonsCreated = true;
-        }
-        
-        // Обновляем активный класс на кнопках
-        const buttons = container.querySelectorAll('.revenue-period-btn');
-        buttons.forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.period === period) {
-                btn.classList.add('active');
-            }
-        });
-        
-        // Получаем контейнер для данных (без кнопок)
+        // Получаем контейнер для данных
         let dataContainer = container.querySelector('.revenue-data-container');
         if (!dataContainer) {
             dataContainer = document.createElement('div');
@@ -856,14 +951,25 @@ async function loadAddressesRevenue(period = 'month') {
             container.appendChild(dataContainer);
         }
         
+        const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+        const monthName = monthNames[month - 1];
+        
         if (data.success && data.addresses && data.addresses.length > 0) {
-            addressesRevenueData = data.addresses;
+            const addressesWithRevenue = data.addresses;
             const totalRevenue = data.totalRevenue || 0;
             
             dataContainer.innerHTML = `
-                <div class="revenue-header" style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 16px;">
+                <div class="revenue-header" style="margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 16px;">
                     <div class="revenue-total" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                        <span class="total-label" style="font-size: 16px; color: #555;">📊 Общая выручка за ${period === 'month' ? 'месяц' : 'год'}:</span>
+                        <div>
+                            <span class="total-label" style="font-size: 14px; color: #666;">📊 Общая выручка за ${monthName} ${year}:</span>
+                            <div class="total-amount" style="font-size: 32px; font-weight: 700; color: #667eea; margin-top: 8px;">${totalRevenue.toLocaleString()} ₽</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="period-badge" style="background: #667eea20; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #667eea;">
+                                📅 ${monthName} ${year}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div class="revenue-table">
@@ -872,7 +978,7 @@ async function loadAddressesRevenue(period = 'month') {
                         <div>🏙️ Город</div>
                         <div>💰 Выручка</div>
                     </div>
-                    ${addressesRevenueData.map(addr => `
+                    ${addressesWithRevenue.map(addr => `
                         <div class="revenue-table-row" style="display: grid; grid-template-columns: 3fr 1.5fr 2fr; padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 14px; align-items: center;">
                             <div class="address-name" style="font-weight: 500; color: #212529; word-break: break-word;" title="${escapeHtml(addr.address)}">
                                 ${escapeHtml(addr.address.substring(0, 45))}${addr.address.length > 45 ? '...' : ''}
@@ -886,9 +992,9 @@ async function loadAddressesRevenue(period = 'month') {
         } else {
             dataContainer.innerHTML = `
                 <div style="text-align: center; padding: 40px; color: #999;">
-                    <div style="font-size: 48px; margin-bottom: 16px;">📍</div>
-                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Нет данных по адресам</div>
-                    <div style="font-size: 13px;">Добавьте адреса в настройках и совершайте продажи через кассу с выбором адреса</div>
+                    <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Нет данных за ${monthName} ${year}</div>
+                    <div style="font-size: 13px;">За выбранный месяц нет продаж</div>
                 </div>
             `;
         }
@@ -913,60 +1019,183 @@ async function loadAddressesRevenue(period = 'month') {
     }
 }
 
-// Функция для создания кнопок переключения периода (вызывается один раз)
-function createRevenueButtons(container) {
-    // Проверяем, не созданы ли уже кнопки
-    if (container.querySelector('.revenue-period-buttons')) {
+// Загрузка выручки за весь год
+async function loadAddressesRevenueForYear(year) {
+    if (!currentBusiness) return;
+    
+    currentRevenueYear = year;
+    currentRevenueMonth = null;
+    
+    const container = document.getElementById('addressesRevenueList');
+    if (!container) {
+        console.error('Контейнер addressesRevenueList не найден');
         return;
     }
     
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'revenue-period-buttons';
-    buttonContainer.style.cssText = 'display: flex; gap: 12px; margin-bottom: 20px; justify-content: flex-end; padding: 8px 0;';
-    buttonContainer.innerHTML = `
-        <button class="revenue-period-btn" data-period="month" style="padding: 8px 24px; border-radius: 30px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; background: white; color: #495057; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            Месяц
-        </button>
-        <button class="revenue-period-btn" data-period="year" style="padding: 8px 24px; border-radius: 30px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s ease; background: white; color: #495057; font-family: inherit; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            Год
-        </button>
+    // Создаем выпадающий список, если его нет
+    if (!revenueSelectCreated) {
+        createRevenueSelect(container);
+        revenueSelectCreated = true;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/addresses-revenue?period=year&year=${year}`);
+        const data = await response.json();
+        
+        // Получаем контейнер для данных
+        let dataContainer = container.querySelector('.revenue-data-container');
+        if (!dataContainer) {
+            dataContainer = document.createElement('div');
+            dataContainer.className = 'revenue-data-container';
+            container.appendChild(dataContainer);
+        }
+        
+        if (data.success && data.addresses && data.addresses.length > 0) {
+            const addressesWithRevenue = data.addresses;
+            const totalRevenue = data.totalRevenue || 0;
+            
+            dataContainer.innerHTML = `
+                <div class="revenue-header" style="margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 16px;">
+                    <div class="revenue-total" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <span class="total-label" style="font-size: 14px; color: #666;">📊 Общая выручка за ${year} год:</span>
+                            <div class="total-amount" style="font-size: 32px; font-weight: 700; color: #667eea; margin-top: 8px;">${totalRevenue.toLocaleString()} ₽</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="period-badge" style="background: #667eea20; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #667eea;">
+                                📅 ${year} год
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="revenue-table">
+                    <div class="revenue-table-header" style="display: grid; grid-template-columns: 3fr 1.5fr 2fr; background: #f8f9fa; padding: 12px 16px; border-radius: 12px; font-weight: 600; font-size: 13px; color: #495057; margin-bottom: 8px;">
+                        <div>📍 Адрес</div>
+                        <div>🏙️ Город</div>
+                        <div>💰 Выручка за год</div>
+                    </div>
+                    ${addressesWithRevenue.map(addr => `
+                        <div class="revenue-table-row" style="display: grid; grid-template-columns: 3fr 1.5fr 2fr; padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 14px; align-items: center;">
+                            <div class="address-name" style="font-weight: 500; color: #212529; word-break: break-word;" title="${escapeHtml(addr.address)}">
+                                ${escapeHtml(addr.address.substring(0, 45))}${addr.address.length > 45 ? '...' : ''}
+                            </div>
+                            <div class="city-name" style="color: #6c757d;">${escapeHtml(addr.city_name || '—')}</div>
+                            <div class="revenue-amount" style="font-weight: 600; color: #28a745;">${addr.revenue.toLocaleString()} ₽</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            dataContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #999;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Нет данных за ${year} год</div>
+                    <div style="font-size: 13px;">За выбранный год нет продаж</div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки выручки по адресам:', error);
+        const container = document.getElementById('addressesRevenueList');
+        if (container) {
+            let dataContainer = container.querySelector('.revenue-data-container');
+            if (!dataContainer) {
+                dataContainer = document.createElement('div');
+                dataContainer.className = 'revenue-data-container';
+                container.appendChild(dataContainer);
+            }
+            dataContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #999;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                    <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Ошибка загрузки данных</div>
+                    <div style="font-size: 13px;">Проверьте подключение к серверу</div>
+                </div>
+            `;
+        }
+    }
+}
+
+// Функция для создания выпадающего списка выбора периода
+function createRevenueSelect(container) {
+    // Проверяем, не создан ли уже select
+    if (container.querySelector('.revenue-period-select')) {
+        return;
+    }
+    
+    const currentYear = new Date().getFullYear();
+    const months = [
+        { value: 1, name: 'Январь' },
+        { value: 2, name: 'Февраль' },
+        { value: 3, name: 'Март' },
+        { value: 4, name: 'Апрель' },
+        { value: 5, name: 'Май' },
+        { value: 6, name: 'Июнь' },
+        { value: 7, name: 'Июль' },
+        { value: 8, name: 'Август' },
+        { value: 9, name: 'Сентябрь' },
+        { value: 10, name: 'Октябрь' },
+        { value: 11, name: 'Ноябрь' },
+        { value: 12, name: 'Декабрь' }
+    ];
+    
+    const currentMonth = new Date().getMonth() + 1;
+    
+    const selectContainer = document.createElement('div');
+    selectContainer.className = 'revenue-period-select';
+    selectContainer.style.cssText = 'display: flex; gap: 12px; margin-bottom: 20px; justify-content: flex-end; align-items: center; padding: 8px 0;';
+    
+    selectContainer.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px; background: white; padding: 4px 16px 4px 20px; border-radius: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <span style="font-size: 14px; color: #666;">📅 Период:</span>
+            <select id="revenuePeriodSelect" style="padding: 8px 12px; border-radius: 30px; border: 1px solid #ddd; background: white; font-size: 14px; font-weight: 500; cursor: pointer; outline: none;">
+                <option value="year">📊 Весь ${currentYear} год</option>
+                ${months.map(month => `
+                    <option value="month_${month.value}" ${month.value === currentMonth ? 'selected' : ''}>
+                        📅 ${month.name} ${currentYear}
+                    </option>
+                `).join('')}
+            </select>
+        </div>
     `;
     
     // Добавляем стили
     const style = document.createElement('style');
     style.textContent = `
-        .revenue-period-btn {
-            cursor: pointer;
+        .revenue-period-select select {
             transition: all 0.2s ease;
         }
-        .revenue-period-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            background: #f8f9fa !important;
+        .revenue-period-select select:hover {
+            border-color: #667eea;
         }
-        .revenue-period-btn.active {
-            background: #667eea !important;
-            color: white !important;
-            box-shadow: 0 2px 8px rgba(102,126,234,0.3);
+        .revenue-period-select select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102,126,234,0.2);
         }
-        .revenue-period-btn.active:hover {
-            background: #5a67d8 !important;
+        .revenue-total {
+            transition: all 0.3s ease;
+        }
+        .revenue-table-row:hover {
+            background: #f8f9fa;
+            transition: background 0.2s;
         }
     `;
     document.head.appendChild(style);
     
-    // Добавляем обработчики
-    buttonContainer.querySelectorAll('.revenue-period-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const period = btn.dataset.period;
-            console.log('Кнопка нажата:', period);
-            loadAddressesRevenue(period);
-        });
+    // Добавляем обработчик изменения выбора
+    const select = selectContainer.querySelector('#revenuePeriodSelect');
+    select.addEventListener('change', (e) => {
+        const selectedValue = e.target.value;
+        if (selectedValue === 'year') {
+            loadAddressesRevenueForYear(currentYear);
+        } else if (selectedValue.startsWith('month_')) {
+            const month = parseInt(selectedValue.split('_')[1]);
+            loadAddressesRevenueForMonth(month, currentYear);
+        }
     });
     
-    container.appendChild(buttonContainer);
+    container.appendChild(selectContainer);
 }
+
 // ========== МОДУЛЬ 2: ЛОЯЛЬНОСТЬ (УРОВНИ) ==========
 async function loadTiersSettings() {
     if (!currentBusiness) return;
@@ -2942,10 +3171,6 @@ function renderScratchSettings() {
     <label>🔢 Максимум игр в день (0 – без ограничений)</label>
     <input type="number" id="scratchMaxPlays" value="${scratchSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateScratchMaxPlays(this.value)">
 </div>
-                <div class="scratch-setting-group">
-                    <label>🖱️ Максимум попыток</label>
-                    <input type="number" id="scratchMaxAttempts" value="${scratchSettings.maxAttempts}" min="1" max="10" onchange="updateScratchMaxAttempts(this.value)">
-                </div>
                 <div class="scratch-setting-group">
                     <label>💡 Стоимость подсказки (бонусов)</label>
                     <input type="number" id="scratchHintCost" value="${scratchSettings.hintCost}" min="0" max="100" onchange="updateScratchHintCost(this.value)">
