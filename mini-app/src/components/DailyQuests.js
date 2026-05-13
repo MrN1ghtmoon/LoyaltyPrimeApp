@@ -13,6 +13,58 @@ export function DailyQuests({ userBalance, onBalanceUpdate, userId, selectedGrou
   const hasAutoCompleted = useRef(false);
   const streakCheckPerformed = useRef(false);
   const getNow = () => new Date(Date.now() + (companyTimezoneOffset || 0) * 60000);
+  
+  // DailyQuests.js - добавьте этот useEffect в начало компонента
+
+useEffect(() => {
+    // Обработчик кастомных событий от игр
+    const handleQuestProgress = (event) => {
+        const { type, increment } = event.detail;
+        console.log(`📢 Получено событие questProgress: ${type}, +${increment}`);
+        
+        // Обновляем прогресс заданий
+        if (quests && quests.length > 0) {
+            // Находим задание по типу и обновляем прогресс
+            const updatedQuests = [...quests];
+            let updated = false;
+            
+            for (const quest of updatedQuests) {
+                if (quest.target_type === type && !quest.completed) {
+                    quest.progress = (quest.progress || 0) + increment;
+                    if (quest.progress >= quest.target_value) {
+                        quest.completed = true;
+                        // Начисляем награду
+                        if (onBalanceUpdate) {
+                            onBalanceUpdate(quest.reward, 'earn', { source: 'quest', questId: quest.id });
+                        }
+                        // Отправляем на сервер
+                        if (userId && selectedGroupId) {
+                            fetch(`${API_URL}/api/users/${userId}/quests/complete`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId, questId: quest.id, reward: quest.reward })
+                            }).catch(console.error);
+                        }
+                    }
+                    updated = true;
+                }
+            }
+            
+            if (updated) {
+                setQuests(updatedQuests);
+                saveQuestsToLocalStorage(updatedQuests);
+                // Вызываем переданный колбэк для обновления UI
+                if (onProgressUpdate) onProgressUpdate(updatedQuests);
+            }
+        }
+    };
+    
+    window.addEventListener('questProgress', handleQuestProgress);
+    
+    return () => {
+        window.removeEventListener('questProgress', handleQuestProgress);
+    };
+}, [quests, userId, selectedGroupId, onBalanceUpdate]);
   // Функция для получения ключа localStorage для задания
   const getQuestStorageKey = (quest) => {
     return `quest_claimed_${userId}_${selectedGroupId}_${quest.id}`;

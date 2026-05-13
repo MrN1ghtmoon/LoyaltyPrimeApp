@@ -311,13 +311,9 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
                 
                 setIsRolling(false);
                 
-                if (typeof window.updateQuestProgress === 'function') {
-                    window.updateQuestProgress('play_dice', 1);
-                } else {
-                    window.dispatchEvent(new CustomEvent('questProgress', { 
-                        detail: { type: 'play_dice', increment: 1 } 
-                    }));
-                }
+                window.dispatchEvent(new CustomEvent('questProgress', { 
+    detail: { type: 'play_dice', increment: 1 } 
+}));
             }, 200);
         }
     }, 80);

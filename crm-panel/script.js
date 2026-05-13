@@ -221,12 +221,6 @@ function initImageUpload(dropZoneId, fileInputId, previewId, removeBtnId, urlInp
     }
 }
 
-// Вызвать инициализацию после загрузки DOM (или в конце скрипта)
-document.addEventListener('DOMContentLoaded', () => {
-    initImageUpload('notifImageUpload', 'notifImageFile', 'notifImagePreview', 'notifImageRemove', 'notifImageUrl');
-	initImageUpload('campaignImageUpload', 'campaignImageFile', 'campaignImagePreview', 'campaignImageRemove', 'campaignImageUrl');
-});
-
 // ========== ФУНКЦИИ ДЛЯ РАБОТЫ С COOKIE ==========
 function setCookie(name, value, days = 7) {
     const expires = new Date(Date.now() + days * 864e5).toUTCString();
@@ -1416,10 +1410,9 @@ async function sendDirectMessage() {
     const segment = document.getElementById('notifSegment')?.value || 'all';
     const title = document.getElementById('notifTitle')?.value || '';
     const message = document.getElementById('notifMessage')?.value || '';
-    const imageUrl = document.getElementById('notifImageUrl')?.value || null;
-    const buttonLink = document.getElementById('notifButtonLink')?.value || null;
-    const buttonText = document.getElementById('notifButtonText')?.value || 'Перейти';
-    
+    const imageUrl = null;
+	const buttonLink = null;
+	const buttonText = null;
     if (!title || !message) {
         alert('❌ Заполните заголовок и текст сообщения');
         return;
@@ -1492,9 +1485,6 @@ async function sendDirectMessage() {
             // Очищаем поля
             document.getElementById('notifTitle').value = '';
             document.getElementById('notifMessage').value = '';
-            document.getElementById('notifImageUrl').value = '';
-            document.getElementById('notifButtonLink').value = '';
-            document.getElementById('notifButtonText').value = '';
             
             // Обновляем историю
             await loadNotificationsHistory();
@@ -1601,9 +1591,6 @@ function showAddCampaignModal() {
     document.getElementById('campaignAudience').value = 'all';
     document.getElementById('campaignTitle').value = '';
     document.getElementById('campaignMessage').value = '';
-    document.getElementById('campaignImageUrl').value = '';
-    document.getElementById('campaignButtonLink').value = '';
-    document.getElementById('campaignButtonText').value = '';
     document.getElementById('campaignInterval').value = '7';
     document.getElementById('campaignActive').checked = false;
     document.getElementById('campaignSendNow').checked = false;
@@ -1648,9 +1635,6 @@ async function editCampaign(campaignId) {
             document.getElementById('campaignAudience').value = campaign.audience;
             document.getElementById('campaignTitle').value = campaign.title;
             document.getElementById('campaignMessage').value = campaign.message;
-            document.getElementById('campaignImageUrl').value = campaign.image_url || '';
-            document.getElementById('campaignButtonLink').value = campaign.button_link || '';
-            document.getElementById('campaignButtonText').value = campaign.button_text || '';
             document.getElementById('campaignInterval').value = campaign.interval_days || 7;
             document.getElementById('campaignActive').checked = campaign.is_active;
             document.getElementById('campaignSendNow').checked = false;
@@ -1677,9 +1661,6 @@ async function saveCampaign() {
     const audience = document.getElementById('campaignAudience').value;
     const title = document.getElementById('campaignTitle').value.trim();
     const message = document.getElementById('campaignMessage').value.trim();
-    const imageUrl = document.getElementById('campaignImageUrl').value.trim() || null;
-    const buttonLink = document.getElementById('campaignButtonLink').value.trim() || null;
-    const buttonText = document.getElementById('campaignButtonText').value.trim() || 'Перейти';
     const intervalDays = audience === 'birthday' ? 1 : (parseInt(document.getElementById('campaignInterval').value) || 7);
     const isActive = document.getElementById('campaignActive').checked;
     const sendNow = document.getElementById('campaignSendNow').checked;
@@ -1727,9 +1708,9 @@ async function saveCampaign() {
                 title,
                 message,
                 audience,
-                image_url: imageUrl,
-                button_link: buttonLink,
-                button_text: buttonText,
+                image_url: null,
+                button_link: null,
+                button_text: null,
                 interval_days: intervalDays,
                 is_active: isActive
             })

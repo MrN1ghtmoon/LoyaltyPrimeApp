@@ -1859,6 +1859,10 @@ const progressToNext = getProgressToNextTier(currentSpent);
           selectedGroupId={selectedGroup?.id}
           vkId={userInfo?.id}
 		  companyTimezoneOffset={selectedGroup?.timezoneOffset || 0}
+		   onProgressUpdate={(updatedQuests) => {
+            // Можно обновить состояние, если нужно
+            console.log('Прогресс заданий обновлен', updatedQuests);
+        }}
         />
       )}
       

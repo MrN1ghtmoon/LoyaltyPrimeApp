@@ -1,4 +1,6 @@
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
+const SALT_ROUNDS = 10;
 const pool = new Pool({
     user: 'postgres',
     password: 'postgres',
@@ -1220,9 +1222,9 @@ async function addCompany(companyData) {
         { name: "🥇 Золото", threshold: 8000, multiplier: 2, cashback: 10, color: "#f1c40f", icon: "🥇" },
         { name: "💎 Бриллиант", threshold: 20000, multiplier: 2.5, cashback: 15, color: "#00b4d8", icon: "💎" }
     ]);
-    
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
     const result = await query(
-        `INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, active, created_at) 
+        `INSERT INTO companies (company, name, email, phone, hashedPassword, brand_color, description, tiers_settings, active, created_at) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NOW()) 
          RETURNING id, company, email, brand_color as "brandColor", description, created_at`,
         [company, name, email, phone || '', password, brandColor || '#2A4B7C', description || `Добро пожаловать в ${company}!`, defaultTiers]
@@ -1287,10 +1289,10 @@ async function createUser(vkId, companyId, name) {
         const user = result.rows[0];
         
         await client.query(
-            `INSERT INTO user_progress (user_id, company_id, total_earned, streak, created_at) 
-             VALUES ($1, $2, 100, 0, NOW())`,
-            [user.id, companyId]
-        );
+    `INSERT INTO user_progress (user_id, company_id, total_earned, streak, updated_at) 
+     VALUES ($1, $2, 100, 0, NOW())`,
+    [user.id, companyId]
+);
         
         await client.query('COMMIT');
         return user;
@@ -3829,8 +3831,9 @@ async function getGreetingSettings(companyId) {
 
 async function saveCashierCredentials(companyId, login, password) {
     try {
+		const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
         const result = await query(
-            `INSERT INTO cashier_credentials (company_id, login, password, updated_at)
+            `INSERT INTO cashier_credentials (company_id, login, hashedPassword, updated_at)
              VALUES ($1, $2, $3, NOW())
              ON CONFLICT (company_id) 
              DO UPDATE SET login = $2, password = $3, updated_at = NOW()

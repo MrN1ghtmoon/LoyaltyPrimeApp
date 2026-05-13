@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
 const { 
     initDatabase, 
@@ -227,10 +228,18 @@ app.post('/api/companies/register', async (req, res) => {
 app.post('/api/companies/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        const result = await query('SELECT * FROM companies WHERE email = $1 AND password = $2', [email, password]);
+        const result = await query('SELECT * FROM companies WHERE email = $1', [email]);
         
         if (result.rows.length > 0) {
-            res.json({ success: true, company: result.rows[0] });
+            const company = result.rows[0];
+            // Прямое сравнение строк (без хеширования)
+            const match = (company.password === password);
+            
+            if (match) {
+                res.json({ success: true, company: company });
+            } else {
+                res.status(401).json({ success: false, message: 'Неверный email или пароль' });
+            }
         } else {
             res.status(401).json({ success: false, message: 'Неверный email или пароль' });
         }
@@ -2240,11 +2249,16 @@ app.post('/api/companies/:companyId/cashier-credentials', async (req, res) => {
 app.post('/api/cashier/login', async (req, res) => {
     try {
         const { login, password, companyId } = req.body;
-        
+        const match = await bcrypt.compare(password, credentials.password);
+if (!match) {
+    return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
+}
         if (!login || !password) {
             return res.status(400).json({ success: false, message: 'Заполните все поля' });
         }
         
+	
+		
         let credentials;
         let targetCompanyId = companyId;
         
@@ -2299,11 +2313,12 @@ app.post('/api/cashier/verify-qr', async (req, res) => {
         }
         
         // Получаем пользователя
-        const user = await getUserByVkId(vkId, companyId);
-        
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-        }
+        let user = await getUserByVkId(vkId, companyId);
+if (!user) {
+    user = await createUser(vkId, companyId, `Пользователь ${vkId}`);
+    await initializeUserClassification(user.id, companyId);
+    console.log('Создан новый пользователь через кассу:', user.id);
+}
         
         // ✅ ПОЛУЧАЕМ УРОВНИ КОМПАНИИ
         const tiers = await getCompanyTiers(companyId);
@@ -3546,6 +3561,49 @@ app.post('/api/users/:userId/games/increment', async (req, res) => {
         res.json({ success: true, playsToday });
     } catch (error) {
         console.error('Ошибка увеличения счетчика игр:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Добавьте после других API эндпоинтов:
+
+// Завершение задания
+app.post('/api/users/:userId/quests/complete', async (req, res) => {
+    try {
+        const { userId, questId, reward } = req.body;
+        
+        // Проверяем, не выполнено ли уже задание
+        const existing = await query(
+            'SELECT * FROM user_quests WHERE user_id = $1 AND quest_id = $2',
+            [userId, questId]
+        );
+        
+        if (existing.rows.length > 0) {
+            return res.json({ success: true, alreadyCompleted: true });
+        }
+        
+        // Отмечаем задание как выполненное
+        await query(
+            `INSERT INTO user_quests (user_id, quest_id, completed_at, reward_claimed) 
+             VALUES ($1, $2, NOW(), true)`,
+            [userId, questId]
+        );
+        
+        // Обновляем прогресс в user_quest_progress
+        await query(
+            `INSERT INTO user_quest_progress (user_id, quest_id, progress, completed, claimed, updated_at)
+             VALUES ($1, $2, $3, true, true, NOW())
+             ON CONFLICT (user_id, quest_id)
+             DO UPDATE SET progress = $3, completed = true, claimed = true, updated_at = NOW()`,
+            [userId, questId, 1]
+        );
+        
+        // Начисляем награду
+        await updateUserBalance(userId, reward, 'earn', `Задание выполнено! +${reward} бонусов`);
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Ошибка выполнения задания:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
