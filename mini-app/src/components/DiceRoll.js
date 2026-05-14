@@ -235,7 +235,7 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
         return;
     }
     
-    await onBalanceUpdate(-totalCost, 'spend', { source: 'game', gameType: 'dice' });
+    await onBalanceUpdate(totalCost, 'spend', { source: 'game', gameType: 'dice' });
     
     // ✅ СОХРАНЯЕМ СЧЁТЧИК В БД
     try {
@@ -311,9 +311,13 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
                 
                 setIsRolling(false);
                 
-                window.dispatchEvent(new CustomEvent('questProgress', { 
-    detail: { type: 'play_dice', increment: 1 } 
-}));
+                if (typeof window.updateQuestProgress === 'function') {
+                    window.updateQuestProgress('play_dice', 1);
+                } else {
+                    window.dispatchEvent(new CustomEvent('questProgress', { 
+                        detail: { type: 'play_dice', increment: 1 } 
+                    }));
+                }
             }, 200);
         }
     }, 80);

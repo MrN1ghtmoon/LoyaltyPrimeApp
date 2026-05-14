@@ -140,8 +140,8 @@ async function showMenu() {
     console.log('║     🏢 Управление компаниями           ║');
     console.log('╠════════════════════════════════════════╣');
     console.log('║  1. 📋 Показать все компании           ║');
-    console.log('║  2. ➕  Создать новую компанию          ║');
-    console.log('║  3. ❌  Удалить компанию                ║');
+    console.log('║  2. ➕  Создать новую компанию         ║');
+    console.log('║  3. ❌  Удалить компанию               ║');
     console.log('║  4. 🚪 Выход                           ║');
     console.log('╚════════════════════════════════════════╝');
     console.log('');
@@ -174,7 +174,7 @@ async function main() {
                     await question('\nНажмите Enter для продолжения...');
                     break;
                 case '4':
-                    console.log('\n👋 До свидания!');
+                    console.log('\nПроизошел выход');
                     running = false;
                     break;
                 default:

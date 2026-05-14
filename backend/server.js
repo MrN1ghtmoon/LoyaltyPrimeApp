@@ -99,8 +99,9 @@ const {
 	clearPromotionPurchases,
 	shouldClearPurchasesForPromotion,
 	incrementUserGamePlays,
-getUserGamePlaysToday,
-getTodayString	
+	getUserGamePlaysToday,
+	getTodayString,
+	trackDailyLogin	
 } = require('./database-pg');
 
 const app = express();
@@ -708,6 +709,8 @@ app.post('/api/users/getOrCreate', async (req, res) => {
         // Отслеживаем посещение приложения для классификации пользователя
         await initializeUserClassification(user.id, companyId);
         await updateUserClassification(user.id, companyId, 'app_visit');
+		
+		 await trackDailyLogin(user.id, companyId);
         
         const allQuests = await getQuests(companyId);
         const now = new Date();
@@ -789,24 +792,60 @@ app.post('/api/users/completeQuest', async (req, res) => {
             }
         }
         
+        // ✅ ПРОВЕРЯЕМ, НЕ ПОЛУЧИЛ ЛИ УЖЕ БОНУС
         const existing = await query(
             'SELECT * FROM user_quests WHERE user_id = $1 AND quest_id = $2',
             [userId, questId]
         );
         
         if (existing.rows.length > 0) {
-            return res.status(400).json({ error: 'Задание уже выполнено' });
+            return res.status(400).json({ error: 'Бонус за это задание уже получен' });
         }
         
+        // ✅ ПРОВЕРЯЕМ, ВЫПОЛНЕНО ЛИ ЗАДАНИЕ (прогресс >= цель)
+        const progressResult = await query(
+            `SELECT uqp.progress, q.target_value 
+             FROM user_quest_progress uqp
+             JOIN quests q ON uqp.quest_id = q.id
+             WHERE uqp.user_id = $1 AND uqp.quest_id = $2`,
+            [userId, questId]
+        );
+        
+        let isCompleted = false;
+        let currentProgress = 0;
+        let targetValue = 1;
+        
+        if (progressResult.rows.length > 0) {
+            currentProgress = progressResult.rows[0].progress || 0;
+            targetValue = progressResult.rows[0].target_value || 1;
+            isCompleted = currentProgress >= targetValue;
+        }
+        
+        if (!isCompleted) {
+            return res.status(400).json({ 
+                error: `Задание ещё не выполнено. Прогресс: ${currentProgress}/${targetValue}` 
+            });
+        }
+        
+        // ✅ ЗАПИСЫВАЕМ ВЫПОЛНЕНИЕ
         await query(
             'INSERT INTO user_quests (user_id, quest_id, completed_at, reward_claimed) VALUES ($1, $2, NOW(), $3)',
             [userId, questId, true]
         );
         
-        await updateQuestProgress(userId, questId, 1, true, true);
+        // ✅ ОБНОВЛЯЕМ user_quest_progress: помечаем как полученное
+        await query(
+            `UPDATE user_quest_progress 
+             SET claimed = true, updated_at = NOW()
+             WHERE user_id = $1 AND quest_id = $2`,
+            [userId, questId]
+        );
+        
+        // ✅ НАЧИСЛЯЕМ БОНУС (только здесь!)
         await updateUserBalance(userId, reward, 'earn', `Задание выполнено! +${reward} бонусов`);
         
         res.json({ success: true });
+        
     } catch (error) {
         console.error('Ошибка выполнения задания:', error);
         res.status(500).json({ error: error.message });
@@ -2742,49 +2781,6 @@ app.post('/api/companies/:companyId/recalculate-classification', async (req, res
     }
 });
 
-// Получение стрика пользователя
-app.get('/api/users/:userId/streak/:companyId', async (req, res) => {
-  try {
-    const { userId, companyId } = req.params;
-    
-    const result = await query(
-      'SELECT streak, last_streak_update_date FROM user_progress WHERE user_id = $1 AND company_id = $2',
-      [userId, companyId]
-    );
-    
-    const streak = result.rows.length > 0 ? result.rows[0].streak : 0;
-    const lastStreakUpdateDate = result.rows.length > 0 ? result.rows[0].last_streak_update_date : null;
-    
-    res.json({ success: true, streak, lastStreakUpdateDate });
-  } catch (error) {
-    console.error('Ошибка получения стрика:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Обновление стрика пользователя
-app.post('/api/users/:userId/streak/update', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { companyId, streak, lastStreakUpdateDate } = req.body;
-    
-    await query(
-      `INSERT INTO user_progress (user_id, company_id, streak, last_streak_update_date, updated_at) 
-       VALUES ($1, $2, $3, $4, NOW())
-       ON CONFLICT (user_id, company_id) 
-       DO UPDATE SET 
-         streak = EXCLUDED.streak,
-         last_streak_update_date = EXCLUDED.last_streak_update_date,
-         updated_at = NOW()`,
-      [userId, companyId, streak, lastStreakUpdateDate || null]
-    );
-    
-    res.json({ success: true, streak });
-  } catch (error) {
-    console.error('Ошибка обновления стрика:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 // ============ API ДЛЯ НАСТРОЕК БОНУСНОЙ СИСТЕМЫ ============
 
 // Получение настроек бонусной системы компании

@@ -254,7 +254,6 @@ async function initDatabase() {
         await ensureAllQuestsExist();
 		await checkAndResetQuests();
 		await addQuestColumns();
-		await addStreakColumns();
 		await addBonusSettingsColumn();
 		await addNotificationCampaignColumns();
 		await addUserProgressSpentColumn();
@@ -282,24 +281,6 @@ async function addDailyBonusSettings() {
     } catch (error) {
         console.error('❌ Ошибка добавления daily_bonus_settings:', error);
     }
-}
-
-async function addStreakColumns() {
-  try {
-    const checkColumn = await query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'user_progress' AND column_name = 'last_streak_update_date'
-    `);
-    
-    if (checkColumn.rows.length === 0) {
-      console.log('📝 Добавляем колонку last_streak_update_date в таблицу user_progress...');
-      await query(`ALTER TABLE user_progress ADD COLUMN last_streak_update_date TIMESTAMP`);
-      console.log('✅ Колонка last_streak_update_date добавлена');
-    }
-  } catch (error) {
-    console.error('Ошибка добавления колонки стрика:', error);
-  }
 }
 
 // Добавляем недостающие колонки в таблицу transactions
@@ -607,11 +588,10 @@ function getPresetQuests() {
         { emoji: '💰', title: 'Потратить 1000 рублей за 3 дня', description: 'Совершите покупки на общую сумму 1000₽ в течение 3 дней', reward: 50, durationDays: 3, targetType: 'spend_amount', targetValue: 1000 },
         { emoji: '💰', title: 'Потратить 2000 рублей за 7 дней', description: 'Совершите покупки на общую сумму 2000₽ в течение 7 дней', reward: 100, durationDays: 7, targetType: 'spend_amount', targetValue: 2000 },
         { emoji: '🛍️', title: '2 Покупки за 3 дня', description: 'Совершите 2 покупки в течение 3 дней', reward: 60, durationDays: 3, targetType: 'purchase_count', targetValue: 2 },
-        { emoji: '🛍️', title: '5 Покупок за 7 дней', description: 'Совершите 5 покупок в течение 7 дней', reward: 120, durationDays: 7, targetType: 'purchase_count', targetValue: 5 },
+        { emoji: '🛍', title: '5 Покупок за 7 дней', description: 'Совершите 5 покупок в течение 7 дней', reward: 120, durationDays: 7, targetType: 'purchase_count', targetValue: 5 },
         { emoji: '🎡', title: 'Сыграть в колесо удачи 3 раза', description: 'Покрутите колесо фортуны 3 раза', reward: 40, durationDays: 7, targetType: 'spin_wheel', targetValue: 3 },
         { emoji: '🎫', title: 'Сыграть в скретч-карту 3 раза', description: 'Сыграйте в скретч-карту 3 раза', reward: 40, durationDays: 7, targetType: 'scratch_card', targetValue: 3 },
         { emoji: '🎲', title: 'Сыграть в кости 3 раза', description: 'Сыграйте в игру в кости 3 раза', reward: 40, durationDays: 7, targetType: 'play_dice', targetValue: 3 },
-        { emoji: '🔥', title: 'Стрик из 7 дней', description: 'Выполняйте все ежедневные задания 7 дней подряд', reward: 150, durationDays: 7, targetType: 'daily_streak', targetValue: 7 },
         { emoji: '✅', title: 'Ежедневный вход', description: 'Заходите в приложение каждый день', reward: 10, durationDays: 1, targetType: 'daily_login', targetValue: 1 },
         { emoji: '🎁', title: 'Воспользоваться акцией', description: 'Купите и активируйте акцию за баллы у партнера', reward: 20, durationDays: 7, targetType: 'use_promotion', targetValue: 1 }
     ];
@@ -660,9 +640,10 @@ async function addPresetDataForCompany(companyId) {
         const presetQuests = getPresetQuests();
         for (const quest of presetQuests) {
             await query(`
-                INSERT INTO quests (company_id, emoji, title, description, reward, active, expires_days, created_at, updated_at) 
-                VALUES ($1, $2, $3, $4, $5, false, NULL, NOW(), NOW())
-            `, [companyId, quest.emoji, quest.title, quest.description, quest.reward]);
+    INSERT INTO quests (company_id, emoji, title, description, reward, active, target_type, target_value, duration_days, created_at, updated_at) 
+    VALUES ($1, $2, $3, $4, $5, false, $6, $7, $8, NOW(), NOW())
+    ON CONFLICT (company_id, title) DO NOTHING
+`, [companyId, quest.emoji, quest.title, quest.description, quest.reward, quest.targetType, quest.targetValue, quest.durationDays]);
         }
         console.log(`✅ Добавлено ${presetQuests.length} заданий`);
         
@@ -1223,12 +1204,12 @@ async function addCompany(companyData) {
         { name: "💎 Бриллиант", threshold: 20000, multiplier: 2.5, cashback: 15, color: "#00b4d8", icon: "💎" }
     ]);
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-    const result = await query(
-        `INSERT INTO companies (company, name, email, phone, hashedPassword, brand_color, description, tiers_settings, active, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NOW()) 
-         RETURNING id, company, email, brand_color as "brandColor", description, created_at`,
-        [company, name, email, phone || '', password, brandColor || '#2A4B7C', description || `Добро пожаловать в ${company}!`, defaultTiers]
-    );
+const result = await query(
+    `INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, active, created_at) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NOW()) 
+     RETURNING id, company, email, brand_color as "brandColor", description, created_at`,
+    [company, name, email, phone || '', hashedPassword, brandColor || '#2A4B7C', description || `Добро пожаловать в ${company}!`, defaultTiers]
+);
     
     const newCompanyId = result.rows[0].id;
     
@@ -1480,10 +1461,10 @@ async function checkAndResetQuests(userId, companyId) {
     }
 }
 
-// Функция для отслеживания прогресса покупок
 async function trackPurchaseProgress(userId, companyId, purchaseAmount) {
     try {
-        // Получаем все активные задания типа purchase_count и spend_amount
+        console.log(`🛒 Отслеживание покупки: userId=${userId}, companyId=${companyId}, amount=${purchaseAmount}`);
+        
         const questsResult = await query(
             `SELECT * FROM quests 
              WHERE company_id = $1 
@@ -1493,75 +1474,147 @@ async function trackPurchaseProgress(userId, companyId, purchaseAmount) {
         );
         
         for (const quest of questsResult.rows) {
-            const durationDays = quest.duration_days || 7; // По умолчанию 7 дней
+            const durationDays = quest.duration_days || 7;
             
-            // Получаем прогресс пользователя
+            const windowStartDate = new Date();
+            windowStartDate.setDate(windowStartDate.getDate() - durationDays);
+            windowStartDate.setHours(0, 0, 0, 0);
+            
+            let actualProgress = 0;
+            
+            if (quest.target_type === 'purchase_count') {
+                const countResult = await query(
+                    `SELECT COUNT(*) as purchase_count
+                     FROM transactions 
+                     WHERE user_id = $1 
+                     AND company_id = $2
+                     AND source = 'pos'
+                     AND amount > 0
+                     AND created_at >= $3`,
+                    [userId, companyId, windowStartDate]
+                );
+                actualProgress = parseInt(countResult.rows[0].purchase_count);
+                console.log(`   purchase_count: ${actualProgress} / ${quest.target_value}`);
+            } else {
+                const sumResult = await query(
+                    `SELECT COALESCE(SUM(amount), 0) as total_amount
+                     FROM transactions 
+                     WHERE user_id = $1 
+                     AND company_id = $2
+                     AND source = 'pos'
+                     AND amount > 0
+                     AND created_at >= $3`,
+                    [userId, companyId, windowStartDate]
+                );
+                actualProgress = parseInt(sumResult.rows[0].total_amount);
+                console.log(`   spend_amount: ${actualProgress} / ${quest.target_value}₽`);
+            }
+            
+            const completed = actualProgress >= quest.target_value;
+            
             const progressResult = await query(
                 'SELECT * FROM user_quest_progress WHERE user_id = $1 AND quest_id = $2',
                 [userId, quest.id]
             );
             
-            // Вычисляем дату начала временного окна
-            const windowStartDate = new Date();
-            windowStartDate.setDate(windowStartDate.getDate() - durationDays);
-            
-            // Получаем количество покупок в пределах временного окна из транзакций
-            const transactionsResult = await query(
-                `SELECT COUNT(*) as purchase_count, COALESCE(SUM(amount), 0) as total_amount
-                 FROM transactions 
-                 WHERE user_id = $1 
-                 AND company_id = $2
-                 AND source = 'pos'
-                 AND bonus_earned > 0
-                 AND created_at >= $3`,
-                [userId, companyId, windowStartDate]
-            );
-            
-            const actualProgress = quest.target_type === 'purchase_count' 
-                ? parseInt(transactionsResult.rows[0].purchase_count)
-                : parseInt(transactionsResult.rows[0].total_amount);
-            
-            // Проверяем выполнено ли задание
-            const completed = actualProgress >= quest.target_value;
-            
-            if (progressResult.rows.length === 0) {
-                // Инициализируем прогресс
+            if (progressResult.rows.length > 0) {
+                const progress = progressResult.rows[0];
+                const progressDate = new Date(progress.updated_at);
+                
+                if (progressDate < windowStartDate) {
+                    await query(
+                        `UPDATE user_quest_progress 
+                         SET progress = $1, completed = $2, claimed = FALSE, updated_at = NOW()
+                         WHERE user_id = $3 AND quest_id = $4`,
+                        [actualProgress, completed, userId, quest.id]
+                    );
+                    console.log(`   🔄 Сброшен прогресс: ${actualProgress}`);
+                } else if (!progress.completed && !progress.claimed) {
+                    await query(
+                        `UPDATE user_quest_progress 
+                         SET progress = $1, completed = $2, updated_at = NOW()
+                         WHERE user_id = $3 AND quest_id = $4`,
+                        [actualProgress, completed, userId, quest.id]
+                    );
+                    console.log(`   📈 Прогресс обновлён: ${actualProgress}/${quest.target_value}`);
+                    
+                    // ✅ ТОЛЬКО ЛОГ, БЕЗ НАЧИСЛЕНИЯ БОНУСА
+                    if (completed && !progress.completed) {
+                        console.log(`   🎉 Задание "${quest.title}" выполнено! Ожидает нажатия кнопки "Забрать"`);
+                    }
+                }
+            } else {
                 await query(
-                    'INSERT INTO user_quest_progress (user_id, quest_id, progress, completed, claimed, updated_at) VALUES ($1, $2, $3, $4, false, NOW())',
+                    `INSERT INTO user_quest_progress (user_id, quest_id, progress, completed, claimed, updated_at)
+                     VALUES ($1, $2, $3, $4, false, NOW())`,
                     [userId, quest.id, actualProgress, completed]
                 );
-            } else {
-                const progress = progressResult.rows[0];
+                console.log(`   🆕 Создан прогресс: ${actualProgress}/${quest.target_value}`);
                 
-                // Пропускаем уже выполненные задания
-                if (progress.completed) continue;
-                
-                // Обновляем прогресс актуальными данными из временного окна
-                await query(
-                    'UPDATE user_quest_progress SET progress = $1, completed = $2, updated_at = NOW() WHERE user_id = $3 AND quest_id = $4',
-                    [actualProgress, completed, userId, quest.id]
-                );
-                
-                // Если задание выполнено, начисляем награду
-                if (completed && !progress.completed) {
-                    await updateUserBalance(userId, quest.reward, 'earn', `Задание выполнено: ${quest.title}`);
-                    await query(
-                        'INSERT INTO user_quests (user_id, quest_id, completed_at, reward_claimed) VALUES ($1, $2, NOW(), true)',
-                        [userId, quest.id]
-                    );
-                    console.log(`✅ Задание выполнено: ${quest.title}, пользователь ${userId}, награда: ${quest.reward}`);
+                // ✅ ТОЛЬКО ЛОГ, БЕЗ НАЧИСЛЕНИЯ БОНУСА
+                if (completed) {
+                    console.log(`   🎉 Задание "${quest.title}" выполнено! Ожидает нажатия кнопки "Забрать"`);
                 }
             }
         }
     } catch (error) {
-        console.error('Ошибка trackPurchaseProgress:', error);
+        console.error('❌ Ошибка trackPurchaseProgress:', error);
     }
 }
 
+async function trackDailyLogin(userId, companyId) {
+    try {
+        console.log(`📅 Отслеживание ежедневного входа: userId=${userId}`);
+        
+        const questsResult = await query(
+            `SELECT * FROM quests 
+             WHERE company_id = $1 
+             AND active = true 
+             AND target_type = 'daily_login'`,
+            [companyId]
+        );
+        
+        for (const quest of questsResult.rows) {
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            
+            // Проверяем, отмечали ли задание как выполненное сегодня
+            const existingProgress = await query(
+                `SELECT * FROM user_quest_progress 
+                 WHERE user_id = $1 AND quest_id = $2
+                 AND updated_at >= $3`,
+                [userId, quest.id, todayStart]
+            );
+            
+            if (existingProgress.rows.length > 0) {
+                console.log(`   📅 Задание "${quest.title}" уже отмечено сегодня`);
+                continue;
+            }
+            
+            // ✅ ТОЛЬКО ОТМЕЧАЕМ КАК ВЫПОЛНЕННОЕ, НО БЕЗ НАЧИСЛЕНИЯ
+            await query(
+                `INSERT INTO user_quest_progress (user_id, quest_id, progress, completed, claimed, updated_at)
+                 VALUES ($1, $2, 1, true, false, NOW())
+                 ON CONFLICT (user_id, quest_id) 
+                 DO UPDATE SET 
+                    progress = 1, 
+                    completed = true, 
+                    claimed = false,
+                    updated_at = NOW()`,
+                [userId, quest.id]
+            );
+            
+            console.log(`   🎉 Ежедневный вход: задание "${quest.title}" выполнено! Ожидает нажатия кнопки "Забрать"`);
+        }
+    } catch (error) {
+        console.error('❌ Ошибка trackDailyLogin:', error);
+    }
+}
 // Функция для отметки выполнения задания "Воспользоваться акцией"
 async function trackPromotionUsage(userId, companyId) {
     try {
-        // Ищем задание типа use_promotion
+        console.log(`🎁 Отслеживание использования акции: userId=${userId}, companyId=${companyId}`);
+        
         const questResult = await query(
             `SELECT * FROM quests 
              WHERE company_id = $1 
@@ -1570,46 +1623,55 @@ async function trackPromotionUsage(userId, companyId) {
             [companyId]
         );
         
-        if (questResult.rows.length === 0) return;
+        if (questResult.rows.length === 0) {
+            console.log('🎁 Нет активных заданий типа use_promotion');
+            return;
+        }
         
-        const quest = questResult.rows[0];
-        
-        // Проверяем прогресс
-        const progressResult = await query(
-            'SELECT * FROM user_quest_progress WHERE user_id = $1 AND quest_id = $2',
-            [userId, quest.id]
-        );
-        
-        if (progressResult.rows.length === 0) {
-            // Инициализируем прогресс
-            await query(
-                'INSERT INTO user_quest_progress (user_id, quest_id, progress, completed, claimed) VALUES ($1, $2, 1, true, false)',
-                [userId, quest.id]
-            );
-        } else {
-            const progress = progressResult.rows[0];
+        for (const quest of questResult.rows) {
+            console.log(`🎁 Обработка задания: "${quest.title}"`);
             
-            // Пропускаем уже выполненные задания
-            if (progress.completed) return;
+            const durationDays = quest.duration_days || 7;
+            const periodStartDate = new Date();
+            periodStartDate.setDate(periodStartDate.getDate() - durationDays);
+            periodStartDate.setHours(0, 0, 0, 0);
             
-            // Отмечаем как выполненное
-            await query(
-                'UPDATE user_quest_progress SET progress = 1, completed = true, updated_at = NOW() WHERE user_id = $1 AND quest_id = $2',
-                [userId, quest.id]
+            const existingProgress = await query(
+                `SELECT * FROM user_quest_progress 
+                 WHERE user_id = $1 AND quest_id = $2
+                 AND updated_at >= $3`,
+                [userId, quest.id, periodStartDate]
             );
             
-            // Начисляем награду
-            await updateUserBalance(userId, quest.reward, 'earn', `Задание выполнено: ${quest.title}`);
-            await query(
-                'INSERT INTO user_quests (user_id, quest_id, completed_at, reward_claimed) VALUES ($1, $2, NOW(), true)',
-                [userId, quest.id]
-            );
+            // Если уже выполнено в текущем периоде - пропускаем
+            if (existingProgress.rows.length > 0 && existingProgress.rows[0].completed) {
+                console.log(`   ⏳ Задание уже выполнено в текущем периоде`);
+                continue;
+            }
+            
+            // Если уже есть запись, но не выполнена - обновляем
+            if (existingProgress.rows.length > 0) {
+                await query(
+                    `UPDATE user_quest_progress 
+                     SET progress = 1, completed = true, updated_at = NOW()
+                     WHERE user_id = $1 AND quest_id = $2`,
+                    [userId, quest.id]
+                );
+            } else {
+                await query(
+                    `INSERT INTO user_quest_progress (user_id, quest_id, progress, completed, claimed, updated_at)
+                     VALUES ($1, $2, 1, true, false, NOW())`,
+                    [userId, quest.id]
+                );
+            }
+            
+            // ✅ ТОЛЬКО ЛОГ, БЕЗ НАЧИСЛЕНИЯ БОНУСА
+            console.log(`   🎉 Задание "${quest.title}" выполнено! Ожидает нажатия кнопки "Забрать"`);
         }
     } catch (error) {
-        console.error('Ошибка trackPromotionUsage:', error);
+        console.error('❌ Ошибка trackPromotionUsage:', error);
     }
 }
-
 // Функция для сброса прогресса задания при переключении active
 async function resetQuestProgress(questId) {
     try {
@@ -4252,7 +4314,6 @@ module.exports = {
 	migrateGiveawaysTable,
     getRealAnalytics,
     recalculateAllUsersClassification,
-	addStreakColumns,
 	addBonusSettingsColumn,
     // Notifications
     sendNotification,
@@ -4295,5 +4356,6 @@ module.exports = {
 	clearPromotionPurchases,
 	shouldClearPurchasesForPromotion,
 	addPromotionCycleStartColumn,
-	getTodayString
+	getTodayString,
+	trackDailyLogin
 };
