@@ -474,8 +474,8 @@ const revealCell = (index, isFreeHint = false) => {
                     fontWeight: 'bold'
                 }}>
                     {limitReached 
-                        ? `❌ Лимит игр на сегодня исчерпан! (${playsToday}/${settings.maxPlaysPerDay})`
-                        : `🎰 Игр сегодня: ${playsToday} / ${settings.maxPlaysPerDay}${remainingPlays <= 3 ? ` • Осталось: ${remainingPlays}` : ''}`
+                        ? `Лимит игр на сегодня исчерпан! (${playsToday}/${settings.maxPlaysPerDay})`
+                        : `Игр сегодня: ${playsToday} / ${settings.maxPlaysPerDay}${remainingPlays <= 3 ? ` • Осталось: ${remainingPlays}` : ''}`
                     }
                 </div>
             )}
@@ -498,11 +498,7 @@ const revealCell = (index, isFreeHint = false) => {
             )}
             
             <div className="scratch-header">
-                <h3>🎰 НАЙДИ 3 ОДИНАКОВЫХ</h3>
-                <div className="scratch-cost">
-                    <span className="cost-icon">🎟️</span>
-                    <span className="cost-value">{settings.cost}</span>
-                </div>
+                <h3>НАЙДИ 3 ОДИНАКОВЫХ</h3>
             </div>
             
             {/* Баннер бесплатной подсказки */}
@@ -554,16 +550,11 @@ const revealCell = (index, isFreeHint = false) => {
                 </div>
             )}
             
-            <div className="game-rules">
-                <div className="rule-item">🎯 Найдите 3 одинаковых символа</div>
-                <div className="rule-item">🖱️ У вас всего {settings.maxAttempts} попыток!</div>
-                <div className="rule-item">🏆 Соберите все 3 и выиграйте множитель!</div>
-            </div>
             
             {/* Прогресс */}
             <div className="game-progress">
                 <div className="progress-text">
-                    🎲 Попыток осталось: {attemptsLeft} / {settings.maxAttempts}
+                    Попыток осталось: {attemptsLeft} / {settings.maxAttempts}
                 </div>
                 <div className="progress-bar">
                     <div 
@@ -576,7 +567,7 @@ const revealCell = (index, isFreeHint = false) => {
             {/* Найдено одинаковых */}
             <div className="found-progress">
                 <div className="found-text">
-                    🔍 Найдено одинаковых: {foundWinning} / 3
+                    Найдено одинаковых: {foundWinning} / 3
                 </div>
                 <div className="found-bar">
                     <div 
@@ -630,7 +621,7 @@ const revealCell = (index, isFreeHint = false) => {
                         cursor: (playsToday === null || limitReached) ? 'not-allowed' : 'pointer'
                     }}
                 >
-                    🎲 НОВАЯ ИГРА
+                    НОВАЯ ИГРА
                 </button>
                 {gameActive && attemptsLeft > 0 && foundWinning < 3 && !limitReached && (
                     <button
@@ -643,7 +634,7 @@ const revealCell = (index, isFreeHint = false) => {
                                 : 'rgba(241, 196, 15, 0.2)'
                         }}
                     >
-                        💡 ПОДСКАЗКА 
+                        ПОДСКАЗКА 
                         {settings.freeHintDaily && freeHintAvailable && !freeHintUsed 
                             ? ' (БЕСПЛАТНО)' 
                             : ` (${settings.hintCost})`}
@@ -668,7 +659,7 @@ const revealCell = (index, isFreeHint = false) => {
             
             {/* Информация о множителях */}
             <div className="multiplier-info">
-                <div className="info-title">🎁 Множители выигрыша:</div>
+                <div className="info-title">Множители выигрыша:</div>
                 <div className="multiplier-list">
                     {settings.symbols.map(sym => (
                         <div key={sym.id} className="multiplier-item">

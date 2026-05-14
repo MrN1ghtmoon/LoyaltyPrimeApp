@@ -585,15 +585,15 @@ async function saveGameSettings(companyId, gameType, settings, active) {
 
 function getPresetQuests() {
     return [
-        { emoji: '💰', title: 'Потратить 1000 рублей за 3 дня', description: 'Совершите покупки на общую сумму 1000₽ в течение 3 дней', reward: 50, durationDays: 3, targetType: 'spend_amount', targetValue: 1000 },
-        { emoji: '💰', title: 'Потратить 2000 рублей за 7 дней', description: 'Совершите покупки на общую сумму 2000₽ в течение 7 дней', reward: 100, durationDays: 7, targetType: 'spend_amount', targetValue: 2000 },
-        { emoji: '🛍️', title: '2 Покупки за 3 дня', description: 'Совершите 2 покупки в течение 3 дней', reward: 60, durationDays: 3, targetType: 'purchase_count', targetValue: 2 },
-        { emoji: '🛍', title: '5 Покупок за 7 дней', description: 'Совершите 5 покупок в течение 7 дней', reward: 120, durationDays: 7, targetType: 'purchase_count', targetValue: 5 },
+        { emoji: '💰', title: 'Потратить 1000 рублей', description: 'Совершите покупки на общую сумму 1000₽', reward: 50, durationDays: 3, targetType: 'spend_amount', targetValue: 1000 },
+        { emoji: '💰', title: 'Потратить 2000 рублей', description: 'Совершите покупки на общую сумму 2000₽', reward: 100, durationDays: 7, targetType: 'spend_amount', targetValue: 2000 },
+        { emoji: '🛍️', title: '2 Покупки', description: 'Совершите 2 покупки', reward: 60, durationDays: 3, targetType: 'purchase_count', targetValue: 2 },
+        { emoji: '🛍', title: '5 Покупок', description: 'Совершите 5 покупок', reward: 120, durationDays: 7, targetType: 'purchase_count', targetValue: 5 },
         { emoji: '🎡', title: 'Сыграть в колесо удачи 3 раза', description: 'Покрутите колесо фортуны 3 раза', reward: 40, durationDays: 7, targetType: 'spin_wheel', targetValue: 3 },
         { emoji: '🎫', title: 'Сыграть в скретч-карту 3 раза', description: 'Сыграйте в скретч-карту 3 раза', reward: 40, durationDays: 7, targetType: 'scratch_card', targetValue: 3 },
         { emoji: '🎲', title: 'Сыграть в кости 3 раза', description: 'Сыграйте в игру в кости 3 раза', reward: 40, durationDays: 7, targetType: 'play_dice', targetValue: 3 },
         { emoji: '✅', title: 'Ежедневный вход', description: 'Заходите в приложение каждый день', reward: 10, durationDays: 1, targetType: 'daily_login', targetValue: 1 },
-        { emoji: '🎁', title: 'Воспользоваться акцией', description: 'Купите и активируйте акцию за баллы у партнера', reward: 20, durationDays: 7, targetType: 'use_promotion', targetValue: 1 }
+        { emoji: '🎁', title: 'Воспользоваться акцией', description: 'Активируйте акцию', reward: 20, durationDays: 7, targetType: 'use_promotion', targetValue: 1 }
     ];
 }
 function getPresetPromotions() {
@@ -2215,17 +2215,17 @@ async function purchasePromotion(userId, promotionId, companyId, bonusCost, isFr
 
 async function getUserPurchasedPromotions(userId, companyId) {
     const result = await query(
-        `SELECT upp.*, p.name, p.reward_value, p.start_date, p.end_date, p.active
-         FROM user_purchased_promotions upp
-         JOIN promotions p ON upp.promotion_id = p.id
-         WHERE upp.user_id = $1 
-           AND upp.company_id = $2 
-           AND upp.used = false
-           AND p.active = true
-           AND (p.end_date IS NULL OR p.end_date > NOW())
-         ORDER BY upp.purchased_at DESC`,
-        [userId, companyId]
-    );
+    `SELECT upp.*, p.name, p.reward_value, p.start_date, p.end_date, p.active, p.is_free, p.price
+     FROM user_purchased_promotions upp
+     JOIN promotions p ON upp.promotion_id = p.id
+     WHERE upp.user_id = $1 
+       AND upp.company_id = $2 
+       AND upp.used = false
+       AND p.active = true
+       AND (p.end_date IS NULL OR p.end_date > NOW())
+     ORDER BY upp.purchased_at DESC`,
+    [userId, companyId]
+);
     return result.rows;
 }
 
@@ -3893,14 +3893,14 @@ async function getGreetingSettings(companyId) {
 
 async function saveCashierCredentials(companyId, login, password) {
     try {
-		const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
         const result = await query(
-            `INSERT INTO cashier_credentials (company_id, login, hashedPassword, updated_at)
+            `INSERT INTO cashier_credentials (company_id, login, password, updated_at)
              VALUES ($1, $2, $3, NOW())
              ON CONFLICT (company_id) 
              DO UPDATE SET login = $2, password = $3, updated_at = NOW()
              RETURNING *`,
-            [companyId, login, password]
+            [companyId, login, hashedPassword]
         );
         
         return result.rows[0];

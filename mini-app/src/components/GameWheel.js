@@ -462,15 +462,10 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId, com
             
             <div className="classic-header">
                 <div className="header-left">
-                    <h3>🎡 КОЛЕСО ФОРТУНЫ</h3>
+                    <h3>КОЛЕСО ФОРТУНЫ</h3>
                     <div className="stats-badge">
-                        <span>🎲 {spinCount}</span>
-                        <span>🏆 {bestWin}</span>
+                        
                     </div>
-                </div>
-                <div className="classic-cost">
-                    <span className="cost-icon">🎟️</span>
-                    <span className="cost-value">{settings.spinCost}</span>
                 </div>
             </div>
             

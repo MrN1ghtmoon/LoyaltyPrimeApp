@@ -130,15 +130,15 @@ async function submitDemo() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Спасибо! Заявка отправлена. Мы свяжемся с вами в ближайшее время.');
+            alert('Спасибо! Заявка отправлена. Мы свяжемся с вами в ближайшее время.');
             document.getElementById('demoBrand').value = '';
             document.getElementById('demoEmail').value = '';
         } else {
-            alert('❌ ' + (data.message || 'Ошибка отправки. Попробуйте позже.'));
+            alert((data.message || 'Ошибка отправки. Попробуйте позже.'));
         }
     } catch (error) {
         console.error('Ошибка:', error);
-        alert('❌ Не удалось отправить заявку. Проверьте подключение к интернету.');
+        alert('Не удалось отправить заявку. Проверьте подключение к интернету.');
     } finally {
         button.textContent = originalText;
         button.disabled = false;
@@ -295,15 +295,15 @@ async function checkSavedSession() {
             const company = companies.find(c => c.id === parseInt(savedCompanyId));
             
             if (company) {
-                console.log('✅ Восстановлена сессия для:', company.company || company.name);
+                console.log('Восстановлена сессия для:', company.company || company.name);
                 currentBusiness = company;
                 loadCRMPanel();
                 return true;
             } else {
-                console.log('❌ Company not found in database');
+                console.log('Company not found in database');
             }
         } catch (error) {
-            console.error('❌ Ошибка восстановления сессии:', error);
+            console.error('Ошибка восстановления сессии:', error);
         }
         
         // Если сессия невалидна, очищаем
@@ -384,7 +384,7 @@ async function handleCRMRegister() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Регистрация успешна! Теперь вы можете войти в CRM.');
+            alert('Регистрация успешна! Теперь вы можете войти в CRM.');
             closeModal('register');
             openModal('login');
         } else {
@@ -744,7 +744,7 @@ function renderActivityChart(period) {
             }).join('')}
         </div>
         <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee; font-size: 13px; color: #666;">
-            📊 Всего транзакций за ${period === 'week' ? 'неделю' : 'год'}: <strong style="color: #667eea; font-size: 16px;">${totalTransactions.toLocaleString()}</strong>
+            Всего транзакций за ${period === 'week' ? 'неделю' : 'год'}: <strong style="color: #667eea; font-size: 16px;">${totalTransactions.toLocaleString()}</strong>
         </div>
     `;
 }
@@ -956,21 +956,17 @@ async function loadAddressesRevenueForMonth(month, year) {
                 <div class="revenue-header" style="margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 16px;">
                     <div class="revenue-total" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                         <div>
-                            <span class="total-label" style="font-size: 14px; color: #666;">📊 Общая выручка за ${monthName} ${year}:</span>
+                            <span class="total-label" style="font-size: 14px; color: #666;">Общая выручка за ${monthName} ${year}:</span>
                             <div class="total-amount" style="font-size: 32px; font-weight: 700; color: #667eea; margin-top: 8px;">${totalRevenue.toLocaleString()} ₽</div>
                         </div>
-                        <div style="text-align: right;">
-                            <span class="period-badge" style="background: #667eea20; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #667eea;">
-                                📅 ${monthName} ${year}
-                            </span>
-                        </div>
+                        
                     </div>
                 </div>
                 <div class="revenue-table">
                     <div class="revenue-table-header" style="display: grid; grid-template-columns: 3fr 1.5fr 2fr; background: #f8f9fa; padding: 12px 16px; border-radius: 12px; font-weight: 600; font-size: 13px; color: #495057; margin-bottom: 8px;">
-                        <div>📍 Адрес</div>
-                        <div>🏙️ Город</div>
-                        <div>💰 Выручка</div>
+                        <div>Адрес</div>
+                        <div>Город</div>
+                        <div>Выручка</div>
                     </div>
                     ${addressesWithRevenue.map(addr => `
                         <div class="revenue-table-row" style="display: grid; grid-template-columns: 3fr 1.5fr 2fr; padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 14px; align-items: center;">
@@ -1057,16 +1053,16 @@ async function loadAddressesRevenueForYear(year) {
                         </div>
                         <div style="text-align: right;">
                             <span class="period-badge" style="background: #667eea20; padding: 6px 12px; border-radius: 20px; font-size: 12px; color: #667eea;">
-                                📅 ${year} год
+                                 ${year} год
                             </span>
                         </div>
                     </div>
                 </div>
                 <div class="revenue-table">
                     <div class="revenue-table-header" style="display: grid; grid-template-columns: 3fr 1.5fr 2fr; background: #f8f9fa; padding: 12px 16px; border-radius: 12px; font-weight: 600; font-size: 13px; color: #495057; margin-bottom: 8px;">
-                        <div>📍 Адрес</div>
-                        <div>🏙️ Город</div>
-                        <div>💰 Выручка за год</div>
+                        <div>Адрес</div>
+                        <div>Город</div>
+                        <div>Выручка за год</div>
                     </div>
                     ${addressesWithRevenue.map(addr => `
                         <div class="revenue-table-row" style="display: grid; grid-template-columns: 3fr 1.5fr 2fr; padding: 12px 16px; border-bottom: 1px solid #e9ecef; font-size: 14px; align-items: center;">
@@ -1140,12 +1136,12 @@ function createRevenueSelect(container) {
     
     selectContainer.innerHTML = `
         <div style="display: flex; align-items: center; gap: 12px; background: white; padding: 4px 16px 4px 20px; border-radius: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <span style="font-size: 14px; color: #666;">📅 Период:</span>
+            <span style="font-size: 14px; color: #666;">Период:</span>
             <select id="revenuePeriodSelect" style="padding: 8px 12px; border-radius: 30px; border: 1px solid #ddd; background: white; font-size: 14px; font-weight: 500; cursor: pointer; outline: none;">
-                <option value="year">📊 Весь ${currentYear} год</option>
+                <option value="year">Весь ${currentYear} год</option>
                 ${months.map(month => `
                     <option value="month_${month.value}" ${month.value === currentMonth ? 'selected' : ''}>
-                        📅 ${month.name} ${currentYear}
+                         ${month.name} ${currentYear}
                     </option>
                 `).join('')}
             </select>
@@ -1246,7 +1242,7 @@ function renderTiersSettings() {
             
             <div class="tier-config-fields">
                 <div class="config-field">
-                    <label>💰 Порог LTV (бонусов или ₽):</label>
+                    <label>Порог трат бонусов:</label>
                     <input type="number" value="${tier.threshold}" 
                            onchange="updateTierConfig(${idx}, 'threshold', parseInt(this.value))" 
                            class="config-input">
@@ -1254,7 +1250,7 @@ function renderTiersSettings() {
                 
                 <!-- ИСПРАВЛЕНО: убрали multiplier, оставили только cashback -->
                 <div class="config-field">
-                    <label>💰 Кешбэк (% начисления):</label>
+                    <label>Кешбэк (% начисления):</label>
                     <input type="number" step="0.5" value="${tier.cashback || 3}" 
                            onchange="updateTierConfig(${idx}, 'cashback', parseFloat(this.value))" 
                            class="config-input">
@@ -1363,7 +1359,7 @@ function loadLoyaltySettings() {
 
 function saveLoyaltySettings() {
     saveTiersToServer();
-    alert('✅ Настройки сохранены!');
+    alert('Настройки сохранены!');
 }
 
 // ========== МОДУЛЬ 3: УВЕДОМЛЕНИЯ ==========
@@ -1393,7 +1389,7 @@ function sendNotification() {
     
     document.getElementById('notifTitle').value = '';
     document.getElementById('notifMessage').value = '';
-    alert(`✅ Уведомление отправлено!\nАудитория: ${getSegmentName(segment)}`);
+    alert(`Уведомление отправлено!\nАудитория: ${getSegmentName(segment)}`);
 }
 
 function getSegmentName(segment) {
@@ -1419,20 +1415,20 @@ async function sendDirectMessage() {
     }
     
     const segmentNames = {
-        'all': '📊 Все пользователи',
-        'new': '🌱 Новичок',
-        'active': '🔥 Активный',
-        'regular': '⭐ Постоянный',
-        'dormant': '😴 Спящий'
+        'all': 'Все пользователи',
+        'new': 'Новичок',
+        'active': 'Активный',
+        'regular': 'Постоянный',
+        'dormant': 'Спящий'
     };
     
     const segmentName = segmentNames[segment] || segment;
     
     // Предпросмотр
-    let previewMessage = `📨 Рассылка сообщения\n\n`;
-    previewMessage += `👥 Аудитория: ${segmentName}\n`;
-    previewMessage += `📝 Заголовок: ${title}\n\n`;
-    previewMessage += `💬 Текст:\n${message.substring(0, 200)}${message.length > 200 ? '...' : ''}\n\n`;
+    let previewMessage = `Рассылка сообщения\n\n`;
+    previewMessage += `Аудитория: ${segmentName}\n`;
+    previewMessage += `Заголовок: ${title}\n\n`;
+    previewMessage += `Текст:\n${message.substring(0, 200)}${message.length > 200 ? '...' : ''}\n\n`;
     if (buttonLink) previewMessage += `🔗 Кнопка: ${buttonText} → ${buttonLink}\n`;
     previewMessage += `\nОтправить?`;
     
@@ -1480,7 +1476,7 @@ async function sendDirectMessage() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ Рассылка отправлена!\n\n📨 Получателей: ${data.sentCount || users.length} пользователей\n👥 Аудитория: ${segmentName}`);
+            alert(`Рассылка отправлена!\n\n📨 Получателей: ${data.sentCount || users.length} пользователей\n👥 Аудитория: ${segmentName}`);
             
             // Очищаем поля
             document.getElementById('notifTitle').value = '';
@@ -1524,7 +1520,7 @@ function renderCampaignsList(campaigns) {
     if (!container) return;
     
     if (!campaigns || campaigns.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">📭 Нет кампаний. Создайте первую!</div>';
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">Нет кампаний. Создайте первую!</div>';
         return;
     }
     
@@ -1558,7 +1554,7 @@ function renderCampaignsList(campaigns) {
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <span style="font-size: 12px; padding: 4px 12px; border-radius: 20px; background: ${isActive ? '#2ecc71' : '#95a5a6'}; color: white; font-weight: 600;">
-                            ${isActive ? '✅ Включена' : '❌ Выключена'}
+                            ${isActive ? 'Включена' : 'Выключена'}
                         </span>
                     </div>
                 </div>
@@ -1568,7 +1564,7 @@ function renderCampaignsList(campaigns) {
                 <div style="display: flex; gap: 8px; margin-top: 12px;">
                     <button onclick="editCampaign(${campaign.id})" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">✏️ Редактировать</button>
                     <button onclick="toggleCampaign(${campaign.id}, ${!isActive})" style="padding: 8px 16px; background: ${isActive ? '#e74c3c' : '#2ecc71'}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">
-                        ${isActive ? '⏸️ Выключить' : '▶️ Включить'}
+                        ${isActive ? 'Выключить' : 'Включить'}
                     </button>
                     ${!campaign.is_default ? `<button onclick="deleteCampaign(${campaign.id})" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">🗑️ Удалить</button>` : ''}
                     <button onclick="sendCampaignNow(${campaign.id})" style="padding: 8px 16px; background: #9b59b6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">🚀 Отправить сейчас</button>
@@ -1586,7 +1582,7 @@ function getDaysWord(days) {
 
 function showAddCampaignModal() {
     currentEditingCampaignId = null;
-    document.getElementById('campaignModalTitle').textContent = '➕ Создать кампанию';
+    document.getElementById('campaignModalTitle').textContent = 'Создать кампанию';
     document.getElementById('campaignName').value = '';
     document.getElementById('campaignAudience').value = 'all';
     document.getElementById('campaignTitle').value = '';
@@ -1726,16 +1722,16 @@ async function saveCampaign() {
             
             closeCampaignModal();
             await loadCampaigns();
-            alert(`✅ Кампания ${currentEditingCampaignId ? 'обновлена' : 'создана'}!`);
+            alert(`Кампания ${currentEditingCampaignId ? 'обновлена' : 'создана'}!`);
         } else {
             const errorEl = document.getElementById('campaignError');
-            errorEl.textContent = '❌ ' + (data.message || data.error);
+            errorEl.textContent = (data.message || data.error);
             errorEl.style.display = 'block';
         }
     } catch (error) {
         console.error('Ошибка сохранения кампании:', error);
         const errorEl = document.getElementById('campaignError');
-        errorEl.textContent = '❌ Ошибка сохранения: ' + error.message;
+        errorEl.textContent = 'Ошибка сохранения: ' + error.message;
         errorEl.style.display = 'block';
     }
 }
@@ -1752,7 +1748,7 @@ async function toggleCampaign(campaignId, isActive) {
         
         if (data.success) {
             await loadCampaigns();
-            alert(isActive ? '✅ Кампания включена' : '⏸️ Кампания выключена');
+            alert(isActive ? 'Кампания включена' : 'Кампания выключена');
         }
     } catch (error) {
         console.error('Ошибка переключения кампании:', error);
@@ -1772,16 +1768,16 @@ async function deleteCampaign(campaignId) {
         
         if (data.success) {
             await loadCampaigns();
-            alert('✅ Кампания удалена');
+            alert('Кампания удалена');
         }
     } catch (error) {
         console.error('Ошибка удаления кампании:', error);
-        alert('❌ Ошибка удаления кампании');
+        alert('Ошибка удаления кампании');
     }
 }
 
 async function sendCampaignNow(campaignId) {
-    if (!confirm('🚀 Отправить кампанию прямо сейчас?')) return;
+    if (!confirm('Отправить кампанию прямо сейчас?')) return;
     
     try {
         const response = await fetch(`${API_URL}/api/campaigns/${campaignId}/execute`, {
@@ -1793,13 +1789,13 @@ async function sendCampaignNow(campaignId) {
         if (data.success) {
             await loadCampaigns();
             await loadNotificationsHistory();
-            alert(`✅ Кампания отправлена ${data.sentCount || 0} пользователям`);
+            alert(`Кампания отправлена ${data.sentCount || 0} пользователям`);
         } else {
-            alert('❌ Ошибка отправки: ' + (data.message || data.error));
+            alert('Ошибка отправки: ' + (data.message || data.error));
         }
     } catch (error) {
         console.error('Ошибка отправки кампании:', error);
-        alert('❌ Ошибка отправки кампании');
+        alert('Ошибка отправки кампании');
     }
 }
 
@@ -1832,7 +1828,7 @@ function renderNotificationsHistory(history) {
     };
     
     if (!history || history.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">📭 Нет отправленных сообщений</div>';
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">Нет отправленных сообщений</div>';
         return;
     }
     
@@ -1843,7 +1839,7 @@ function renderNotificationsHistory(history) {
                     <div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(notif.title)}</div>
                     <div style="font-size: 13px; color: #555; margin-bottom: 8px;">${escapeHtml(notif.message.substring(0, 100))}${notif.message.length > 100 ? '...' : ''}</div>
                 </div>
-                <div style="font-size: 12px; color: #2ecc71; white-space: nowrap; margin-left: 12px;">✅ ${notif.sent_count || 0} чел.</div>
+                <div style="font-size: 12px; color: #2ecc71; white-space: nowrap; margin-left: 12px;">${notif.sent_count || 0} чел.</div>
             </div>
             <div style="font-size: 11px; color: #888; margin-top: 8px;">
                 👥 ${segmentNames[notif.audience] || notif.audience} • ${new Date(notif.sent_at || notif.created_at).toLocaleString('ru-RU')}
@@ -1878,7 +1874,7 @@ function loadPresetQuest() {
         document.getElementById('questTitle').value = selectedOption.value;
         document.getElementById('questDesc').value = selectedOption.getAttribute('data-desc') || '';
         document.getElementById('questReward').value = selectedOption.getAttribute('data-reward') || 10;
-        const emoji = selectedOption.getAttribute('data-emoji') || '✅';
+        const emoji = selectedOption.getAttribute('data-emoji') || '';
         const emojiSelect = document.getElementById('questEmoji');
         if (emojiSelect) {
             for (let i = 0; i < emojiSelect.options.length; i++) {
@@ -1973,14 +1969,14 @@ function renderPromotionsList() {
                         <div class="promotion-emojis">${promo.emoji || '🎯'}</div>
                         <div class="promotion-name">${escapeHtml(promo.name)}</div>
                         <div class="promotion-reward" style="background:#ffd966; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700;">${promo.reward_type === 'bonus' ? `+${promo.reward_value} бонусов` : `${promo.reward_value}% скидка`}</div>
-                        <div class="promotion-status inactive" style="background:#e2e3e5; color:#383d41;">❌ Неактивна</div>
+                        <div class="promotion-status inactive" style="background:#e2e3e5; color:#383d41;"> Неактивна</div>
                         <button class="btn-edit" onclick="editPromotion(${promo.id})" style="background:#17a2b8; color:white; border:none; padding:6px 12px; border-radius:8px; cursor:pointer;">✏️</button>
                     </div>
                     <div class="promotion-desc" style="font-size:13px; color:#e74c3c; margin:8px 0 4px 60px;">
-                        ⚠️ Для активации акции необходимо указать дату начала и окончания!
+                        Для активации акции необходимо указать дату начала и окончания!
                     </div>
                     <div class="promotion-dates" style="font-size:11px; color:#999; margin-left:60px;">
-                        📅 Дата не указана
+                        Дата не указана
                     </div>
                 </div>
             `;
@@ -2019,8 +2015,8 @@ function renderPromotionsList() {
         
         // Показываем цену или бесплатную отметку
         const priceDisplay = promo.is_free 
-            ? '<span style="background:#3498db; color:white; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700;">🎁 Бесплатная</span>'
-            : `<span style="background:#9b59b6; color:white; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700;">💎 ${promo.price || 100} баллов</span>`;
+            ? '<span style="background:#3498db; color:white; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700;">Бесплатная</span>'
+            : `<span style="background:#9b59b6; color:white; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700;"> ${promo.price || 100} баллов</span>`;
         
         let displayDescription = promo.description || '';
         
@@ -2041,10 +2037,10 @@ function renderPromotionsList() {
                 </div>
                 <div class="promotion-desc" style="font-size:13px; color:#555; margin:8px 0 4px 60px;">${escapeHtml(displayDescription)}</div>
                 <div class="promotion-dates" style="font-size:11px; color:#999; margin-left:60px;">
-                    📅 ${formatDateTime(startDate)} → ${formatDateTime(endDate)}
-                    ${status === 'waiting' ? '<span style="color:#f39c12; margin-left:8px;">⏳ Акция начнется позже</span>' : ''}
-                    ${status === 'active' ? '<span style="color:#2ecc71; margin-left:8px;">✅ Активна сейчас</span>' : ''}
-                    ${status === 'expired' ? '<span style="color:#e74c3c; margin-left:8px;">⏰ Акция завершена</span>' : ''}
+                     ${formatDateTime(startDate)} → ${formatDateTime(endDate)}
+                    ${status === 'waiting' ? '<span style="color:#f39c12; margin-left:8px;">Акция начнется позже</span>' : ''}
+                    ${status === 'active' ? '<span style="color:#2ecc71; margin-left:8px;">Активна сейчас</span>' : ''}
+                    ${status === 'expired' ? '<span style="color:#e74c3c; margin-left:8px;"> Акция завершена</span>' : ''}
                 </div>
             </div>
         `;
@@ -2083,8 +2079,8 @@ function showAddPromotionModal() {
     document.getElementById('promoPriceField').style.display = 'block';
     document.getElementById('promoFreeNote').style.display = 'none';
     
-    document.getElementById('promotionModalTitle').textContent = '➕ Создать новую акцию';
-    document.getElementById('savePromotionBtn').textContent = '💾 Создать акцию';
+    document.getElementById('promotionModalTitle').textContent = 'Создать новую акцию';
+    document.getElementById('savePromotionBtn').textContent = 'Создать акцию';
     document.getElementById('deletePromotionBtn').style.display = 'none';
     
     openModal('promotion');
@@ -2163,8 +2159,8 @@ async function editPromotion(promotionId) {
     document.getElementById('promoActive').checked = promo.active;
     
     // Обновляем заголовок и кнопку
-    document.getElementById('promotionModalTitle').textContent = '✏️ Редактировать акцию';
-    document.getElementById('savePromotionBtn').textContent = '💾 Сохранить изменения';
+    document.getElementById('promotionModalTitle').textContent = 'Редактировать акцию';
+    document.getElementById('savePromotionBtn').textContent = 'Сохранить изменения';
     document.getElementById('deletePromotionBtn').style.display = 'block';
     
     openModal('promotion');
@@ -2184,7 +2180,7 @@ async function savePromotion() {
     
     // Validate name
     if (!name) {
-        errorElement.textContent = '❌ Укажите название акции';
+        errorElement.textContent = 'Укажите название акции';
         errorElement.style.display = 'block';
         setTimeout(() => errorElement.style.display = 'none', 3000);
         return;
@@ -2314,11 +2310,11 @@ async function savePromotion() {
             
             // Показываем разное сообщение в зависимости от того, были ли очищены покупки
             if (data.purchasesCleared) {
-                alert(`✅ Акция ${currentEditingPromotionId ? 'обновлена' : 'создана'}!\n\n⚠️ ВНИМАНИЕ: ${data.message}\n\n📅 ${formattedStart} → ${formattedEnd}\n⏱️ Длительность: ${durationHours} часов\n\n💡 Пользователям потребуется купить акцию заново.`);
+                alert(` Акция ${currentEditingPromotionId ? 'обновлена' : 'создана'}!\n\n ВНИМАНИЕ: ${data.message}\n\n ${formattedStart} → ${formattedEnd}\n Длительность: ${durationHours} часов\n\n Пользователям потребуется купить акцию заново.`);
             } else if (currentEditingPromotionId) {
-                alert(`✅ Акция обновлена!\n📅 ${formattedStart} → ${formattedEnd}\n⏱️ Длительность: ${durationHours} часов`);
+                alert(`Акция обновлена!\n ${formattedStart} → ${formattedEnd}\n Длительность: ${durationHours} часов`);
             } else {
-                alert(`✅ Акция создана!\n📅 ${formattedStart} → ${formattedEnd}\n⏱️ Длительность: ${durationHours} часов`);
+                alert(`Акция создана!\n ${formattedStart} → ${formattedEnd}\n Длительность: ${durationHours} часов`);
             }
         } else {
             errorElement.textContent = data.message || 'Ошибка сохранения';
@@ -2388,13 +2384,13 @@ async function deleteCurrentPromotion() {
         if (response.ok && data.success) {
             await loadPromotionsAndQuestsFromDB();
             closeModal('promotion');
-            alert('✅ Акция успешно удалена');
+            alert('Акция успешно удалена');
         } else {
-            alert('❌ Ошибка удаления акции');
+            alert('Ошибка удаления акции');
         }
     } catch (error) {
         console.error('Ошибка:', error);
-        alert('❌ Ошибка подключения к серверу');
+        alert('Ошибка подключения к серверу');
     }
 }
 
@@ -2410,7 +2406,7 @@ function renderQuestsManagerList() {
     
     container.innerHTML = questsManager.map(quest => {
         const status = quest.active ? 'active' : 'inactive';
-        const statusText = quest.active ? '✅ Активно' : '❌ Отключено';
+        const statusText = quest.active ? 'Активно' : 'Отключено';
         const durationDays = quest.duration_days || 1;
         
         // Показываем предупреждение если дней больше 7
@@ -2437,9 +2433,9 @@ function renderQuestsManagerList() {
                 </div>
                 <div class="promotion-desc" style="font-size:13px; color:#555; margin:8px 0 4px 60px;">${escapeHtml(quest.description || '')}</div>
                 <div class="promotion-dates" style="font-size:11px; color:#999; margin-left:60px;">
-                    ⏱️ Дней на выполнение: ${durationDays} ${daysWarning ? `<span style="color:#e74c3c; margin-left:8px;">${daysWarning}</span>` : ''}
+                    Дней на выполнение: ${durationDays} ${daysWarning ? `<span style="color:#e74c3c; margin-left:8px;">${daysWarning}</span>` : ''}
                     ${questTypeInfo}
-                    ${!quest.active ? '<span style="color:#e74c3c; margin-left:8px;">🔒 Задание отключено</span>' : '<span style="color:#2ecc71; margin-left:8px;">🟢 Задание активно в приложении</span>'}
+                    ${!quest.active ? '<span style="color:#e74c3c; margin-left:8px;">Задание отключено</span>' : '<span style="color:#2ecc71; margin-left:8px;">Задание активно в приложении</span>'}
                 </div>
                 <div class="promotion-actions" style="margin-left:60px; margin-top:8px;">
                     <label style="font-size:13px; display: flex; align-items: center; gap: 12px;">
@@ -2571,7 +2567,7 @@ async function saveQuest() {
         if (response.ok && data.success) {
             await loadQuestsManager();
             closeModal('quest');
-            alert('✅ Задание обновлено!');
+            alert('Задание обновлено!');
         } else {
             errorElement.textContent = data.message || 'Ошибка сохранения';
             errorElement.style.display = 'block';
@@ -2622,7 +2618,7 @@ async function saveBusinessSettings() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ Настройки брендирования сохранены!\n\nЦвет будет применен в mini-app при следующем открытии.');
+            alert('Настройки брендирования сохранены!\n\nЦвет будет применен в mini-app при следующем открытии.');
         } else {
             alert('❌ Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'));
         }
@@ -2838,7 +2834,7 @@ function renderWheelSettings() {
     container.innerHTML = `
         <div class="wheel-settings-card">
             <div class="wheel-header">
-                <h3>🎡 Колесо фортуны</h3>
+                <h3>Колесо фортуны</h3>
                 <div class="toggle-switch">
                     <input type="checkbox" id="wheelActive" ${wheelSettings.active ? 'checked' : ''} onchange="toggleWheelActive(this.checked)">
                     <span>${wheelSettings.active ? 'Активно' : 'Отключено'}</span>
@@ -2847,37 +2843,37 @@ function renderWheelSettings() {
             
             <div class="wheel-settings-grid">
                 <div class="wheel-setting-group">
-                    <label>💰 Стоимость вращения (бонусов)</label>
+                    <label>Стоимость вращения (бонусов)</label>
                     <input type="number" id="wheelSpinCost" value="${wheelSettings.spinCost}" min="1" max="1000" onchange="updateWheelSpinCost(this.value)">
                 </div>
                 <div class="wheel-setting-group">
-                    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
+                    <label>Максимум игр в день (0 – без ограничений)</label>
                     <input type="number" id="wheelMaxPlays" value="${wheelSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateWheelMaxPlays(this.value)">
                     <small style="display: block; margin-top: 4px; color: #666;">Ограничение на количество вращений в день для одного пользователя</small>
                 </div>
                 <div class="wheel-setting-group">
                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                        <span>🎁 Бесплатное вращение в день</span>
+                        <span>Бесплатное вращение в день</span>
                         <input type="checkbox" 
                                id="wheelFreeSpin" 
                                ${wheelSettings.freeSpinDaily ? 'checked' : ''} 
                                onchange="updateWheelFreeSpin(this.checked)"
                                style="width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #ff4d4d;">
                         <span id="wheelFreeSpinStatus" style="font-size: 12px; color: ${wheelSettings.freeSpinDaily ? '#2ecc71' : '#888'}">
-                            ${wheelSettings.freeSpinDaily ? '✅ Включена' : '⭕ Отключена'}
+                            ${wheelSettings.freeSpinDaily ? 'Включена' : 'Отключена'}
                         </span>
                     </label>
                 </div>
             </div>
             
             <div style="margin-top: 20px;">
-                <h4 style="margin-bottom: 12px;">🎯 Сектора колеса</h4>
+                <h4 style="margin-bottom: 12px;">Сектора колеса</h4>
                 <div class="sectors-list" id="sectorsList"></div>
                 <button class="btn-add-sector" onclick="addSector()">+ Добавить сектор</button>
             </div>
             
             <div class="wheel-stats">
-                <h4>📊 Статистика вероятностей</h4>
+                <h4>Статистика вероятностей</h4>
                 <div class="wheel-stats-grid" id="wheelStats"></div>
             </div>
         </div>
@@ -2962,7 +2958,7 @@ function renderWheelStats() {
 }
 
 function getIconOptions(selectedIcon) {
-    const icons = ['⭐', '🎯', '🔥', '💀', '✨', '🍀', '💎', '🏆', '🎲', '💰', '🎁', '⚡', '👑', '🎉'];
+    const icons = ['🔰','🥉','🥈','🥇','💎', '🏆'];
     return icons.map(icon => `<option value="${icon}" ${selectedIcon === icon ? 'selected' : ''}>${icon}</option>`).join('');
 }
 
@@ -3025,7 +3021,7 @@ function updateWheelFreeSpin(checked) {
     // Обновляем текст статуса
     const statusSpan = document.getElementById('wheelFreeSpinStatus');
     if (statusSpan) {
-        statusSpan.textContent = checked ? '✅ Включена' : '⭕ Отключена';
+        statusSpan.textContent = checked ? 'Включена' : 'Отключена';
         statusSpan.style.color = checked ? '#2ecc71' : '#888';
     }
     
@@ -3075,7 +3071,7 @@ async function saveAllGameSettings() {
     await saveWheelSettings();
     await saveScratchSettings();
 	await saveDiceSettings();
-    alert('✅ Все настройки игр сохранены!');
+    alert('Все настройки игр сохранены!');
 }
 
 // ========== НАСТРОЙКА СКРЕТЧ-КАРТЫ ==========
@@ -3117,7 +3113,7 @@ async function loadScratchSettings() {
                 maxPlaysPerDay: data.settings.maxPlaysPerDay || 0  // ← ДОБАВЛЯЕМ ЭТУ СТРОКУ
             };
             scratchSettings.active = data.active;
-            console.log('✅ Scratch settings loaded, maxPlaysPerDay:', scratchSettings.maxPlaysPerDay);
+            console.log('Scratch settings loaded, maxPlaysPerDay:', scratchSettings.maxPlaysPerDay);
         }
     } catch (error) {
         console.error('Ошибка загрузки настроек скретч-карты:', error);
@@ -3136,7 +3132,7 @@ function renderScratchSettings() {
     container.innerHTML = `
         <div class="scratch-settings-card">
             <div class="scratch-header">
-                <h3>🎫 Скретч-карта (Найди 3 одинаковых)</h3>
+                <h3>Скретч-карта (Найди 3 одинаковых)</h3>
                 <div class="toggle-switch">
                     <input type="checkbox" id="scratchActive" ${scratchSettings.active ? 'checked' : ''} onchange="toggleScratchActive(this.checked)">
                     <span>${scratchSettings.active ? 'Активна' : 'Отключена'}</span>
@@ -3145,40 +3141,40 @@ function renderScratchSettings() {
             
             <div class="scratch-settings-grid">
                 <div class="scratch-setting-group">
-                    <label>💰 Стоимость игры (бонусов)</label>
+                    <label>Стоимость игры (бонусов)</label>
                     <input type="number" id="scratchCost" value="${scratchSettings.cost}" min="1" max="500" onchange="updateScratchCost(this.value)">
                 </div>
 				<div class="scratch-setting-group">
-    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
+    <label>Максимум игр в день (0 – без ограничений)</label>
     <input type="number" id="scratchMaxPlays" value="${scratchSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateScratchMaxPlays(this.value)">
 </div>
                 <div class="scratch-setting-group">
-                    <label>💡 Стоимость подсказки (бонусов)</label>
+                    <label>Стоимость подсказки (бонусов)</label>
                     <input type="number" id="scratchHintCost" value="${scratchSettings.hintCost}" min="0" max="100" onchange="updateScratchHintCost(this.value)">
                 </div>
                 <div class="scratch-setting-group">
                     <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                        <span>🎁 Бесплатная подсказка в день</span>
+                        <span>Бесплатная подсказка в день</span>
                         <input type="checkbox" 
                                id="scratchFreeHint" 
                                ${scratchSettings.freeHintDaily ? 'checked' : ''} 
                                onchange="updateScratchFreeHint(this.checked)"
                                style="width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #ff4d4d;">
                         <span id="scratchFreeHintStatus" style="font-size: 12px; color: ${scratchSettings.freeHintDaily ? '#2ecc71' : '#888'}">
-                            ${scratchSettings.freeHintDaily ? '✅ Включена' : '⭕ Отключена'}
+                            ${scratchSettings.freeHintDaily ? 'Включена' : 'Отключена'}
                         </span>
                     </label>
                 </div>
             </div>
             
             <div style="margin-top: 20px;">
-                <h4 style="margin-bottom: 12px;">🎯 Символы и призы</h4>
+                <h4 style="margin-bottom: 12px;">Символы и призы</h4>
                 <div class="symbols-list" id="symbolsList"></div>
                 <button class="btn-add-symbol" onclick="addSymbol()">+ Добавить символ</button>
             </div>
             
             <div class="scratch-stats">
-                <h4>📊 Статистика вероятностей</h4>
+                <h4>Статистика вероятностей</h4>
                 <div class="scratch-stats-grid" id="scratchStats"></div>
             </div>
         </div>
@@ -3322,7 +3318,7 @@ function updateScratchFreeHint(checked) {
     // Обновляем текст статуса
     const statusSpan = document.getElementById('scratchFreeHintStatus');
     if (statusSpan) {
-        statusSpan.textContent = checked ? '✅ Включена' : '⭕ Отключена';
+        statusSpan.textContent = checked ? 'Включена' : 'Отключена';
         statusSpan.style.color = checked ? '#2ecc71' : '#888';
     }
     
@@ -3364,7 +3360,7 @@ async function saveScratchSettings() {
         const data = await response.json();
         if (data.success) {
             showSaveIndicator();
-            console.log('✅ Scratch settings saved, maxPlaysPerDay:', scratchSettings.maxPlaysPerDay);
+            console.log('Scratch settings saved, maxPlaysPerDay:', scratchSettings.maxPlaysPerDay);
         }
     } catch (error) {
         console.error('Ошибка сохранения настроек скретч-карты:', error);
@@ -3435,7 +3431,7 @@ function renderDiceSettings() {
     container.innerHTML = `
         <div class="dice-settings-card">
             <div class="dice-header-settings">
-                <h3>🎲 Кости (Dice Roll)</h3>
+                <h3>Кости</h3>
                 <div class="toggle-switch">
                     <input type="checkbox" id="diceActive" ${diceSettings.active ? 'checked' : ''} onchange="toggleDiceActive(this.checked)">
                     <span>${diceSettings.active ? 'Активна' : 'Отключена'}</span>
@@ -3444,42 +3440,42 @@ function renderDiceSettings() {
             
             <div class="dice-settings-grid">
                 <div class="dice-setting-group">
-                    <label>💰 Стоимость игры (бонусов)</label>
+                    <label>Стоимость игры (бонусов)</label>
                     <input type="number" id="diceCost" value="${diceSettings.cost}" min="1" max="500" onchange="updateDiceCost(this.value)">
                 </div>
 				<div class="dice-setting-group">
-    <label>🔢 Максимум игр в день (0 – без ограничений)</label>
+    <label>Максимум игр в день (0 – без ограничений)</label>
     <input type="number" id="diceMaxPlays" value="${diceSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateDiceMaxPlays(this.value)">
 </div>
                 <div class="dice-setting-group">
-                    <label>💎 Базовый джекпот</label>
+                    <label>Базовый джекпот</label>
                     <input type="number" id="diceJackpotBase" value="${diceSettings.jackpotBase}" min="100" max="10000" onchange="updateDiceJackpotBase(this.value)">
                 </div>
                 <div class="dice-setting-group">
-                    <label>🎲 Шанс на джекпот (%)</label>
+                    <label>Шанс на джекпот (%)</label>
                     <input type="number" id="diceJackpotChance" value="${diceSettings.jackpotChance}" min="0" max="10" step="0.5" onchange="updateDiceJackpotChance(this.value)">
                     <small style="font-size: 10px; color: #666;">0.5 = 0.5% шанс</small>
                 </div>
                 <div class="dice-setting-group">
-                    <label>📈 Пополнение джекпота (%)</label>
+                    <label>Пополнение джекпота (%)</label>
                     <input type="number" id="diceJackpotContribution" value="${diceSettings.jackpotContribution}" min="0" max="50" onchange="updateDiceJackpotContribution(this.value)">
                     <small style="font-size: 10px; color: #666;">% от проигрыша в джекпот</small>
                 </div>
             </div>
             
             <div style="margin-top: 20px;">
-                <h4 style="margin-bottom: 12px;">⚡ Множители ставки</h4>
+                <h4 style="margin-bottom: 12px;">Множители ставки</h4>
                 <div class="multipliers-list" id="multipliersList"></div>
                 <button class="btn-add-multiplier" onclick="addMultiplier()">+ Добавить множитель</button>
             </div>
             
             <div style="margin-top: 20px;">
-                <h4 style="margin-bottom: 12px;">🎯 Комбинации и выигрыши</h4>
+                <h4 style="margin-bottom: 12px;">Комбинации и выигрыши</h4>
                 <div class="combinations-list" id="diceCombinationsList"></div>
             </div>
             
             <div class="dice-stats-info">
-                <h4>📊 Информация</h4>
+                <h4>Информация</h4>
                 <div class="dice-stats-grid" id="diceStatsInfo"></div>
             </div>
         </div>
@@ -3574,7 +3570,7 @@ function addMultiplier() {
                     color: white;
                     font-weight: 600;
                     cursor: pointer;
-                ">✅ Добавить</button>
+                ">Добавить</button>
                 <button id="cancelMultiplier" style="
                     flex: 1;
                     padding: 12px;
@@ -3584,7 +3580,7 @@ function addMultiplier() {
                     color: white;
                     font-weight: 600;
                     cursor: pointer;
-                ">❌ Отмена</button>
+                ">Отмена</button>
             </div>
         </div>
     `;
@@ -3610,13 +3606,13 @@ function addMultiplier() {
         }
         
         if (newMult > 50) {
-            alert('❌ Множитель не может быть больше 50');
+            alert('Множитель не может быть больше 50');
             return;
         }
         
         // Проверка на дубликат
         if (diceSettings.betMultipliers.includes(newMult)) {
-            alert(`❌ Множитель x${newMult} уже существует`);
+            alert(`Множитель x${newMult} уже существует`);
             return;
         }
         
@@ -3628,7 +3624,7 @@ function addMultiplier() {
         saveDiceSettingsDebounced();
         
         modal.remove();
-        alert(`✅ Множитель x${newMult} добавлен!`);
+        alert(`Множитель x${newMult} добавлен!`);
     };
     
     confirmBtn.onclick = addMultiplierValue;
@@ -3650,7 +3646,7 @@ function addMultiplier() {
 
 function removeMultiplier(index) {
     if (diceSettings.betMultipliers.length <= 1) {
-        alert('❌ Нельзя удалить последний множитель');
+        alert('Нельзя удалить последний множитель');
         return;
     }
     
@@ -3661,7 +3657,7 @@ function removeMultiplier(index) {
         diceSettings.betMultipliers.splice(index, 1);
         renderMultipliersList();
         saveDiceSettingsDebounced();
-        alert(`✅ Множитель x${multiplier} удалён`);
+        alert(`Множитель x${multiplier} удалён`);
     }
 }
 
@@ -3803,7 +3799,7 @@ async function saveDiceSettings() {
         const data = await response.json();
         if (data.success) {
             showSaveIndicator();
-            console.log('✅ Dice settings saved, maxPlaysPerDay:', diceSettings.maxPlaysPerDay);
+            console.log('Dice settings saved, maxPlaysPerDay:', diceSettings.maxPlaysPerDay);
         }
     } catch (error) {
         console.error('Ошибка сохранения настроек костей:', error);
@@ -3871,13 +3867,13 @@ function renderGiveawaysList() {
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px;">
                         <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background: ${giveaway.active && !isExpired ? '#e8f5e9' : '#ffebee'}; color: ${giveaway.active && !isExpired ? '#2e7d32' : '#c62828'};">
-                            ${giveaway.active && !isExpired ? '✅ Активен' : '❌ Неактивен'}
+                            ${giveaway.active && !isExpired ? 'Активен' : 'Неактивен'}
                         </span>
                         <button onclick="editGiveaway(${giveaway.id})" style="background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">
-                            ✏️
+                            
                         </button>
                         <button onclick="deleteGiveaway(${giveaway.id})" style="background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;">
-                            🗑️
+                            
                         </button>
                     </div>
                 </div>
@@ -4107,7 +4103,7 @@ async function loadBonusSettings() {
         
         if (data.success) {
             bonusSettings = data.settings;
-            console.log('✅ Настройки бонусов загружены:', bonusSettings);
+            console.log('Настройки бонусов загружены:', bonusSettings);
             renderBonusSettings();
         } else {
             console.error('Ошибка загрузки:', data);
@@ -4122,25 +4118,25 @@ async function loadBonusSettings() {
 function renderBonusSettings() {
     const container = document.getElementById('bonusSettingsContainer');
     if (!container) {
-        console.error('❌ Контейнер bonusSettingsContainer не найден в DOM!');
+        console.error('Контейнер bonusSettingsContainer не найден в DOM!');
         return;
     }
     
-    console.log('🎨 Рендерим настройки бонусов');
+    console.log('Рендерим настройки бонусов');
     
     container.innerHTML = `
         <div class="settings-card">
-            <h3>💰 Настройки бонусной системы</h3>
+            <h3>Настройки бонусной системы</h3>
             <div class="bonus-settings-description" style="margin-bottom: 20px; padding: 12px; background: #e8f5e9; border-radius: 12px;">
                 <p style="margin: 0; font-size: 13px; color: #2e7d32;">
-                    💡 Настройте параметры использования бонусов в вашей программе лояльности.
+                    Настройте параметры использования бонусов в вашей программе лояльности.
                     Процент начисления бонусов (кешбэк) настраивается в <strong>уровнях программы лояльности</strong>.
                 </p>
             </div>
             
             <div class="bonus-setting-row">
                 <div class="setting-info">
-                    <label>💱 Курс: 1 рубль = ? бонусов</label>
+                    <label>Курс: 1 рубль = ? бонусов</label>
                     <div class="setting-description">Сколько бонусов нужно потратить, чтобы оплатить 1 рубль</div>
                 </div>
                 <div class="setting-control">
@@ -4151,7 +4147,7 @@ function renderBonusSettings() {
             
             <div class="bonus-setting-row">
                 <div class="setting-info">
-                    <label>📊 Максимальный процент оплаты бонусами</label>
+                    <label>Максимальный процент оплаты бонусами</label>
                     <div class="setting-description">Какую часть стоимости заказа можно оплатить бонусами (0-100%)</div>
                 </div>
                 <div class="setting-control">
@@ -4162,7 +4158,7 @@ function renderBonusSettings() {
             
             <div class="bonus-setting-row">
                 <div class="setting-info">
-                    <label>💰 Минимальная сумма для начисления бонусов</label>
+                    <label>Минимальная сумма для начисления бонусов</label>
                     <div class="setting-description">Минимальная сумма покупки для получения бонусов</div>
                 </div>
                 <div class="setting-control">
@@ -4172,17 +4168,17 @@ function renderBonusSettings() {
             </div>
             
             <div class="bonus-preview" style="margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 12px;">
-                <h4 style="margin-bottom: 12px;">📱 Предпросмотр на странице кассира:</h4>
+                <h4 style="margin-bottom: 12px;">Предпросмотр на странице кассира:</h4>
                 <div style="background: white; padding: 16px; border-radius: 8px;">
                     <div style="margin-bottom: 8px;">
-                        <span style="color: #666;">💰 Списание бонусов:</span>
+                        <span style="color: #666;">Списание бонусов:</span>
                         <div style="font-size: 12px; color: #888; margin-top: 4px;">
-                            📌 1 ₽ = <strong id="previewRubToBonus">${bonusSettings.rubToBonus}</strong> бонусов
+                            1 ₽ = <strong id="previewRubToBonus">${bonusSettings.rubToBonus}</strong> бонусов
                         </div>
                     </div>
                     <div id="previewMaxPayment" style="margin-bottom: 8px;">
                         <div style="font-size: 12px; color: #888;">
-                            📌 Максимальный процент оплаты бонусами: <strong>${bonusSettings.maxBonusPaymentPercent}%</strong>
+                            Максимальный процент оплаты бонусами: <strong>${bonusSettings.maxBonusPaymentPercent}%</strong>
                         </div>
                         <div id="previewExample" style="font-size: 11px; color: #2ecc71; margin-top: 4px;">
                             Пример: при заказе на 1000₽ можно оплатить бонусами до ${Math.floor(1000 * bonusSettings.maxBonusPaymentPercent / 100)}₽ 
@@ -4190,7 +4186,7 @@ function renderBonusSettings() {
                         </div>
                     </div>
                     <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #eee; font-size: 12px; color: #9b59b6;">
-                        ⭐ <strong>Кешбэк (начисление):</strong> настраивается в уровнях лояльности
+                        <strong>Кешбэк (начисление):</strong> настраивается в уровнях лояльности
                         <div style="font-size: 11px; color: #888; margin-top: 4px;">
                             Пример: при кешбэке 10% и покупке на 1000₽ → начисляется 100 бонусов
                         </div>
@@ -4198,7 +4194,7 @@ function renderBonusSettings() {
                 </div>
             </div>
             
-            <button class="btn-save" onclick="saveBonusSettings()" style="margin-top: 20px; width: 100%;">💾 Сохранить настройки</button>
+            <button class="btn-save" onclick="saveBonusSettings()" style="margin-top: 20px; width: 100%;">Сохранить настройки</button>
         </div>
     `;
     
@@ -4280,7 +4276,7 @@ async function saveBonusSettings() {
         if (data.success) {
             bonusSettings = data.settings;
             showSaveIndicator();
-            alert('✅ Настройки бонусной системы сохранены!');
+            alert('Настройки бонусной системы сохранены!');
             renderBonusSettings();
         } else {
             alert('❌ Ошибка сохранения: ' + (data.message || 'Неизвестная ошибка'));
@@ -4359,9 +4355,9 @@ function renderAddressesList() {
                     ${addr.is_main ? '<span style="background: #2ecc71; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">Основной</span>' : ''}
                 </div>
                 <div style="font-size: 12px; color: #666; margin-top: 4px;">
-                    ${addr.city_name ? `🏙️ ${escapeHtml(addr.city_name)}` : '🌍 Без города'}
-                    ${addr.phone ? ` • 📞 ${addr.phone}` : ''}
-                    ${addr.working_hours ? ` • ⏰ ${addr.working_hours.substring(0, 50)}${addr.working_hours.length > 50 ? '...' : ''}` : ''}
+                    ${addr.city_name ? ` ${escapeHtml(addr.city_name)}` : 'Без города'}
+                    ${addr.phone ? ` •  ${addr.phone}` : ''}
+                    ${addr.working_hours ? ` • ${addr.working_hours.substring(0, 50)}${addr.working_hours.length > 50 ? '...' : ''}` : ''}
                 </div>
             </div>
             <div>
@@ -4388,7 +4384,7 @@ function editCity(cityId) {
     if (!city) return;
     
     currentEditingCityId = cityId;
-    document.getElementById('cityModalTitle').textContent = '✏️ Редактировать город';
+    document.getElementById('cityModalTitle').textContent = 'Редактировать город';
     document.getElementById('cityName').value = city.name;
     document.getElementById('citySortOrder').value = city.sort_order || 0;
     document.getElementById('cityModal').style.display = 'flex';
@@ -4478,7 +4474,7 @@ function editAddress(addressId) {
     if (!address) return;
     
     currentEditingAddressId = addressId;
-    document.getElementById('addressModalTitle').textContent = '✏️ Редактировать адрес';
+    document.getElementById('addressModalTitle').textContent = 'Редактировать адрес';
     
     const citySelect = document.getElementById('addressCityId');
     citySelect.innerHTML = '<option value="">-- Без города --</option>' + 
@@ -4577,12 +4573,12 @@ async function saveCashierCredentials() {
     }
     
     if (password !== passwordConfirm) {
-        showCashierStatus('❌ Пароли не совпадают', 'error');
+        showCashierStatus('Пароли не совпадают', 'error');
         return;
     }
     
     if (password.length < 4) {
-        showCashierStatus('❌ Пароль должен быть не менее 4 символов', 'error');
+        showCashierStatus('Пароль должен быть не менее 4 символов', 'error');
         return;
     }
     
@@ -4596,16 +4592,16 @@ async function saveCashierCredentials() {
         const data = await response.json();
         
         if (data.success) {
-            showCashierStatus('✅ Данные кассира успешно сохранены!', 'success');
+            showCashierStatus('Данные кассира успешно сохранены!', 'success');
             // Clear password fields
             document.getElementById('cashierPassword').value = '';
             document.getElementById('cashierPasswordConfirm').value = '';
         } else {
-            showCashierStatus('❌ ' + (data.message || 'Ошибка сохранения'), 'error');
+            showCashierStatus((data.message || 'Ошибка сохранения'), 'error');
         }
     } catch (error) {
         console.error('Ошибка сохранения данных кассира:', error);
-        showCashierStatus('❌ Ошибка подключения к серверу', 'error');
+        showCashierStatus('Ошибка подключения к серверу', 'error');
     }
 }
 
@@ -4822,7 +4818,7 @@ async function saveGreetingSettings() {
         console.log('Response data:', data);
         
         if (data.success) {
-            showGreetingStatus('✅ Настройки успешно сохранены!', 'success');
+            showGreetingStatus('Настройки успешно сохранены!', 'success');
             updateGreetingPreview();
         } else {
             console.error('Server error:', data);

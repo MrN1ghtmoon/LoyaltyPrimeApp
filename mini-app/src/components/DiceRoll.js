@@ -420,14 +420,7 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
             
             <div className="dice-header">
                 <div className="dice-title">
-                    <span className="dice-main-emoji">🎲</span>
-                    <h3>Кости: Премиум</h3>
-                </div>
-                <div className="dice-stats-panel">
-                    <div className="jackpot-display">
-                        <span className="jackpot-icon">💎</span>
-                        <span className="jackpot-value">{jackpot.toLocaleString()}</span>
-                    </div>
+                    <h3>КОСТИ: ПРЕМИУМ</h3>
                 </div>
             </div>
             
@@ -451,7 +444,7 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
                 </div>
                 {settings.maxPlaysPerDay > 0 && playsToday !== null && (
                     <div className="remaining-plays" style={{ fontSize: '11px', color: '#aaa', marginTop: '8px', textAlign: 'center' }}>
-                        🎲 Игр сегодня: {playsToday} / {settings.maxPlaysPerDay}
+                        Игр сегодня: {playsToday} / {settings.maxPlaysPerDay}
                     </div>
                 )}
             </div>
@@ -481,9 +474,9 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
                     disabled={playsToday === null || isRolling || userBalance < settings.cost * betMultiplier || limitReached}
                 >
                     {isRolling ? (
-                        <><span className="spinner-icon">🎲</span> Бросаем...</>
+                        <><span className="spinner-icon"></span> Бросаем...</>
                     ) : (
-                        <><span className="roll-icon">🎲</span> Бросить кости!</>
+                        <><span className="roll-icon"></span> Бросить кости!</>
                     )}
                 </button>
             </div>
@@ -515,7 +508,7 @@ export function DiceRoll({ onBalanceUpdate, userBalance, companyId, userId, comp
                     className="combinations-toggle"
                     onClick={() => setShowCombinations(!showCombinations)}
                 >
-                    {showCombinations ? '📋 Скрыть комбинации' : '📖 Показать все комбинации'}
+                    {showCombinations ? 'Скрыть комбинации' : 'Показать все комбинации'}
                 </button>
                 
                 {showCombinations && (

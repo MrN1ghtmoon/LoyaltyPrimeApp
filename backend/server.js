@@ -111,24 +111,6 @@ app.use(express.static('crm-panel'));
 const multer = require('multer');
 const path = require('path');
 
-// Настройка хранилища multer
-const storage = multer.diskStorage({
-    destination: './uploads/',
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB
-
-// Статическая раздача загруженных файлов
-app.use('/uploads', express.static('uploads'));
-
-// Эндпоинт для загрузки изображений (возвращает URL)
-app.post('/api/upload', upload.single('image'), (req, res) => {
-    if (!req.file) return res.status(400).json({ success: false, message: 'Файл не загружен' });
-    res.json({ success: true, url: `/uploads/${req.file.filename}` });
-});
-
 app.use((req, res, next) => {
     console.log(`📨 ${req.method} ${req.url}`);
     next();
@@ -152,7 +134,7 @@ async function createDefaultCampaignsForCompany(companyId) {
             {
                 name: '🎂 Поздравление с днем рождения',
                 title: 'С днем рождения! 🎉🎂',
-                message: 'Поздравляем вас с днем рождения! В честь вашего праздника дарим вам удвоенные бонусы! Желаем счастья и здоровья! 🎈🎁',
+                message: 'Поздравляем вас с днем рождения! Желаем счастья и здоровья! 🎈🎁',
                 audience: 'birthday',
                 is_active: false, // По умолчанию выключена
                 interval_days: 1,
@@ -184,19 +166,6 @@ async function createDefaultCampaignsForCompany(companyId) {
 // ============ HEALTH CHECK ============
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend работает на PostgreSQL!' });
-});
-
-app.put('/api/companies/:companyId/logo', upload.single('logo'), async (req, res) => {
-    try {
-        const companyId = parseInt(req.params.companyId);
-        if (!req.file) return res.status(400).json({ success: false, message: 'Файл не загружен' });
-        const logoUrl = `/uploads/${req.file.filename}`;
-        await query('UPDATE companies SET logo_url = $1 WHERE id = $2', [logoUrl, companyId]);
-        res.json({ success: true, logoUrl });
-    } catch (error) {
-        console.error('Ошибка загрузки логотипа:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
 });
 
 // ============ API ДЛЯ КОМПАНИЙ ============
