@@ -300,7 +300,7 @@ const saveSelectedLocation = async (addressId) => {
         if (data.success) {
             await loadUserSelectedLocation();
             setShowLocationSelector(false);
-            showModal('📍 Адрес сохранен', 'Ваш адрес выбран. При следующем посещении он будет использоваться по умолчанию.');
+            showModal('Адрес сохранен', 'Ваш адрес выбран. При следующем посещении он будет использоваться по умолчанию.');
         }
     } catch (error) {
         console.error('Ошибка сохранения локации:', error);
@@ -796,7 +796,8 @@ useEffect(() => {
       description: company.description,
       greetingEmoji: '👋', // Default, will be updated from CRM
       greetingText: 'Добро пожаловать!', // Default, will be updated from CRM
-      fullGreetingText: '' // Default, will be updated from CRM
+      fullGreetingText: '', // Default, will be updated from CRM
+      miniAppActive: true // По умолчанию активно
     });
     
     // Загружаем настройки приветствия
@@ -825,21 +826,44 @@ useEffect(() => {
       console.error('Ошибка загрузки приветствия:', error);
     }
     
-	// Загружаем часовой пояс компании
-try {
-  const tzResp = await fetch(`${API_URL}/api/companies/${company.id}/timezone`);
-  const tzData = await tzResp.json();
-  const timezoneOffset = tzData.success ? tzData.timezoneOffset : 0;
-  setSelectedGroup(prev => ({ ...prev, timezoneOffset }));
-} catch (e) {
-  console.error('Ошибка загрузки timezone:', e);
-}
-	
+    // Загружаем часовой пояс компании
+    try {
+      const tzResp = await fetch(`${API_URL}/api/companies/${company.id}/timezone`);
+      const tzData = await tzResp.json();
+      const timezoneOffset = tzData.success ? tzData.timezoneOffset : 0;
+      setSelectedGroup(prev => ({ ...prev, timezoneOffset }));
+    } catch (e) {
+      console.error('Ошибка загрузки timezone:', e);
+    }
+    
+    // ✅ ДОБАВЬТЕ ЭТОТ БЛОК - ПРОВЕРКА СТАТУСА MINI APP
+    try {
+      const statusResponse = await fetch(`${API_URL}/api/companies/${company.id}/mini-app-status`);
+      const statusData = await statusResponse.json();
+      
+      if (statusData.success) {
+        setSelectedGroup(prev => ({ 
+          ...prev, 
+          miniAppActive: statusData.mini_app_active 
+        }));
+        
+        // Если приложение отключено, показываем сообщение и не переходим в профиль
+        if (!statusData.mini_app_active) {
+          showModal('Временно недоступно', 'Приложение отключено администратором. Пожалуйста, зайдите позже.');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка проверки статуса Mini App:', error);
+      // По умолчанию считаем, что приложение активно
+      setSelectedGroup(prev => ({ ...prev, miniAppActive: true }));
+    }
+    
     if (userInfo?.id) {
       await loadUserData(company.id, userInfo.id, `${userInfo.first_name} ${userInfo.last_name}`);
     }
     setStep('profile');
-  };
+};
 
   const getInitials = (firstName, lastName) => {
     if (firstName && lastName) return (firstName[0] + lastName[0]).toUpperCase();
@@ -1209,21 +1233,60 @@ if (step === 'selectGroup') {
         padding: '8px',
         borderTop: '1px solid rgba(255,255,255,0.1)'
       }}>
-        📍 Всего заведений: {availableCompanies.length}
+        Всего заведений: {availableCompanies.length}
       </div>
     </div>
   );
 }
 
 
-  const currentGroupData = getCurrentGroupData();
+const currentGroupData = getCurrentGroupData();
 const currentBalance = currentGroupData?.bonusBalance || 0;
 const currentSpent = currentGroupData?.totalSpent || 0;     
 const currentTier = getCurrentTierBySpent(currentSpent);    
 const nextTier = getNextTierBySpent(currentSpent);          
 const progressToNext = getProgressToNextTier(currentSpent); 
   
-
+if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false) {
+    return (
+        <div style={{ 
+            maxWidth: 500, 
+            margin: '0 auto', 
+            padding: '40px 20px', 
+            background: '#1a1f2e', 
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center'
+        }}>
+            <div style={{ fontSize: '64px', marginBottom: '24px' }}>🔧</div>
+            <h2 style={{ color: '#ffd966', fontSize: '24px', marginBottom: '12px' }}>Временно недоступно</h2>
+            <p style={{ color: 'white', opacity: 0.8, fontSize: '16px', marginBottom: '8px' }}>
+                Приложение временно отключено администратором.
+            </p>
+            <p style={{ color: '#aaa', fontSize: '14px' }}>
+                Пожалуйста, зайдите позже.
+            </p>
+            <button 
+                onClick={() => setStep('selectGroup')}
+                style={{
+                    marginTop: '32px',
+                    padding: '12px 24px',
+                    background: selectedGroup?.color || '#ff4d4d',
+                    border: 'none',
+                    borderRadius: '30px',
+                    color: 'white',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                }}
+            >
+                ← Выбрать другое заведение
+            </button>
+        </div>
+    );
+}
   return (
     <div style={{ maxWidth:500, margin:'0 auto', padding:'20px 16px 30px', background:'#1a1f2e', minHeight:'100vh' }}>
       <header style={{ background:`linear-gradient(135deg, ${selectedGroup?.color}40, rgba(30,35,48,0.9))`, borderRadius:28, padding:20, marginBottom:20, border:`1px solid ${selectedGroup?.color}60` }}>
@@ -1411,7 +1474,6 @@ const progressToNext = getProgressToNextTier(currentSpent);
             onClick={() => setShowLocationSelector(true)}
         >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 24 }}>📍</span>
                 <div style={{ flex: 1 }}>
                     {selectedLocation.city && (
                         <div style={{ fontSize: 13, opacity: 0.7, color: 'white' }}>
@@ -1424,7 +1486,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
                     </div>
                     {selectedLocation.phone && (
                         <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, color: 'white' }}>
-                            📞 {selectedLocation.phone}
+                            {selectedLocation.phone}
                         </div>
                     )}
                 </div>
@@ -1435,7 +1497,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
     {/* Блок с активными акциями на главной */}
     {promotions.length > 0 && (
       <div style={{ background:'rgba(30,35,48,0.7)', borderRadius:28, padding:20, marginTop:20 }}>
-        <h3 style={{ fontSize:18, marginBottom:12, color:'white' }}>🎁 Активные акции</h3>
+        <h3 style={{ fontSize:18, marginBottom:12, color:'white' }}>Активные акции</h3>
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {promotions.slice(0, 3).map(offer => {
             const endDate = adjustDateToLocal(offer.end_date, selectedGroup?.timezoneOffset || 0);
@@ -1487,12 +1549,12 @@ const progressToNext = getProgressToNextTier(currentSpent);
                         fontWeight: 500,
                         fontFamily: totalHours > 0 ? 'inherit' : 'monospace'
                       }}>
-                        ⏰ Осталось: {timeLeftText}
+                        Осталось: {timeLeftText}
                       </div>
                     )}
                     {!showTimeLeft && (
                       <div style={{ fontSize:11, color: '#e74c3c', marginTop:4, fontWeight: 500 }}>
-                        ❌ {timeLeftText}
+                        {timeLeftText}
                       </div>
                     )}
                   </div>
@@ -1526,7 +1588,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
         <div style={{ background:'linear-gradient(135deg,#1e2538,#131825)', borderRadius:32, maxWidth:500, width:'100%', maxHeight:'80vh', overflow:'auto', position:'relative' }} onClick={e=>e.stopPropagation()}>
             <div style={{ padding:24 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-                    <h3 style={{ color:'white', fontSize:20 }}>📍 Выберите адрес</h3>
+                    <h3 style={{ color:'white', fontSize:20 }}>Выберите адрес</h3>
                     <button onClick={() => setShowLocationSelector(false)} style={{ background:'none', border:'none', fontSize:24, color:'white', cursor:'pointer' }}>✕</button>
                 </div>
                 
@@ -1539,7 +1601,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
                             return (
                                 <div key={city.id} style={{ marginBottom: 24 }}>
                                     <h4 style={{ color: '#ffd966', fontSize: 16, marginBottom: 12, paddingLeft: 8 }}>
-                                        🏙️ {city.name}
+                                        {city.name}
                                     </h4>
                                     {cityAddresses.map(addr => (
                                         <div 
@@ -1555,17 +1617,17 @@ const progressToNext = getProgressToNextTier(currentSpent);
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                <span style={{ fontSize: 20 }}>{addr.is_main ? '⭐' : '📍'}</span>
+                                                <span style={{ fontSize: 20 }}>{addr.is_main ? '⭐' : ''}</span>
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ color: 'white', fontWeight: 500 }}>{addr.address}</div>
                                                     {addr.phone && (
                                                         <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, color: 'white' }}>
-                                                            📞 {addr.phone}
+                                                            {addr.phone}
                                                         </div>
                                                     )}
                                                     {addr.working_hours && (
                                                         <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2, color: 'white' }}>
-                                                            ⏰ {addr.working_hours}
+                                                            {addr.working_hours}
                                                         </div>
                                                     )}
                                                 </div>
@@ -1584,7 +1646,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
                 {/* Адреса без города */}
                 {locations?.addresses?.filter(a => !a.city_id).length > 0 && (
                     <div>
-                        <h4 style={{ color: '#ffd966', fontSize: 16, marginBottom: 12, paddingLeft: 8 }}>📍 Другие адреса</h4>
+                        <h4 style={{ color: '#ffd966', fontSize: 16, marginBottom: 12, paddingLeft: 8 }}>Другие адреса</h4>
                         {locations.addresses.filter(a => !a.city_id).map(addr => (
                             <div 
                                 key={addr.id}
@@ -1599,10 +1661,9 @@ const progressToNext = getProgressToNextTier(currentSpent);
                                 }}
                             >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    <span style={{ fontSize: 20 }}>📍</span>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ color: 'white', fontWeight: 500 }}>{addr.address}</div>
-                                        {addr.phone && <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, color: 'white' }}>📞 {addr.phone}</div>}
+                                        {addr.phone && <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, color: 'white' }}>{addr.phone}</div>}
                                     </div>
                                     {selectedLocation?.addressId === addr.id && <div style={{ color: '#2ecc71', fontSize: 20 }}>✓</div>}
                                 </div>
@@ -1613,7 +1674,6 @@ const progressToNext = getProgressToNextTier(currentSpent);
                 
                 {(!locations?.cities || locations.cities.length === 0) && (!locations?.addresses || locations.addresses.length === 0) && (
                     <div style={{ textAlign: 'center', padding: 40, opacity: 0.6, color: 'white' }}>
-                        <div style={{ fontSize: 48, marginBottom: 12 }}>📍</div>
                         <div>Нет доступных адресов</div>
                         <div style={{ fontSize: 12, marginTop: 8, opacity: 0.5 }}>Обратитесь к администратору</div>
                     </div>
@@ -2152,7 +2212,7 @@ const progressToNext = getProgressToNextTier(currentSpent);
                     }} 
                     style={{ width:'100%', padding:12, background:'#ffd966', border:'none', borderRadius:12, color:'#1a1f2e', fontWeight:600, cursor:'pointer', marginBottom:8 }}
                   >
-                    💾 Сохранить дату
+                    Сохранить дату
                   </button>
                   <button onClick={() => setShowBirthdayModal(false)} style={{ width:'100%', padding:12, background:'rgba(255,255,255,0.1)', border:'none', borderRadius:12, color:'white', fontWeight:600, cursor:'pointer' }}>
                     Отмена

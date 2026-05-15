@@ -452,7 +452,7 @@ async function loadCRMPanel() {
             <div class="business-email">${escapeHtml(currentBusiness.email || '')}</div>
         `;
     }
-    
+    await loadMiniAppStatus();	
     await loadPresetQuests();
     await loadPromotionsAndQuestsFromDB();
     await loadGiveaways();
@@ -465,7 +465,8 @@ async function loadCRMPanel() {
     await loadCampaigns();
     await loadBonusSettings();
 	await loadTimezone();
-	await loadCashierCredentials();	
+	await loadCashierCredentials();
+	
 }
 
 function closeCRMPanel() {
@@ -2780,6 +2781,21 @@ document.addEventListener('DOMContentLoaded', () => {
 // Добавьте эти функции в script.js
 
 // ========== НАСТРОЙКА КОЛЕСА ФОРТУНЫ ==========
+
+// ✅ ОТДЕЛЬНЫЙ МАССИВ ИКОНОК ДЛЯ КОЛЕСА
+const WHEEL_ICONS = ['⭐', '🎯', '🔥', '💀', '✨', '🍀', '💎', '🏆', '🎲', '💰', '🎁', '🍕', '🍔', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍷', '🍺', '🍻', '🥂', '🥤', '🍸', '🍹', '🍾', '🪙', '💸', '💵', '💶', '💷', '💴', '👑', '⭐', '🌟', '✨', '⚡', '🔥', '💧', '❄️', '🌈', '☀️', '🌙', '🌍', '🎈', '🎉', '🎊', '🎁', '🏅', '🥇', '🥈', '🥉', '🏆', '🎯', '🎲', '🎰', '🎮', '🕹️', '🎪', '🎡', '🎢', '🎠', '🎭', '🎨', '🎬', '🎤', '🎧', '🎸', '🎹', '🎺', '🎻', '🥁', '📱', '💻', '⌚', '📷', '🔋', '💡', '🔦', '📚', '🔑', '🔒', '🔓', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '💝', '💖', '💗', '💓', '💞', '💕', '💟', '❣️', '💋', '👑', '👒', '🎩', '🧢', '👓', '🕶️'];
+
+// ✅ ОТДЕЛЬНЫЕ ЦВЕТА ДЛЯ КОЛЕСА
+function getWheelRandomColor() {
+    const colors = ['#2ecc71', '#3498db', '#e74c3c', '#f39c12', '#1abc9c', '#9b59b6', '#e67e22', '#95a5a6', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9', '#74b9ff', '#a29bfe', '#fd79a8', '#e84393', '#6c5ce7', '#00b894', '#00cec9', '#0984e3', '#6ab04c', '#f9ca24', '#eb4d4b'];
+    return colors[Math.floor(Math.random() * colors.length)];
+}
+
+// ✅ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ОПЦИЙ ИКОНОК ДЛЯ КОЛЕСА
+function getWheelIconOptions(selectedIcon) {
+    return WHEEL_ICONS.map(icon => `<option value="${icon}" ${selectedIcon === icon ? 'selected' : ''}>${icon}</option>`).join('');
+}
+
 let wheelSettings = {
     spinCost: 25,
     sectors: [
@@ -2794,7 +2810,7 @@ let wheelSettings = {
     ],
     maxSpinsPerDay: 10,
     freeSpinDaily: false,
-	maxPlaysPerDay: 0,
+    maxPlaysPerDay: 0,
     active: true
 };
 
@@ -2813,9 +2829,9 @@ async function loadWheelSettings() {
                 sectors: data.settings.sectors || wheelSettings.sectors,
                 maxSpinsPerDay: data.settings.maxSpinsPerDay || 10,
                 freeSpinDaily: data.settings.freeSpinDaily || false,
-				maxPlaysPerDay: data.settings.maxPlaysPerDay || 0
+                maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
+                active: data.active !== false
             };
-            wheelSettings.active = data.active;
         }
     } catch (error) {
         console.error('Ошибка загрузки настроек колеса:', error);
@@ -2837,7 +2853,9 @@ function renderWheelSettings() {
                 <h3>Колесо фортуны</h3>
                 <div class="toggle-switch">
                     <input type="checkbox" id="wheelActive" ${wheelSettings.active ? 'checked' : ''} onchange="toggleWheelActive(this.checked)">
-                    <span>${wheelSettings.active ? 'Активно' : 'Отключено'}</span>
+                    <span id="wheelActiveStatus" style="color: ${wheelSettings.active ? '#2ecc71' : '#888'}">
+                        ${wheelSettings.active ? 'Активно' : 'Отключено'}
+                    </span>
                 </div>
             </div>
             
@@ -2911,10 +2929,8 @@ function renderSectorsList() {
                     <input type="color" value="${sector.color}" onchange="updateSector(${idx}, 'color', this.value)" style="width: 50px; height: 32px;">
                 </div>
                 <div class="sector-field">
-                    <label>Иконка</label>
-                    <select onchange="updateSector(${idx}, 'icon', this.value)" style="width: 60px;">
-                        ${getIconOptions(sector.icon)}
-                    </select>
+                    <label>Смайлик</label>
+                    <input type="text" value="${sector.icon}" onchange="updateSector(${idx}, 'icon', this.value)" maxlength="2" style="width: 50px; text-align: center; font-size: 20px;" placeholder="😀">
                 </div>
             </div>
             <button class="sector-remove" onclick="removeSector(${idx})" ${wheelSettings.sectors.length <= 3 ? 'disabled style="opacity:0.5"' : ''}>🗑️</button>
@@ -2957,11 +2973,7 @@ function renderWheelStats() {
     }
 }
 
-function getIconOptions(selectedIcon) {
-    const icons = ['🔰','🥉','🥈','🥇','💎', '🏆'];
-    return icons.map(icon => `<option value="${icon}" ${selectedIcon === icon ? 'selected' : ''}>${icon}</option>`).join('');
-}
-
+// ✅ ОБНОВЛЕННАЯ ФУНКЦИЯ updateSector с сохранением
 function updateSector(index, field, value) {
     if (wheelSettings.sectors[index]) {
         wheelSettings.sectors[index][field] = value;
@@ -2971,13 +2983,14 @@ function updateSector(index, field, value) {
     }
 }
 
+// ✅ ОБНОВЛЕННАЯ ФУНКЦИЯ addSector
 function addSector() {
     const newSector = {
         name: `x${wheelSettings.sectors.length + 1}`,
         value: wheelSettings.sectors.length + 1,
         multiplier: wheelSettings.sectors.length + 1,
-        color: getRandomColor(),
-        icon: '🎲',
+        color: getWheelRandomColor(),
+        icon: '🎲',  
         weight: 10
     };
     wheelSettings.sectors.push(newSector);
@@ -2986,6 +2999,7 @@ function addSector() {
     saveWheelSettingsDebounced();
 }
 
+// ✅ ОБНОВЛЕННАЯ ФУНКЦИЯ removeSector
 function removeSector(index) {
     if (wheelSettings.sectors.length <= 3) {
         alert('❌ Нельзя удалить сектор. Минимум 3 сектора');
@@ -2999,10 +3013,7 @@ function removeSector(index) {
     }
 }
 
-function getRandomColor() {
-    const colors = ['#2ecc71', '#3498db', '#e74c3c', '#f39c12', '#1abc9c', '#9b59b6', '#e67e22', '#95a5a6'];
-    return colors[Math.floor(Math.random() * colors.length)];
-}
+// ✅ УДАЛИ СТАРУЮ getRandomColor и используй getWheelRandomColor
 
 function updateWheelSpinCost(value) {
     wheelSettings.spinCost = parseInt(value) || 25;
@@ -3018,7 +3029,6 @@ function updateWheelMaxPlays(value) {
 function updateWheelFreeSpin(checked) {
     wheelSettings.freeSpinDaily = checked;
     
-    // Обновляем текст статуса
     const statusSpan = document.getElementById('wheelFreeSpinStatus');
     if (statusSpan) {
         statusSpan.textContent = checked ? 'Включена' : 'Отключена';
@@ -3030,6 +3040,18 @@ function updateWheelFreeSpin(checked) {
 
 function toggleWheelActive(active) {
     wheelSettings.active = active;
+    
+    const statusSpan = document.getElementById('wheelActiveStatus');
+    if (statusSpan) {
+        statusSpan.textContent = active ? 'Активно' : 'Отключено';
+        statusSpan.style.color = active ? '#2ecc71' : '#888';
+    }
+    
+    const checkbox = document.getElementById('wheelActive');
+    if (checkbox && checkbox.checked !== active) {
+        checkbox.checked = active;
+    }
+    
     saveWheelSettingsDebounced();
 }
 
@@ -3061,6 +3083,7 @@ async function saveWheelSettings() {
         const data = await response.json();
         if (data.success) {
             showSaveIndicator();
+            console.log('✅ Wheel settings saved, active:', wheelSettings.active);
         }
     } catch (error) {
         console.error('Ошибка сохранения настроек колеса:', error);
@@ -3070,11 +3093,22 @@ async function saveWheelSettings() {
 async function saveAllGameSettings() {
     await saveWheelSettings();
     await saveScratchSettings();
-	await saveDiceSettings();
+    await saveDiceSettings();
     alert('Все настройки игр сохранены!');
 }
 
 // ========== НАСТРОЙКА СКРЕТЧ-КАРТЫ ==========
+function getScratchRandomColor() {
+    const colors = [
+        '#e74c3c', '#f1c40f', '#e67e22', '#2ecc71', '#3498db', '#9b59b6', 
+        '#1abc9c', '#e84393', '#6c5ce7', '#00b894', '#00cec9', '#0984e3', 
+        '#6ab04c', '#f9ca24', '#eb4d4b', '#f0932b', '#badc58', '#a29bfe', 
+        '#fd79a8', '#d63031', '#e17055', '#55efc4', '#81ecec', '#74b9ff', 
+        '#dfe6e9', '#b2bec3', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', 
+        '#ffeaa7', '#fdcb6e', '#e17055', '#d63031'
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+}
 let scratchSettings = {
     cost: 20,
     maxAttempts: 3,
@@ -3135,7 +3169,9 @@ function renderScratchSettings() {
                 <h3>Скретч-карта (Найди 3 одинаковых)</h3>
                 <div class="toggle-switch">
                     <input type="checkbox" id="scratchActive" ${scratchSettings.active ? 'checked' : ''} onchange="toggleScratchActive(this.checked)">
-                    <span>${scratchSettings.active ? 'Активна' : 'Отключена'}</span>
+                    <span id="scratchActiveStatus" style="color: ${scratchSettings.active ? '#2ecc71' : '#888'}">
+                        ${scratchSettings.active ? 'Активна' : 'Отключена'}
+                    </span>
                 </div>
             </div>
             
@@ -3144,10 +3180,10 @@ function renderScratchSettings() {
                     <label>Стоимость игры (бонусов)</label>
                     <input type="number" id="scratchCost" value="${scratchSettings.cost}" min="1" max="500" onchange="updateScratchCost(this.value)">
                 </div>
-				<div class="scratch-setting-group">
-    <label>Максимум игр в день (0 – без ограничений)</label>
-    <input type="number" id="scratchMaxPlays" value="${scratchSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateScratchMaxPlays(this.value)">
-</div>
+                <div class="scratch-setting-group">
+                    <label>Максимум игр в день (0 – без ограничений)</label>
+                    <input type="number" id="scratchMaxPlays" value="${scratchSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateScratchMaxPlays(this.value)">
+                </div>
                 <div class="scratch-setting-group">
                     <label>Стоимость подсказки (бонусов)</label>
                     <input type="number" id="scratchHintCost" value="${scratchSettings.hintCost}" min="0" max="100" onchange="updateScratchHintCost(this.value)">
@@ -3268,7 +3304,7 @@ function addSymbol() {
         name: `Символ ${scratchSettings.symbols.length + 1}`,
         value: 50,
         multiplier: 5,
-        color: getRandomColor(),
+        color: getScratchRandomColor(),
         prob: 10
     };
     scratchSettings.symbols.push(newSymbol);
@@ -3326,7 +3362,22 @@ function updateScratchFreeHint(checked) {
 }
 
 function toggleScratchActive(active) {
+    console.log('🔄 Scratch toggled to:', active);
     scratchSettings.active = active;
+    
+    // ✅ Обновляем текст статуса сразу
+    const statusSpan = document.getElementById('scratchActiveStatus');
+    if (statusSpan) {
+        statusSpan.textContent = active ? 'Включена' : 'Отключена';
+        statusSpan.style.color = active ? '#2ecc71' : '#888';
+    }
+    
+    // ✅ Обновляем сам чекбокс (на всякий случай)
+    const checkbox = document.getElementById('scratchActive');
+    if (checkbox && checkbox.checked !== active) {
+        checkbox.checked = active;
+    }
+    
     saveScratchSettingsDebounced();
 }
 
@@ -3351,7 +3402,7 @@ async function saveScratchSettings() {
                     symbols: scratchSettings.symbols,
                     hintCost: scratchSettings.hintCost,
                     freeHintDaily: scratchSettings.freeHintDaily,
-                    maxPlaysPerDay: scratchSettings.maxPlaysPerDay || 0  // ← ДОБАВЛЯЕМ ЭТУ СТРОКУ
+                    maxPlaysPerDay: scratchSettings.maxPlaysPerDay || 0  
                 },
                 active: scratchSettings.active
             })
@@ -3366,7 +3417,6 @@ async function saveScratchSettings() {
         console.error('Ошибка сохранения настроек скретч-карты:', error);
     }
 }
-// Добавьте в script.js после функций для скретч-карты
 
 // ========== НАСТРОЙКА ИГРЫ В КОСТИ ==========
 let diceSettings = {
@@ -3434,7 +3484,9 @@ function renderDiceSettings() {
                 <h3>Кости</h3>
                 <div class="toggle-switch">
                     <input type="checkbox" id="diceActive" ${diceSettings.active ? 'checked' : ''} onchange="toggleDiceActive(this.checked)">
-                    <span>${diceSettings.active ? 'Активна' : 'Отключена'}</span>
+                    <span id="diceActiveStatus" style="color: ${diceSettings.active ? '#2ecc71' : '#888'}">
+                        ${diceSettings.active ? 'Активна' : 'Отключена'}
+                    </span>
                 </div>
             </div>
             
@@ -3443,23 +3495,9 @@ function renderDiceSettings() {
                     <label>Стоимость игры (бонусов)</label>
                     <input type="number" id="diceCost" value="${diceSettings.cost}" min="1" max="500" onchange="updateDiceCost(this.value)">
                 </div>
-				<div class="dice-setting-group">
-    <label>Максимум игр в день (0 – без ограничений)</label>
-    <input type="number" id="diceMaxPlays" value="${diceSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateDiceMaxPlays(this.value)">
-</div>
                 <div class="dice-setting-group">
-                    <label>Базовый джекпот</label>
-                    <input type="number" id="diceJackpotBase" value="${diceSettings.jackpotBase}" min="100" max="10000" onchange="updateDiceJackpotBase(this.value)">
-                </div>
-                <div class="dice-setting-group">
-                    <label>Шанс на джекпот (%)</label>
-                    <input type="number" id="diceJackpotChance" value="${diceSettings.jackpotChance}" min="0" max="10" step="0.5" onchange="updateDiceJackpotChance(this.value)">
-                    <small style="font-size: 10px; color: #666;">0.5 = 0.5% шанс</small>
-                </div>
-                <div class="dice-setting-group">
-                    <label>Пополнение джекпота (%)</label>
-                    <input type="number" id="diceJackpotContribution" value="${diceSettings.jackpotContribution}" min="0" max="50" onchange="updateDiceJackpotContribution(this.value)">
-                    <small style="font-size: 10px; color: #666;">% от проигрыша в джекпот</small>
+                    <label>Максимум игр в день (0 – без ограничений)</label>
+                    <input type="number" id="diceMaxPlays" value="${diceSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateDiceMaxPlays(this.value)">
                 </div>
             </div>
             
@@ -3748,23 +3786,22 @@ function updateDiceMaxPlays(value) {
     saveDiceSettingsDebounced();
 }
 
-function updateDiceJackpotBase(value) {
-    diceSettings.jackpotBase = parseInt(value) || 1000;
-    saveDiceSettingsDebounced();
-}
-
-function updateDiceJackpotChance(value) {
-    diceSettings.jackpotChance = parseFloat(value) || 1;
-    saveDiceSettingsDebounced();
-}
-
-function updateDiceJackpotContribution(value) {
-    diceSettings.jackpotContribution = parseInt(value) || 10;
-    saveDiceSettingsDebounced();
-}
-
 function toggleDiceActive(active) {
     diceSettings.active = active;
+    
+    // ✅ Обновляем текст статуса сразу
+    const statusSpan = document.getElementById('diceActiveStatus');
+    if (statusSpan) {
+        statusSpan.textContent = active ? 'Активна' : 'Отключена';
+        statusSpan.style.color = active ? '#2ecc71' : '#888';
+    }
+    
+    // ✅ Обновляем сам чекбокс
+    const checkbox = document.getElementById('diceActive');
+    if (checkbox && checkbox.checked !== active) {
+        checkbox.checked = active;
+    }
+    
     saveDiceSettingsDebounced();
 }
 
@@ -4839,6 +4876,128 @@ function showGreetingStatus(message, type) {
     
     setTimeout(() => {
         statusEl.innerHTML = '';
+    }, 3000);
+}
+
+// Загрузка статуса Mini App
+async function loadMiniAppStatus() {
+    if (!currentBusiness) return;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/mini-app-status`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const isActive = data.mini_app_active;
+            const toggle = document.getElementById('miniAppToggle');
+            const statusText = document.getElementById('miniAppStatusText');
+            const warningDiv = document.getElementById('miniAppWarning');
+            
+            if (toggle) {
+                toggle.checked = isActive;
+            }
+            
+            if (statusText) {
+                statusText.textContent = isActive ? '✅ Включен' : '❌ Отключен';
+                statusText.style.background = isActive ? '#d4edda' : '#f8d7da';
+                statusText.style.color = isActive ? '#155724' : '#721c24';
+            }
+            
+            if (warningDiv) {
+                warningDiv.style.display = isActive ? 'none' : 'block';
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки статуса Mini App:', error);
+    }
+}
+
+// Переключение статуса Mini App
+async function toggleMiniApp(isActive) {
+    if (!currentBusiness) {
+        showMiniAppStatus('❌ Ошибка: компания не выбрана', 'error');
+        return;
+    }
+    
+    const toggle = document.getElementById('miniAppToggle');
+    const originalChecked = toggle.checked;
+    
+    // Блокируем toggle на время запроса
+    toggle.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/mini-app-status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mini_app_active: isActive })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Обновляем UI
+            const statusText = document.getElementById('miniAppStatusText');
+            const warningDiv = document.getElementById('miniAppWarning');
+            const successDiv = document.getElementById('miniAppSuccess');
+            const successMessage = document.getElementById('miniAppSuccessMessage');
+            
+            if (statusText) {
+                statusText.textContent = isActive ? '✅ Включен' : '❌ Отключен';
+                statusText.style.background = isActive ? '#d4edda' : '#f8d7da';
+                statusText.style.color = isActive ? '#155724' : '#721c24';
+            }
+            
+            if (warningDiv) {
+                warningDiv.style.display = isActive ? 'none' : 'block';
+            }
+            
+            // Показываем сообщение об успехе
+            if (successMessage) {
+                successMessage.textContent = isActive ? 'VK Mini App включен. Пользователи могут пользоваться приложением.' : 'VK Mini App отключен. Пользователи увидят сообщение "Временно недоступно".';
+            }
+            if (successDiv) {
+                successDiv.style.display = 'block';
+                setTimeout(() => {
+                    successDiv.style.display = 'none';
+                }, 3000);
+            }
+            
+            showMiniAppStatus(data.message, 'success');
+        } else {
+            // Возвращаем toggle в исходное состояние
+            toggle.checked = originalChecked;
+            showMiniAppStatus(data.message || '❌ Ошибка обновления статуса', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        toggle.checked = originalChecked;
+        showMiniAppStatus('❌ Ошибка подключения к серверу', 'error');
+    } finally {
+        toggle.disabled = false;
+    }
+}
+
+// Показ уведомления о статусе
+function showMiniAppStatus(message, type) {
+    const statusDiv = document.createElement('div');
+    statusDiv.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+        background: ${type === 'success' ? '#27ae60' : '#e74c3c'};
+    `;
+    statusDiv.textContent = message;
+    document.body.appendChild(statusDiv);
+    
+    setTimeout(() => {
+        statusDiv.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => statusDiv.remove(), 300);
     }, 3000);
 }
 

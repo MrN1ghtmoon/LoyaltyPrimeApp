@@ -87,6 +87,7 @@ export function ScratchCard({ onBalanceUpdate, userBalance, companyId, userId, c
     const [foundWinning, setFoundWinning] = useState(0);
     const [selectedSymbol, setSelectedSymbol] = useState(null);
     const [playsToday, setPlaysToday] = useState(null);
+	const [hintUsedInGame, setHintUsedInGame] = useState(false);
     
     // Состояние для бесплатной подсказки
     const [freeHintAvailable, setFreeHintAvailable] = useState(false);
@@ -153,37 +154,41 @@ useEffect(() => {
     };
 }, [userId, companyId]);
 
-    // ✅ ЗАГРУЗКА НАСТРОЕК С СЕРВЕРА
-    useEffect(() => {
-        const loadSettings = async () => {
-            if (!companyId) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/api/games/${companyId}/scratch`);
-                const data = await response.json();
-                
-                console.log('🎫 Scratch API response:', data);
-                
-                if (data.success && data.active !== false) {
-                    setSettings({
-                        cost: data.settings.cost || 20,
-                        maxAttempts: data.settings.maxAttempts || 3,
-                        symbols: data.settings.symbols || DEFAULT_SYMBOLS,
-                        hintCost: data.settings.hintCost || 15,
-                        freeHintDaily: data.settings.freeHintDaily || false,
-                        maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
-                        active: data.active
-                    });
-                    console.log('🎫 Loaded maxPlaysPerDay:', data.settings.maxPlaysPerDay);
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки настроек скретч-карты:', error);
-            }
-            setSettingsLoaded(true);
-        };
+useEffect(() => {
+    const loadSettings = async () => {
+        if (!companyId) return;
         
-        loadSettings();
-    }, [companyId]);
+        try {
+            const response = await fetch(`${API_URL}/api/games/${companyId}/scratch`);
+            const data = await response.json();
+            
+            console.log('🎫 Scratch загружены настройки:', data);
+            
+            if (data.success) {
+                // ✅ Убираем условие data.active !== false - загружаем ВСЕГДА
+                setSettings({
+                    cost: data.settings.cost || 20,
+                    maxAttempts: data.settings.maxAttempts || 3,
+                    symbols: data.settings.symbols || DEFAULT_SYMBOLS,
+                    hintCost: data.settings.hintCost || 15,
+                    freeHintDaily: data.settings.freeHintDaily || false,
+                    maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
+                    active: data.active !== false  // ✅ active будет true или false
+                });
+                console.log('🎫 Scratch active =', data.active !== false);
+            } else {
+                // Если ответ не success, используем дефолтные значения
+                setSettings(prev => ({ ...prev, active: true }));
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки настроек скретч-карты:', error);
+            setSettings(prev => ({ ...prev, active: true }));
+        }
+        setSettingsLoaded(true);
+    };
+    
+    loadSettings();
+}, [companyId]);
 
     // ✅ ЗАГРУЗКА КОЛИЧЕСТВА СЫГРАННЫХ ИГР СЕГОДНЯ
     useEffect(() => {
@@ -304,6 +309,9 @@ const newGame = async () => {
     
     await onBalanceUpdate(settings.cost, 'spend', { source: 'game', gameType: 'scratch', action: 'newGame' });
     
+    // ✅ СБРАСЫВАЕМ ФЛАГ ПОДСКАЗКИ ПРИ НОВОЙ ИГРЕ
+    setHintUsedInGame(false);
+    
     // ✅ СОХРАНЯЕМ СЧЁТЧИК В БД
     try {
         const response = await fetch(`${API_URL}/api/users/${userId}/games/increment`, {
@@ -321,8 +329,7 @@ const newGame = async () => {
         setPlaysToday(prev => (prev || 0) + 1);
     }
     
-    // ✅ ОТПРАВЛЯЕМ СОБЫТИЕ О ПРОГРЕССЕ ЗАДАНИЯ (1 раз за игру)
-    // Это должно быть здесь, а не только при выигрыше!
+    // ✅ ОТПРАВЛЯЕМ СОБЫТИЕ О ПРОГРЕССЕ ЗАДАНИЯ
     window.dispatchEvent(new CustomEvent('questProgress', { 
         detail: { type: 'scratch_card', increment: 1 } 
     }));
@@ -390,7 +397,7 @@ const revealCell = (index, isFreeHint = false) => {
             setResult({
                 type: 'lose',
                 value: 0,
-                message: `😢 Вы не нашли 3 одинаковых символа за ${settings.maxAttempts} попыток. Попробуйте ещё раз!`
+                message: `Вы не нашли 3 одинаковых символа за ${settings.maxAttempts} попыток. Попробуйте ещё раз!`
             });
             setGameActive(false);
         }
@@ -402,34 +409,49 @@ const revealCell = (index, isFreeHint = false) => {
 
     // Подсказка - показать одну выигрышную ячейку
     const showHint = async () => {
-        if (!gameActive) return;
-        if (isRevealing) return;
-        if (attemptsLeft <= 0) return;
-        
-        const unrevealedWinning = board.findIndex(cell => cell.isWinning && !cell.revealed);
-        
-        if (unrevealedWinning === -1) {
-            alert('❌ Нет доступных подсказок!');
-            return;
-        }
-        
-        if (settings.freeHintDaily && freeHintAvailable && !freeHintUsed) {
-            saveFreeHintState(true);
-            revealCell(unrevealedWinning, true);
-            setResult({
-                type: 'info',
-                message: '🎁 Использована бесплатная подсказка!'
-            });
-            setTimeout(() => setResult(null), 2000);
-        } 
-        else if (userBalance >= settings.hintCost) {
-            await onBalanceUpdate(-settings.hintCost, 'spend', { source: 'game', gameType: 'scratch', action: 'hint' });
-            revealCell(unrevealedWinning, false);
-        } 
-        else {
-            alert(`❌ Недостаточно бонусов! Нужно ${settings.hintCost} бонусов за подсказку.`);
-        }
-    };
+    if (!gameActive) return;
+    if (isRevealing) return;
+    if (attemptsLeft <= 0) return;
+    
+    // ✅ ПРОВЕРКА: подсказка уже использована в этой игре
+    if (hintUsedInGame) {
+        setResult({
+            type: 'info',
+            message: 'Подсказка уже использована в этой игре (можно только 1 раз)'
+        });
+        setTimeout(() => setResult(null), 2000);
+        return;
+    }
+    
+    const unrevealedWinning = board.findIndex(cell => cell.isWinning && !cell.revealed);
+    
+    if (unrevealedWinning === -1) {
+        alert('❌ Нет доступных подсказок!');
+        return;
+    }
+    
+    // ✅ УСТАНАВЛИВАЕМ ФЛАГ, ЧТО ПОДСКАЗКА ИСПОЛЬЗОВАНА
+    setHintUsedInGame(true);
+    
+    if (settings.freeHintDaily && freeHintAvailable && !freeHintUsed) {
+        saveFreeHintState(true);
+        revealCell(unrevealedWinning, true);
+        setResult({
+            type: 'info',
+            message: '🎁 Использована бесплатная подсказка!'
+        });
+        setTimeout(() => setResult(null), 2000);
+    } 
+    else if (userBalance >= settings.hintCost) {
+        await onBalanceUpdate(-settings.hintCost, 'spend', { source: 'game', gameType: 'scratch', action: 'hint' });
+        revealCell(unrevealedWinning, false);
+    } 
+    else {
+        // Если не хватило бонусов, возвращаем флаг обратно
+        setHintUsedInGame(false);
+        alert(`❌ Недостаточно бонусов! Нужно ${settings.hintCost} бонусов за подсказку.`);
+    }
+};
     
     // ✅ Показываем загрузку, если нет userId или не загрузились настройки
     if (!userId || !settingsLoaded || playsToday === null) {
@@ -445,23 +467,23 @@ const revealCell = (index, isFreeHint = false) => {
             </div>
         );
     }
-
+	
     if (!settings.active) {
-        return (
-            <div className="scratch-card-3x3" style={{ textAlign: 'center', padding: '40px' }}>
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎫</div>
-                <div style={{ color: '#ffd966', fontSize: '18px', fontWeight: 'bold' }}>Игра временно недоступна</div>
-                <div style={{ color: '#aaa', fontSize: '14px', marginTop: '8px' }}>Загляните позже!</div>
-            </div>
-        );
-    }
+    return (
+        <div className="scratch-card-3x3" style={{ textAlign: 'center', padding: '40px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎫</div>
+            <div style={{ color: '#ffd966', fontSize: '18px', fontWeight: 'bold' }}>Игра временно недоступна</div>
+            <div style={{ color: '#aaa', fontSize: '14px', marginTop: '8px' }}>Загляните позже!</div>
+        </div>
+    );
+}
     
     const remainingPlays = getRemainingPlays();
     const limitReached = isLimitReached();
 
     return (
         <div className="scratch-card-3x3">
-            {/* ✅ БАННЕР ЛИМИТА ИГР (как в DiceRoll) */}
+            {/*  БАННЕР ЛИМИТА ИГР  */}
             {settings.maxPlaysPerDay > 0 && playsToday !== null && (
                 <div style={{ 
                     background: limitReached ? '#e74c3c' : (remainingPlays <= 3 ? '#f39c12' : 'rgba(255,255,255,0.1)'),
@@ -479,6 +501,7 @@ const revealCell = (index, isFreeHint = false) => {
                     }
                 </div>
             )}
+			
             
             {showConfetti && (
                 <div className="confetti-overlay">
@@ -580,7 +603,7 @@ const revealCell = (index, isFreeHint = false) => {
             {/* Выигрышный символ (подсказка) */}
             {selectedSymbol && foundWinning < 3 && gameActive && (
                 <div className="hint-symbol">
-                    💡 Подсказка: ищите символ <span style={{ fontSize: '20px' }}>{selectedSymbol.id}</span>
+                    Подсказка: ищите символ <span style={{ fontSize: '20px' }}>{selectedSymbol.id}</span>
                 </div>
             )}
             
@@ -645,7 +668,6 @@ const revealCell = (index, isFreeHint = false) => {
             {/* Результат */}
             {result && (
                 <div className={`game-result ${result.type === 'win' ? 'win' : result.type === 'info' ? 'info' : 'lose'} show`}>
-                    <div className="result-icon">{result.type === 'win' ? '🏆' : result.type === 'info' ? '💡' : '😢'}</div>
                     <div className="result-text">{result.message}</div>
                 </div>
             )}
@@ -653,9 +675,30 @@ const revealCell = (index, isFreeHint = false) => {
             {/* Последний выигрыш */}
             {lastWin && !result && lastWin > 0 && (
                 <div className="last-win">
-                    🏆 ПОСЛЕДНИЙ ВЫИГРЫШ: +{lastWin}
+                    ПОСЛЕДНИЙ ВЫИГРЫШ: +{lastWin}
                 </div>
             )}
+			<div className="hint-info" style={{
+    background: 'rgba(155, 89, 182, 0.2)',
+    borderRadius: '12px',
+    padding: '8px 12px',
+    marginBottom: '16px',
+    textAlign: 'center',
+    fontSize: '12px',
+    color: '#dda0dd',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px'
+}}>
+    <span>Подсказку можно использовать только 1 раз за игру</span>
+    {hintUsedInGame && gameActive && (
+        <span style={{ color: '#e74c3c', fontSize: '11px' }}>(Уже использована)</span>
+    )}
+    {settings.freeHintDaily && freeHintAvailable && !freeHintUsed && !hintUsedInGame && (
+        <span style={{ color: '#2ecc71', fontSize: '11px' }}>🎁 Сегодня бесплатно!</span>
+    )}
+</div>
             
             {/* Информация о множителях */}
             <div className="multiplier-info">
@@ -669,6 +712,30 @@ const revealCell = (index, isFreeHint = false) => {
                     ))}
                 </div>
             </div>
+			<div className="game-info" style={{
+    background: 'rgba(0,0,0,0.3)',
+    borderRadius: '16px',
+    padding: '12px 16px',
+    marginBottom: '16px',
+	marginTop: '16px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+}}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ color: 'white', fontSize: '14px' }}>Стоимость игры:</span>
+    </div>
+    <div style={{ 
+        background: '#ff4d4d', 
+        padding: '6px 16px', 
+        borderRadius: '30px',
+        fontWeight: 'bold',
+        color: 'white',
+        fontSize: '16px'
+    }}>
+        {settings.cost} бонусов
+    </div>
+</div>
         </div>
     );
 }

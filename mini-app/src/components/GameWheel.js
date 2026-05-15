@@ -45,31 +45,40 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId, com
 
     // Загрузка настроек с сервера
     useEffect(() => {
-        const loadSettings = async () => {
-            if (!companyId) return;
-            
-            try {
-                const response = await fetch(`${API_URL}/api/games/${companyId}/wheel`);
-                const data = await response.json();
-                
-                if (data.success && data.active !== false) {
-                    setSettings({
-                        spinCost: data.settings.spinCost || 25,
-                        sectors: data.settings.sectors || DEFAULT_SECTORS,
-                        maxSpinsPerDay: data.settings.maxSpinsPerDay || 10,
-                        freeSpinDaily: data.settings.freeSpinDaily || false,
-                        maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
-                        active: data.active
-                    });
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки настроек колеса:', error);
-            }
-            setSettingsLoaded(true);
-        };
+    const loadSettings = async () => {
+        if (!companyId) return;
         
-        loadSettings();
-    }, [companyId]);
+        try {
+            const response = await fetch(`${API_URL}/api/games/${companyId}/wheel`);
+            const data = await response.json();
+            
+            console.log('🎡 GameWheel загружены настройки:', data);
+            
+            if (data.success) {
+                // ✅ Убираем условие data.active !== false из if
+                // Настройки загружаются ВСЕГДА, независимо от active
+                setSettings({
+                    spinCost: data.settings.spinCost || 25,
+                    sectors: data.settings.sectors || DEFAULT_SECTORS,
+                    maxSpinsPerDay: data.settings.maxSpinsPerDay || 10,
+                    freeSpinDaily: data.settings.freeSpinDaily || false,
+                    maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
+                    active: data.active !== false  // ✅ active будет true или false
+                });
+                console.log('🎡 GameWheel active =', data.active !== false);
+            } else {
+                // Если ответ не success, используем дефолтные значения
+                setSettings(prev => ({ ...prev, active: true }));
+            }
+        } catch (error) {
+            console.error('Ошибка загрузки настроек колеса:', error);
+            setSettings(prev => ({ ...prev, active: true }));
+        }
+        setSettingsLoaded(true);
+    };
+    
+    loadSettings();
+}, [companyId]);
 
     // Загрузка состояния бесплатного вращения из localStorage
     useEffect(() => {

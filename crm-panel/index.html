@@ -451,6 +451,47 @@
                             </div>
                         </div>
                     </div>
+					<div class="settings-card" style="margin-top: 20px;">
+    <h3>VK Mini App</h3>
+    <div class="mini-app-control">
+        <p style="color: #666; font-size: 13px; margin-bottom: 16px;">
+            Управляйте доступом пользователей к VK Mini App. 
+            При отключении приложение будет показывать сообщение "Временно недоступно".
+        </p>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <label style="font-weight: 600; display: block; margin-bottom: 4px;">Статус Mini App</label>
+                <span style="font-size: 12px; color: #666;">Включено/Выключено приложение для пользователей</span>
+            </div>
+            <div class="toggle-switch" style="display: flex; align-items: center; gap: 12px;">
+                <input type="checkbox" id="miniAppToggle" onchange="toggleMiniApp(this.checked)">
+                <span id="miniAppStatusText" style="font-weight: 600; padding: 4px 12px; border-radius: 20px;"></span>
+            </div>
+        </div>
+        
+        <div id="miniAppWarning" style="display: none; margin-top: 16px; padding: 12px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div>
+                    <strong style="color: #856404;">Внимание!</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #856404;">
+                        При отключении Mini App пользователи увидят сообщение "Временно недоступно" и не смогут пользоваться приложением.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="miniAppSuccess" style="display: none; margin-top: 16px; padding: 12px; background: #d4edda; border-radius: 8px; border-left: 4px solid #28a745;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">✅</span>
+                <div>
+                    <strong style="color: #155724;">Успешно!</strong>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #155724;" id="miniAppSuccessMessage"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 					<div id="bonusSettingsContainer"></div>
 					<div class="settings-card" style="margin-top: 20px;">
 						<h3>Приветствие компании</h3>
@@ -461,7 +502,6 @@
 						<div class="form-group">
 							<label>Эмодзи компании</label>
 							<div id="emojiPicker" style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; margin-top: 8px;">
-								<!-- Emojis will be populated by JavaScript -->
 							</div>
 							<input type="hidden" id="selectedEmoji" value="🏢">
 							<small style="display: block; margin-top: 8px; color: #666;">

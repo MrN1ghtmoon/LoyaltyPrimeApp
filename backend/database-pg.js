@@ -258,6 +258,7 @@ async function initDatabase() {
 		await addNotificationCampaignColumns();
 		await addUserProgressSpentColumn();
 		await createUserGamePlaysTable();
+		await addMiniAppStatusColumn();  
 		await addPromotionCycleStartColumn();
         await insertTestData();
 
@@ -511,7 +512,6 @@ async function getGameSettings(companyId, gameType) {
         } else if (gameType === 'dice') {
             defaultSettings = {
                 cost: 25,
-                jackpotBase: 1000,
                 betMultipliers: [1, 2, 3, 5, 10],
                 combinations: {
                     '2': { name: 'Змеиные глаза', multiplier: 15, icon: '🐍', color: '#2ecc71', description: 'Редкая комбинация!', enabled: true },
@@ -529,8 +529,6 @@ async function getGameSettings(companyId, gameType) {
                     'even': { name: 'Четная сумма', multiplier: 1.5, icon: '📊', color: '#3498db', description: 'Хороший результат', enabled: true },
                     'odd': { name: 'Нечетная сумма', multiplier: 1.2, icon: '🎯', color: '#1abc9c', description: 'Неплохо!', enabled: true }
                 },
-                jackpotChance: 1,
-                jackpotContribution: 10,
 				maxPlaysPerDay: 0
             };
         }
@@ -4239,6 +4237,62 @@ function getTodayString(timezoneOffset) {
     const day = String(companyNow.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 }
+
+async function addMiniAppStatusColumn() {
+    try {
+        const checkColumn = await query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'companies' AND column_name = 'mini_app_active'
+        `);
+        
+        if (checkColumn.rows.length === 0) {
+            console.log('📝 Добавляем колонку mini_app_active в таблицу companies...');
+            await query(`
+                ALTER TABLE companies 
+                ADD COLUMN mini_app_active BOOLEAN DEFAULT TRUE
+            `);
+            console.log('✅ Колонка mini_app_active добавлена');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка добавления mini_app_active:', error);
+    }
+}
+
+// Добавьте эти функции в database-pg.js
+async function getMiniAppStatus(companyId) {
+    try {
+        const result = await query(
+            'SELECT mini_app_active FROM companies WHERE id = $1',
+            [companyId]
+        );
+        
+        if (result.rows.length > 0) {
+            return result.rows[0].mini_app_active !== false;
+        }
+        return true;
+    } catch (error) {
+        console.error('Ошибка получения статуса Mini App:', error);
+        return true;
+    }
+}
+
+async function updateMiniAppStatus(companyId, isActive) {
+    try {
+        const result = await query(
+            'UPDATE companies SET mini_app_active = $1 WHERE id = $2 RETURNING mini_app_active',
+            [isActive, companyId]
+        );
+        
+        if (result.rows.length > 0) {
+            return result.rows[0].mini_app_active;
+        }
+        return false;
+    } catch (error) {
+        console.error('Ошибка обновления статуса Mini App:', error);
+        throw error;
+    }
+}
 module.exports = {
     pool,
     query,
@@ -4357,5 +4411,7 @@ module.exports = {
 	shouldClearPurchasesForPromotion,
 	addPromotionCycleStartColumn,
 	getTodayString,
-	trackDailyLogin
+	trackDailyLogin,
+	getMiniAppStatus,
+    updateMiniAppStatus
 };
