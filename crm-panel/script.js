@@ -103,16 +103,26 @@ function toggleFaq(element) {
 // ========== ОТПРАВКА ДЕМО-ЗАЯВКИ НА ПОЧТУ ==========
 async function submitDemo() {
     const brandName = document.getElementById('demoBrand')?.value;
-	const owner = document.getElementById('demoOwner')?.value;
+    const owner = document.getElementById('demoOwner')?.value;
     const email = document.getElementById('demoEmail')?.value;
     const phone = document.getElementById('demoPhone')?.value;
+    
+    // Валидация обязательных полей
     if (!brandName || !owner || !email || !phone) {
         alert('Пожалуйста, заполните все поля');
         return;
     }
     
+    // Валидация email
     if (!email.includes('@')) {
         alert('Пожалуйста, введите корректный email');
+        return;
+    }
+    
+    // Валидация телефона: проверяем, что введено 11 цифр
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 11) {
+        alert('Пожалуйста, введите корректный номер телефона (11 цифр)');
         return;
     }
     
@@ -133,11 +143,11 @@ async function submitDemo() {
         if (data.success) {
             alert('Спасибо! Заявка отправлена. Мы свяжемся с вами в ближайшее время.');
             document.getElementById('demoBrand').value = '';
-			document.getElementById('demoOwner').value = '';
+            document.getElementById('demoOwner').value = '';
             document.getElementById('demoEmail').value = '';
-			document.getElementById('demoPhone').value = '';
+            document.getElementById('demoPhone').value = '';
         } else {
-            alert((data.message || 'Ошибка отправки. Попробуйте позже.'));
+            alert(data.message || 'Ошибка отправки. Попробуйте позже.');
         }
     } catch (error) {
         console.error('Ошибка:', error);
@@ -5014,4 +5024,71 @@ function showMiniAppStatus(message, type) {
         statusDiv.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => statusDiv.remove(), 300);
     }, 3000);
+}
+// ========== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ==========
+
+async function submitForgotPassword() {
+    const email = document.getElementById('forgotEmail')?.value.trim();
+    const phone = document.getElementById('forgotPhone')?.value.trim();
+    const errorElement = document.getElementById('forgotError');
+    
+    // Валидация
+    if (!email || !phone) {
+        errorElement.textContent = 'Заполните email и номер телефона';
+        errorElement.style.display = 'block';
+        setTimeout(() => errorElement.style.display = 'none', 3000);
+        return;
+    }
+    
+    if (!email.includes('@')) {
+        errorElement.textContent = 'Введите корректный email';
+        errorElement.style.display = 'block';
+        setTimeout(() => errorElement.style.display = 'none', 3000);
+        return;
+    }
+    
+    // Валидация телефона (11 цифр)
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 11) {
+        errorElement.textContent = 'Введите корректный номер телефона (11 цифр)';
+        errorElement.style.display = 'block';
+        setTimeout(() => errorElement.style.display = 'none', 3000);
+        return;
+    }
+    
+    const button = event.target;
+    const originalText = button.textContent;
+    button.textContent = 'Отправка...';
+    button.disabled = true;
+    
+    try {
+        const response = await fetch(`${API_URL}/api/companies/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, phone })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message);
+            // Очищаем поля и закрываем модальное окно
+            document.getElementById('forgotEmail').value = '';
+            document.getElementById('forgotPhone').value = '';
+            closeModal('forgotPassword');
+            openModal('login');
+        } else {
+            errorElement.textContent = data.message || 'Ошибка отправки';
+            errorElement.style.display = 'block';
+            setTimeout(() => errorElement.style.display = 'none', 3000);
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        errorElement.textContent = 'Ошибка подключения к серверу';
+        errorElement.style.display = 'block';
+        setTimeout(() => errorElement.style.display = 'none', 3000);
+    } finally {
+        button.textContent = originalText;
+        button.disabled = false;
+    }
 }

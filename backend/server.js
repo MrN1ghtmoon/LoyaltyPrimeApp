@@ -2656,21 +2656,34 @@ const transporter = nodemailer.createTransport({
 });
 
 // ============ ЭНДПОИНТ ДЛЯ ДЕМО-ЗАЯВКИ ============
+// ============ ЭНДПОИНТ ДЛЯ ДЕМО-ЗАЯВКИ ============
 app.post('/api/demo-request', async (req, res) => {
     try {
         const { brandName, owner, email, phone } = req.body;
         
+        // Валидация обязательных полей
         if (!brandName || !owner || !email || !phone) {
             return res.status(400).json({ success: false, message: 'Заполните все поля' });
         }
         
+        // Валидация email
         if (!email.includes('@')) {
             return res.status(400).json({ success: false, message: 'Введите корректный email' });
         }
         
+        // Валидация телефона: оставляем только цифры
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length !== 11) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Введите корректный номер телефона (11 цифр)' 
+            });
+        }
+        const normalizedPhone = '+7' + cleanPhone.slice(-10);
+        
         const mailOptions = {
-            from: '"LoyaltyPrime" <padavydov@stud.kantiana.ru>',  
-            to: 'padavydov@stud.kantiana.ru',                         
+            from: '"LoyaltyPrime" <padavydov@stud.kantiana.ru>',
+            to: 'padavydov@stud.kantiana.ru',
             subject: `Новая заявка на демо от ${brandName}`,
             text: `
 Новая заявка на демо-доступ к программе лояльности
@@ -2679,7 +2692,7 @@ app.post('/api/demo-request', async (req, res) => {
 Бренд: ${brandName}
 Владелец: ${owner}
 Email: ${email}
-Телефон для связи: ${phone}
+Телефон для связи: ${normalizedPhone}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Свяжитесь с клиентом как можно скорее для демонстрации возможностей LoyaltyPrime.
@@ -2690,9 +2703,9 @@ Email: ${email}
                     
                     <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
                         <p style="margin: 8px 0;"><strong>Бренд:</strong> ${brandName}</p>
-						<p style="margin: 8px 0;"><strong>Владелец:</strong> ${owner}</p>
+                        <p style="margin: 8px 0;"><strong>Владелец:</strong> ${owner}</p>
                         <p style="margin: 8px 0;"><strong>Email:</strong> ${email}</p>
-						<p style="margin: 8px 0;"><strong>Телефон для связи:</strong> ${phone}</p>
+                        <p style="margin: 8px 0;"><strong>Телефон для связи:</strong> ${normalizedPhone}</p>
                     </div>
                     
                     <p style="color: #555;">Свяжитесь с клиентом как можно скорее для демонстрации возможностей <strong>LoyaltyPrime</strong>.</p>
@@ -2706,7 +2719,7 @@ Email: ${email}
         
         await transporter.sendMail(mailOptions);
         
-        console.log(`Демо-заявка отправлена: ${brandName} - ${email}`);
+        console.log(`Демо-заявка отправлена: ${brandName} - ${email} - ${normalizedPhone}`);
         
         res.json({ 
             success: true, 
@@ -3620,6 +3633,89 @@ app.put('/api/companies/:companyId/mini-app-status', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// ============ ВОССТАНОВЛЕНИЕ ПАРОЛЯ ============
+app.post('/api/companies/forgot-password', async (req, res) => {
+    try {
+        const { email, phone } = req.body;
+        
+        if (!email || !phone) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Заполните email и номер телефона' 
+            });
+        }
+        
+        // Валидация телефона
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length !== 11) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Введите корректный номер телефона (11 цифр)' 
+            });
+        }
+        const normalizedPhone = '+7' + cleanPhone.slice(-10);
+        
+        // Проверяем, существует ли компания с таким email
+        const companyResult = await query('SELECT * FROM companies WHERE email = $1', [email]);
+        
+        if (companyResult.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Компания с таким email не найдена' 
+            });
+        }
+        
+        const company = companyResult.rows[0];
+        
+        // Отправляем письмо администратору (владельцу LoyaltyPrime)
+        const mailOptions = {
+            from: '"LoyaltyPrime" <padavydov@stud.kantiana.ru>',
+            to: 'padavydov@stud.kantiana.ru',
+            subject: `🔐 Запрос на восстановление пароля: ${company.company}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px;">
+                    <h2 style="color: #ff4d4d; margin-bottom: 20px;">🔐 Запрос на восстановление пароля</h2>
+                    
+                    <div style="background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                        <p style="margin: 8px 0;"><strong>Компания:</strong> ${company.company}</p>
+                        <p style="margin: 8px 0;"><strong>Владелец:</strong> ${company.name}</p>
+                        <p style="margin: 8px 0;"><strong>Email для входа:</strong> ${email}</p>
+                        <p style="margin: 8px 0;"><strong>Телефон для связи:</strong> ${normalizedPhone}</p>
+                    </div>
+                    
+                    <div style="background: #fff3cd; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
+                        <p style="margin: 0; color: #856404;">
+                            <strong>📞 Действия:</strong> Свяжитесь с владельцем по номеру телефона ${normalizedPhone} для подтверждения личности, 
+                            затем помогите восстановить доступ к аккаунту (сбросьте пароль или сообщите новый).
+                        </p>
+                    </div>
+                    
+                    <hr style="margin: 20px 0; border-color: #e0e0e0;">
+                    
+                    <p style="color: #888; font-size: 12px;">Письмо сгенерировано автоматически из CRM-системы LoyaltyPrime.</p>
+                </div>
+            `
+        };
+        
+        await transporter.sendMail(mailOptions);
+        
+        console.log(`Запрос восстановления пароля: ${email} - ${normalizedPhone}`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Запрос отправлен! Мы свяжемся с вами в ближайшее время.' 
+        });
+        
+    } catch (error) {
+        console.error('Ошибка восстановления пароля:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Ошибка отправки. Попробуйте позже.' 
+        });
+    }
+});
+
 const PORT = 3001;
 app.listen(PORT, () => {
     console.log(`Бэкенд запущен на http://localhost:${PORT}`);
