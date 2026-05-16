@@ -29,7 +29,7 @@ async function initDatabase() {
                 password VARCHAR(255) NOT NULL,
                 brand_color VARCHAR(50) DEFAULT '#2A4B7C',
                 description TEXT DEFAULT 'Добро пожаловать в программу лояльности!',
-                active BOOLEAN DEFAULT FALSE,
+                is_active BOOLEAN DEFAULT FALSE,
                 settings JSONB DEFAULT '{}',
                 tiers_settings JSONB DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1193,11 +1193,12 @@ async function addCompany(companyData) {
     ]);
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 const result = await query(
-    `INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, active, created_at) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, NOW()) 
-     RETURNING id, company, email, brand_color as "brandColor", description, created_at`,
-    [company, name, email, phone || '', hashedPassword, brandColor || '#2A4B7C', description || `Добро пожаловать в ${company}!`, defaultTiers]
-);
+        `INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, is_active, mini_app_active, created_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, false, NOW()) 
+         RETURNING id, company, email, brand_color as "brandColor", description, created_at`,
+        [company, name, email, phone || '', hashedPassword, brandColor || '#2A4B7C', description || `Добро пожаловать в ${company}!`, defaultTiers]
+    );
+    
     
     const newCompanyId = result.rows[0].id;
     
@@ -1220,16 +1221,16 @@ async function getAllCompanies() {
             brand_color as "brandColor", 
             description,
             COALESCE(settings->>'company_emoji', '🏢') as "companyEmoji",
-            COALESCE(mini_app_active, false) as "mini_app_active"
+            COALESCE(mini_app_active, false) as "mini_app_active",
+            COALESCE(is_active, false) as "is_active"
         FROM companies 
-        WHERE active = true 
         ORDER BY created_at DESC
     `);
     return result.rows;
 }
 
 async function getCompanyById(id) {
-    const result = await query('SELECT * FROM companies WHERE id = $1', [id]);
+    const result = await query('SELECT *, is_active, mini_app_active FROM companies WHERE id = $1', [id]);
     return result.rows[0];
 }
 

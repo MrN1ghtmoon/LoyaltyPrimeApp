@@ -187,10 +187,18 @@ app.post('/api/companies/register', async (req, res) => {
         
         const newCompany = await addCompany({ company, name, email, phone, password, brandColor, description });
         
-        // Создаем стандартные кампании для новой компании
         await createDefaultCampaignsForCompany(newCompany.id);
         
-        res.json({ success: true, company: newCompany });
+        // ИЗМЕНЕНО: возвращаем статус блокировки
+        res.json({ 
+            success: true, 
+            company: {
+                ...newCompany,
+                is_active: false,
+                mini_app_active: false
+            },
+            message: 'Компания зарегистрирована. Для активации войдите в CRM и включите переключатели в настройках.'
+        });
     } catch (error) {
         console.error('❌ Ошибка:', error);
         res.status(500).json({ success: false, message: error.message });
@@ -225,6 +233,7 @@ app.get('/api/companies/list', async (req, res) => {
         const companies = await getAllCompanies();
         res.json(companies);
     } catch (error) {
+        console.error('Ошибка получения компаний:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });

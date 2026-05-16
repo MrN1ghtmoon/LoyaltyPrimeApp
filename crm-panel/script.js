@@ -4931,6 +4931,17 @@ async function loadMiniAppStatus() {
             if (warningDiv) {
                 warningDiv.style.display = isActive ? 'none' : 'block';
             }
+            
+            // Добавлено: Показываем уведомление о статусе блокировки при входе
+            if (!isActive && !sessionStorage.getItem('blocked_notification_shown')) {
+                setTimeout(() => {
+                    showMiniAppStatus(
+                        '⚠️ VK Mini App отключен. Включите его в настройках CRM, чтобы пользователи могли пользоваться приложением.',
+                        'warning'
+                    );
+                    sessionStorage.setItem('blocked_notification_shown', 'true');
+                }, 1000);
+            }
         }
     } catch (error) {
         console.error('Ошибка загрузки статуса Mini App:', error);
@@ -5005,6 +5016,14 @@ async function toggleMiniApp(isActive) {
 // Показ уведомления о статусе
 function showMiniAppStatus(message, type) {
     const statusDiv = document.createElement('div');
+    let bgColor = '#27ae60'; // success - green
+    
+    if (type === 'error') {
+        bgColor = '#e74c3c'; // error - red
+    } else if (type === 'warning') {
+        bgColor = '#f39c12'; // warning - orange
+    }
+    
     statusDiv.style.cssText = `
         position: fixed;
         bottom: 20px;
@@ -5015,7 +5034,9 @@ function showMiniAppStatus(message, type) {
         font-weight: 600;
         z-index: 10000;
         animation: slideIn 0.3s ease;
-        background: ${type === 'success' ? '#27ae60' : '#e74c3c'};
+        background: ${bgColor};
+        max-width: 350px;
+        font-size: 13px;
     `;
     statusDiv.textContent = message;
     document.body.appendChild(statusDiv);
@@ -5023,7 +5044,7 @@ function showMiniAppStatus(message, type) {
     setTimeout(() => {
         statusDiv.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => statusDiv.remove(), 300);
-    }, 3000);
+    }, 5000);
 }
 // ========== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ==========
 

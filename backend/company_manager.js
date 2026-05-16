@@ -33,6 +33,7 @@ async function syncSequence() {
 }
 
 // Функция для создания компании (БЕЗ предустановленных акций и заданий)
+// В функции createCompany(), измените INSERT запрос
 async function createCompany() {
     console.log('\n📝 Создание новой компании\n');
     
@@ -50,24 +51,24 @@ async function createCompany() {
     }
     
     try {
-        // Синхронизируем последовательность
         await syncSequence();
         
-        // Вставляем новую компанию
+        // ИЗМЕНЕНО: явно устанавливаем is_active = false, mini_app_active = false
         const result = await pool.query(
-            `INSERT INTO companies (company, name, email, phone, password, brand_color, description, active, created_at) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW()) 
+            `INSERT INTO companies (company, name, email, phone, password, brand_color, description, is_active, mini_app_active, created_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, NOW()) 
              RETURNING id, company, email`,
             [company, name, email, phone || '', password, brandColor || '#2ecc71', description || '']
         );
         
         const companyId = result.rows[0].id;
         
-
-        console.log(`\nКомпания "${company}" успешно создана!`);
+        console.log(`\n✅ Компания "${company}" успешно создана!`);
         console.log(`   ID: ${companyId}`);
         console.log(`   Email: ${email}`);
         console.log(`   Пароль: ${password}`);
+        console.log(`   ⚠️ Статус: ЗАБЛОКИРОВАНА (CRM и VK Mini App неактивны)`);
+        console.log(`   Для активации войдите в CRM и включите оба переключателя в настройках.`);
     } catch (error) {
         console.error('❌ Ошибка создания компании:', error.message);
     }
