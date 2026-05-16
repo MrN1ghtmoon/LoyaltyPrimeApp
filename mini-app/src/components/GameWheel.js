@@ -624,10 +624,6 @@ export function GameWheel({ onBalanceUpdate, userBalance, companyId, userId, com
                     <span className="chance-dot red" />
                     <span>Стоимость: {settings.spinCost}</span>
                 </div>
-                <div className="chance-item">
-                    <span className="chance-dot gray" />
-                    <span>Шанс: {Math.round((settings.sectors.filter(s => s.value > 0).length / settings.sectors.length) * 100)}%</span>
-                </div>
             </div>
         </div>
     );

@@ -3575,9 +3575,9 @@ app.post('/api/users/:userId/quests/complete', async (req, res) => {
     }
 });
 
-// ============ API ДЛЯ УПРАВЛЕНИЯ СТАТУСОМ VK MINI APP ============
+// ============ API Р”Р›РЇ РЈРџР РђР’Р›Р•РќРРЇ РЎРўРђРўРЈРЎРћРњ VK MINI APP ============
 
-// Получение статуса Mini App для компании
+// РџРѕР»СѓС‡РµРЅРёРµ СЃС‚Р°С‚СѓСЃР° Mini App
 app.get('/api/companies/:companyId/mini-app-status', async (req, res) => {
     try {
         const companyId = parseInt(req.params.companyId);
@@ -3588,12 +3588,12 @@ app.get('/api/companies/:companyId/mini-app-status', async (req, res) => {
             mini_app_active: isActive 
         });
     } catch (error) {
-        console.error('Ошибка получения статуса Mini App:', error);
+        console.error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ СЃС‚Р°С‚СѓСЃР° Mini App:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// Обновление статуса Mini App
+// РћР±РЅРѕРІР»РµРЅРёРµ СЃС‚Р°С‚СѓСЃР° Mini App
 app.put('/api/companies/:companyId/mini-app-status', async (req, res) => {
     try {
         const companyId = parseInt(req.params.companyId);
@@ -3602,7 +3602,7 @@ app.put('/api/companies/:companyId/mini-app-status', async (req, res) => {
         if (mini_app_active === undefined) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'Параметр mini_app_active обязателен' 
+                message: 'РџРѕР»Рµ mini_app_active РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ'
             });
         }
         
@@ -3611,17 +3611,17 @@ app.put('/api/companies/:companyId/mini-app-status', async (req, res) => {
         res.json({ 
             success: true, 
             mini_app_active: newStatus,
-            message: newStatus ? '? VK Mini App включен' : '? VK Mini App отключен'
+            message: newStatus ? 'VK Mini App Р°РєС‚РёРІРёСЂРѕРІР°РЅ' : 'VK Mini App РґРµР°РєС‚РёРІРёСЂРѕРІР°РЅ'
         });
     } catch (error) {
-        console.error('Ошибка обновления статуса Mini App:', error);
+        console.error('РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ СЃС‚Р°С‚СѓСЃР° Mini App:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 const PORT = 3001;
 app.listen(PORT, () => {
-    console.log(`вњ… Backend running on http://localhost:${PORT}`);
-    console.log(`рџђ Р‘Р°Р·Р° РґР°РЅРЅС‹С…: PostgreSQL`);
-    console.log(`рџ”‘ РўРµСЃС‚РѕРІС‹Р№ РІС…РѕРґ: email: pizza@test.com, password: 123456`);
-    console.log(`рџ’і POS API РґРѕСЃС‚СѓРїРЅС‹: /api/pos/verify-qr, /api/pos/apply-bonus, /api/pos/spend-bonus`);
+    console.log(`Р‘СЌРєРµРЅРґ Р·Р°РїСѓС‰РµРЅ РЅР° http://localhost:${PORT}`);
+    console.log(`Р‘Р°Р·Р° РґР°РЅРЅС‹С…: PostgreSQL`);
+    console.log(`РўРµСЃС‚РѕРІС‹Р№ РІС…РѕРґ: email: pizza@test.com, password: 123456`);
+    console.log(`POS API РґРѕСЃС‚СѓРїРЅС‹: /api/pos/verify-qr, /api/pos/apply-bonus, /api/pos/spend-bonus`);
 });

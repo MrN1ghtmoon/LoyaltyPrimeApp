@@ -623,7 +623,6 @@ function renderActivityChart(period) {
     if (!cachedAnalytics || !cachedAnalytics.dailyActivity || cachedAnalytics.dailyActivity.length === 0) {
         activityChart.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #999;">
-                <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
                 <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Нет данных активности</div>
                 <div style="font-size: 13px;">Покупки через страницу кассира появятся здесь</div>
             </div>
@@ -983,7 +982,6 @@ async function loadAddressesRevenueForMonth(month, year) {
         } else {
             dataContainer.innerHTML = `
                 <div style="text-align: center; padding: 40px; color: #999;">
-                    <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
                     <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Нет данных за ${monthName} ${year}</div>
                     <div style="font-size: 13px;">За выбранный месяц нет продаж</div>
                 </div>
@@ -1200,7 +1198,7 @@ async function loadTiersSettings() {
             renderTiersSettings();
         } else {
             tiers = [
-                { name: "🌱 Новичок", threshold: 0, multiplier: 1, cashback: 3, color: "#95a5a6", icon: "🌱" },
+                { name: "🔰 Новичок", threshold: 0, multiplier: 1, cashback: 3, color: "#95a5a6", icon: "🔰" },
                 { name: "🥉 Бронза", threshold: 500, multiplier: 1.2, cashback: 5, color: "#cd7f32", icon: "🥉" },
                 { name: "🥈 Серебро", threshold: 2000, multiplier: 1.5, cashback: 7, color: "#bdc3c7", icon: "🥈" },
                 { name: "🥇 Золото", threshold: 8000, multiplier: 2, cashback: 10, color: "#f1c40f", icon: "🥇" },
@@ -1270,7 +1268,7 @@ function renderTiersSettings() {
 
 
 function getIconOptions(selectedIcon) {
-    const icons = ['🌱', '🥉', '🥈', '🥇', '💎', '⭐', '🏆', '👑', '🔥', '⚡', '🎯'];
+    const icons = ['🔰', '🥉', '🥈', '🥇', '💎'];
     return icons.map(icon => `<option value="${icon}" ${selectedIcon === icon ? 'selected' : ''}>${icon}</option>`).join('');
 }
 
@@ -1287,7 +1285,6 @@ function addTierConfig() {
     const sortedTiers = [...tiers].sort((a, b) => a.threshold - b.threshold);
     const lastTier = sortedTiers[sortedTiers.length - 1];
     const newThreshold = lastTier ? lastTier.threshold + 5000 : 1000;
-    // ИСПРАВЛЕНО: убрали multiplier
     const newCashback = lastTier ? Math.min(30, lastTier.cashback + 2) : 3;
     
     tiers.push({
@@ -1307,7 +1304,7 @@ function getNextColor(index) {
 }
 
 function getNextIcon(index) {
-    const icons = ['🌱', '🥉', '🥈', '🥇', '💎', '⭐', '🏆', '👑', '🔥', '⚡'];
+    const icons = ['🔰', '🥉', '🥈', '🥇', '💎'];
     return icons[index % icons.length];
 }
 
@@ -2782,16 +2779,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ========== НАСТРОЙКА КОЛЕСА ФОРТУНЫ ==========
 
-// ✅ ОТДЕЛЬНЫЙ МАССИВ ИКОНОК ДЛЯ КОЛЕСА
+// ОТДЕЛЬНЫЙ МАССИВ ИКОНОК ДЛЯ КОЛЕСА
 const WHEEL_ICONS = ['⭐', '🎯', '🔥', '💀', '✨', '🍀', '💎', '🏆', '🎲', '💰', '🎁', '🍕', '🍔', '🍦', '🍩', '🍪', '🍫', '🍬', '🍭', '🍷', '🍺', '🍻', '🥂', '🥤', '🍸', '🍹', '🍾', '🪙', '💸', '💵', '💶', '💷', '💴', '👑', '⭐', '🌟', '✨', '⚡', '🔥', '💧', '❄️', '🌈', '☀️', '🌙', '🌍', '🎈', '🎉', '🎊', '🎁', '🏅', '🥇', '🥈', '🥉', '🏆', '🎯', '🎲', '🎰', '🎮', '🕹️', '🎪', '🎡', '🎢', '🎠', '🎭', '🎨', '🎬', '🎤', '🎧', '🎸', '🎹', '🎺', '🎻', '🥁', '📱', '💻', '⌚', '📷', '🔋', '💡', '🔦', '📚', '🔑', '🔒', '🔓', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '💝', '💖', '💗', '💓', '💞', '💕', '💟', '❣️', '💋', '👑', '👒', '🎩', '🧢', '👓', '🕶️'];
 
-// ✅ ОТДЕЛЬНЫЕ ЦВЕТА ДЛЯ КОЛЕСА
+// ОТДЕЛЬНЫЕ ЦВЕТА ДЛЯ КОЛЕСА
 function getWheelRandomColor() {
     const colors = ['#2ecc71', '#3498db', '#e74c3c', '#f39c12', '#1abc9c', '#9b59b6', '#e67e22', '#95a5a6', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9', '#74b9ff', '#a29bfe', '#fd79a8', '#e84393', '#6c5ce7', '#00b894', '#00cec9', '#0984e3', '#6ab04c', '#f9ca24', '#eb4d4b'];
     return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// ✅ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ОПЦИЙ ИКОНОК ДЛЯ КОЛЕСА
+// ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ОПЦИЙ ИКОНОК ДЛЯ КОЛЕСА
 function getWheelIconOptions(selectedIcon) {
     return WHEEL_ICONS.map(icon => `<option value="${icon}" ${selectedIcon === icon ? 'selected' : ''}>${icon}</option>`).join('');
 }
@@ -2921,16 +2918,16 @@ function renderSectorsList() {
                     <input type="number" value="${sector.value}" onchange="updateSector(${idx}, 'value', parseInt(this.value))" style="width: 70px;">
                 </div>
                 <div class="sector-field">
-                    <label>Вес (%)</label>
+                    <label>Шанс (%)</label>
                     <input type="number" value="${sector.weight || 10}" onchange="updateSector(${idx}, 'weight', parseInt(this.value))" min="1" max="100" style="width: 70px;">
+                </div>
+				<div class="sector-field">
+                    <label>Иконка</label>
+                    <input type="text" value="${sector.icon}" onchange="updateSector(${idx}, 'icon', this.value)" maxlength="2" style="width: 50px; text-align: center; font-size: 20px;" placeholder="😀">
                 </div>
                 <div class="sector-field">
                     <label>Цвет</label>
                     <input type="color" value="${sector.color}" onchange="updateSector(${idx}, 'color', this.value)" style="width: 50px; height: 32px;">
-                </div>
-                <div class="sector-field">
-                    <label>Смайлик</label>
-                    <input type="text" value="${sector.icon}" onchange="updateSector(${idx}, 'icon', this.value)" maxlength="2" style="width: 50px; text-align: center; font-size: 20px;" placeholder="😀">
                 </div>
             </div>
             <button class="sector-remove" onclick="removeSector(${idx})" ${wheelSettings.sectors.length <= 3 ? 'disabled style="opacity:0.5"' : ''}>🗑️</button>
@@ -2948,7 +2945,7 @@ function renderWheelStats() {
     container.innerHTML = `
         <div>
             <div class="wheel-stat-value">${totalWeight}%</div>
-            <div class="wheel-stat-label">Сумма весов</div>
+            <div class="wheel-stat-label">Сумма шансов</div>
         </div>
         <div>
             <div class="wheel-stat-value">${expectedValue.toFixed(2)}</div>
@@ -3083,7 +3080,7 @@ async function saveWheelSettings() {
         const data = await response.json();
         if (data.success) {
             showSaveIndicator();
-            console.log('✅ Wheel settings saved, active:', wheelSettings.active);
+            console.log('Настройки колеса сохранены, активно:', wheelSettings.active);
         }
     } catch (error) {
         console.error('Ошибка сохранения настроек колеса:', error);
@@ -3232,10 +3229,6 @@ function renderSymbolsList() {
             </div>
             <div class="symbol-fields">
                 <div class="symbol-field">
-                    <label>Эмодзи</label>
-                    <input type="text" value="${symbol.id}" onchange="updateSymbol(${idx}, 'id', this.value)" maxlength="2" style="width: 50px;">
-                </div>
-                <div class="symbol-field">
                     <label>Название</label>
                     <input type="text" value="${symbol.name}" onchange="updateSymbol(${idx}, 'name', this.value)" style="width: 80px;">
                 </div>
@@ -3250,6 +3243,10 @@ function renderSymbolsList() {
                 <div class="symbol-field">
                     <label>Вес (%)</label>
                     <input type="number" value="${symbol.prob || 10}" onchange="updateSymbol(${idx}, 'prob', parseInt(this.value))" min="1" max="100" style="width: 70px;">
+                </div>
+				<div class="symbol-field">
+                    <label>Иконка</label>
+                    <input type="text" value="${symbol.id}" onchange="updateSymbol(${idx}, 'id', this.value)" maxlength="2" style="width: 50px;">
                 </div>
                 <div class="symbol-field">
                     <label>Цвет</label>
@@ -3365,14 +3362,12 @@ function toggleScratchActive(active) {
     console.log('🔄 Scratch toggled to:', active);
     scratchSettings.active = active;
     
-    // ✅ Обновляем текст статуса сразу
     const statusSpan = document.getElementById('scratchActiveStatus');
     if (statusSpan) {
         statusSpan.textContent = active ? 'Включена' : 'Отключена';
         statusSpan.style.color = active ? '#2ecc71' : '#888';
     }
     
-    // ✅ Обновляем сам чекбокс (на всякий случай)
     const checkbox = document.getElementById('scratchActive');
     if (checkbox && checkbox.checked !== active) {
         checkbox.checked = active;
@@ -4898,7 +4893,7 @@ async function loadMiniAppStatus() {
             }
             
             if (statusText) {
-                statusText.textContent = isActive ? '✅ Включен' : '❌ Отключен';
+                statusText.textContent = isActive ? 'Включен' : 'Отключен';
                 statusText.style.background = isActive ? '#d4edda' : '#f8d7da';
                 statusText.style.color = isActive ? '#155724' : '#721c24';
             }
@@ -4942,7 +4937,7 @@ async function toggleMiniApp(isActive) {
             const successMessage = document.getElementById('miniAppSuccessMessage');
             
             if (statusText) {
-                statusText.textContent = isActive ? '✅ Включен' : '❌ Отключен';
+                statusText.textContent = isActive ? 'Включен' : 'Отключен';
                 statusText.style.background = isActive ? '#d4edda' : '#f8d7da';
                 statusText.style.color = isActive ? '#155724' : '#721c24';
             }
