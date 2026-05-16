@@ -1,6 +1,5 @@
 const readline = require('readline');
 const { Pool } = require('pg');
-const { addPresetDataForCompany } = require('./database-pg');
 
 const pool = new Pool({
     user: 'postgres',
@@ -19,14 +18,23 @@ const question = (query) => new Promise(resolve => rl.question(query, resolve));
 
 // Функция для синхронизации последовательности ID
 async function syncSequence() {
-    await pool.query(`
-        SELECT setval('companies_id_seq', (SELECT COALESCE(MAX(id), 0) FROM companies))
-    `);
+    const result = await pool.query('SELECT COALESCE(MAX(id), 0) as max_id FROM companies');
+    const maxId = parseInt(result.rows[0].max_id);
+    
+    if (maxId === 0) {
+        // Таблица пустая - сбрасываем на 1
+        await pool.query('ALTER SEQUENCE companies_id_seq RESTART WITH 1');
+        console.log('✅ Последовательность сброшена на 1 (таблица пуста)');
+    } else {
+        // Устанавливаем на maxId
+        await pool.query(`SELECT setval('companies_id_seq', $1)`, [maxId]);
+        console.log(`✅ Последовательность установлена на ${maxId}`);
+    }
 }
 
-// Функция для создания компании
+// Функция для создания компании (БЕЗ предустановленных акций и заданий)
 async function createCompany() {
-    console.log('\nСоздание новой компании\n');
+    console.log('\n📝 Создание новой компании\n');
     
     const company = await question('Название компании: ');
     const name = await question('Имя владельца: ');
@@ -37,27 +45,32 @@ async function createCompany() {
     const description = await question('Описание: ');
     
     if (!company || !name || !email || !password) {
-        console.log('Ошибка: Название, имя, email и пароль обязательны');
+        console.log('❌ Ошибка: Название, имя, email и пароль обязательны');
         return;
     }
     
-    // Синхронизируем последовательность
-    await syncSequence();
-    
-    // Вставляем новую компанию
-    const result = await pool.query(
-        `INSERT INTO companies (company, name, email, phone, password, brand_color, description) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) 
-         RETURNING id, company, email`,
-        [company, name, email, phone || '', password, brandColor || '#2ecc71', description || '']
-    );
-    
-    const companyId = result.rows[0].id;
-	await addPresetDataForCompany(companyId);
-    console.log(`\nКомпания "${company}" успешно создана!`);
-    console.log(`   ID: ${companyId}`);
-    console.log(`   Email: ${email}`);
-    console.log(`   Пароль: ${password}`);
+    try {
+        // Синхронизируем последовательность
+        await syncSequence();
+        
+        // Вставляем новую компанию
+        const result = await pool.query(
+            `INSERT INTO companies (company, name, email, phone, password, brand_color, description, active, created_at) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW()) 
+             RETURNING id, company, email`,
+            [company, name, email, phone || '', password, brandColor || '#2ecc71', description || '']
+        );
+        
+        const companyId = result.rows[0].id;
+        
+
+        console.log(`\nКомпания "${company}" успешно создана!`);
+        console.log(`   ID: ${companyId}`);
+        console.log(`   Email: ${email}`);
+        console.log(`   Пароль: ${password}`);
+    } catch (error) {
+        console.error('❌ Ошибка создания компании:', error.message);
+    }
 }
 
 // Функция для удаления компании
@@ -66,11 +79,11 @@ async function deleteCompany() {
     const companies = await pool.query('SELECT id, company, email FROM companies ORDER BY id');
     
     if (companies.rows.length === 0) {
-        console.log('\nНет компаний в базе данных');
+        console.log('\n📭 Нет компаний в базе данных');
         return;
     }
     
-    console.log('\nСписок компаний:');
+    console.log('\n📋 Список компаний:');
     companies.rows.forEach(comp => {
         console.log(`   ID: ${comp.id} | ${comp.company} | ${comp.email}`);
     });
@@ -80,7 +93,7 @@ async function deleteCompany() {
     
     const companyId = parseInt(answer);
     if (isNaN(companyId)) {
-        console.log('Некорректный ID');
+        console.log('❌ Некорректный ID');
         return;
     }
     
@@ -88,11 +101,11 @@ async function deleteCompany() {
     const company = await pool.query('SELECT id, company, email FROM companies WHERE id = $1', [companyId]);
     
     if (company.rows.length === 0) {
-        console.log('Компания с таким ID не найдена');
+        console.log('❌ Компания с таким ID не найдена');
         return;
     }
     
-    console.log(`\nВы собираетесь удалить компанию:`);
+    console.log(`\n⚠️ Вы собираетесь удалить компанию:`);
     console.log(`   Название: ${company.rows[0].company}`);
     console.log(`   Email: ${company.rows[0].email}`);
     
@@ -100,13 +113,12 @@ async function deleteCompany() {
     
     if (confirm.toLowerCase() === 'yes') {
         await pool.query('DELETE FROM companies WHERE id = $1', [companyId]);
-        console.log('Компания успешно удалена!');
+        console.log('✅ Компания успешно удалена!');
         
         // Синхронизируем последовательность после удаления
         await syncSequence();
-        console.log('Последовательность ID синхронизирована');
     } else {
-        console.log('Удаление отменено');
+        console.log('❌ Удаление отменено');
     }
 }
 
@@ -115,11 +127,11 @@ async function listCompanies() {
     const companies = await pool.query('SELECT id, company, email, phone, created_at FROM companies ORDER BY id');
     
     if (companies.rows.length === 0) {
-        console.log('\nНет компаний в базе данных');
+        console.log('\n📭 Нет компаний в базе данных');
         return;
     }
     
-    console.log('\nСписок компаний:');
+    console.log('\n📋 Список компаний:');
     console.log('┌────┬──────────────────────────┬──────────────────────────┬─────────────┐');
     console.log('│ ID │ Название                 │ Email                    │ Телефон     │');
     console.log('├────┼──────────────────────────┼──────────────────────────┼─────────────┤');
@@ -132,7 +144,7 @@ async function listCompanies() {
     });
     
     console.log('└────┴──────────────────────────┴──────────────────────────┴─────────────┘');
-    console.log(`\nВсего компаний: ${companies.rows.length}`);
+    console.log(`\n📊 Всего компаний: ${companies.rows.length}`);
 }
 
 // Главное меню
@@ -154,7 +166,7 @@ async function main() {
     try {
         // Проверяем подключение к БД
         await pool.query('SELECT NOW()');
-        console.log('Подключение к базе данных установлено\n');
+        console.log('✅ Подключение к базе данных установлено\n');
         
         let running = true;
         
@@ -176,17 +188,17 @@ async function main() {
                     await question('\nНажмите Enter для продолжения...');
                     break;
                 case '4':
-                    console.log('\nПроизошел выход');
+                    console.log('\n👋 Произошел выход');
                     running = false;
                     break;
                 default:
-                    console.log('\nНеверный выбор. Попробуйте снова.');
+                    console.log('\n❌ Неверный выбор. Попробуйте снова.');
                     await question('\nНажмите Enter для продолжения...');
             }
         }
         
     } catch (error) {
-        console.error('Ошибка:', error.message);
+        console.error('❌ Ошибка:', error.message);
     } finally {
         rl.close();
         await pool.end();

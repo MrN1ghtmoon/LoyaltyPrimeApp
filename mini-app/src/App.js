@@ -22,8 +22,7 @@ const getApiUrl = () => {
 
 // Определяем DEFAULT_TIERS ДО его использования
 const DEFAULT_TIERS = [
-    { name: '🌱 Новичок', threshold: 0, cashback: 3, color: '#95a5a6', icon: '🌱' },
-    { name: '🥉 Бронза', threshold: 500, cashback: 5, color: '#cd7f32', icon: '🥉' },
+    { name: '🔰 Новичок', threshold: 0, cashback: 3, color: '#95a5a6', icon: '🔰' },
     { name: '🥈 Серебро', threshold: 2000, cashback: 7, color: '#bdc3c7', icon: '🥈' },
     { name: '🥇 Золото', threshold: 8000, cashback: 10, color: '#f1c40f', icon: '🥇' },
     { name: '💎 Бриллиант', threshold: 20000, cashback: 15, color: '#00b4d8', icon: '💎' }

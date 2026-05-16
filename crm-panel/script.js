@@ -103,10 +103,11 @@ function toggleFaq(element) {
 // ========== ОТПРАВКА ДЕМО-ЗАЯВКИ НА ПОЧТУ ==========
 async function submitDemo() {
     const brandName = document.getElementById('demoBrand')?.value;
+	const owner = document.getElementById('demoOwner')?.value;
     const email = document.getElementById('demoEmail')?.value;
-    
-    if (!brandName || !email) {
-        alert('Пожалуйста, заполните оба поля');
+    const phone = document.getElementById('demoPhone')?.value;
+    if (!brandName || !owner || !email || !phone) {
+        alert('Пожалуйста, заполните все поля');
         return;
     }
     
@@ -117,14 +118,14 @@ async function submitDemo() {
     
     const button = document.querySelector('.cta-button');
     const originalText = button.textContent;
-    button.textContent = '⏳ Отправка...';
+    button.textContent = 'Отправка...';
     button.disabled = true;
     
     try {
         const response = await fetch(`${API_URL}/api/demo-request`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ brandName, email })
+            body: JSON.stringify({ brandName, owner, email, phone })
         });
         
         const data = await response.json();
@@ -132,7 +133,9 @@ async function submitDemo() {
         if (data.success) {
             alert('Спасибо! Заявка отправлена. Мы свяжемся с вами в ближайшее время.');
             document.getElementById('demoBrand').value = '';
+			document.getElementById('demoOwner').value = '';
             document.getElementById('demoEmail').value = '';
+			document.getElementById('demoPhone').value = '';
         } else {
             alert((data.message || 'Ошибка отправки. Попробуйте позже.'));
         }
@@ -4875,7 +4878,7 @@ async function saveGreetingSettings() {
         }
     } catch (error) {
         console.error('Ошибка сохранения приветствия:', error);
-        showGreetingStatus('❌ Ошибка подключения: ' + error.message, 'error');
+        showGreetingStatus('Ошибка подключения: ' + error.message, 'error');
     }
 }
 
@@ -4927,7 +4930,7 @@ async function loadMiniAppStatus() {
 // Переключение статуса Mini App
 async function toggleMiniApp(isActive) {
     if (!currentBusiness) {
-        showMiniAppStatus('❌ Ошибка: компания не выбрана', 'error');
+        showMiniAppStatus('Ошибка: компания не выбрана', 'error');
         return;
     }
     
@@ -4978,12 +4981,12 @@ async function toggleMiniApp(isActive) {
         } else {
             // Возвращаем toggle в исходное состояние
             toggle.checked = originalChecked;
-            showMiniAppStatus(data.message || '❌ Ошибка обновления статуса', 'error');
+            showMiniAppStatus(data.message || 'Ошибка обновления статуса', 'error');
         }
     } catch (error) {
         console.error('Ошибка:', error);
         toggle.checked = originalChecked;
-        showMiniAppStatus('❌ Ошибка подключения к серверу', 'error');
+        showMiniAppStatus('Ошибка подключения к серверу', 'error');
     } finally {
         toggle.disabled = false;
     }
@@ -5012,4 +5015,3 @@ function showMiniAppStatus(message, type) {
         setTimeout(() => statusDiv.remove(), 300);
     }, 3000);
 }
-

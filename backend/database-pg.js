@@ -29,7 +29,7 @@ async function initDatabase() {
                 password VARCHAR(255) NOT NULL,
                 brand_color VARCHAR(50) DEFAULT '#2A4B7C',
                 description TEXT DEFAULT 'Добро пожаловать в программу лояльности!',
-                active BOOLEAN DEFAULT TRUE,
+                active BOOLEAN DEFAULT FALSE,
                 settings JSONB DEFAULT '{}',
                 tiers_settings JSONB DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -660,7 +660,6 @@ async function getCompanyTiers(companyId) {
         
         const defaultTiers = [
             { name: "🔰 Новичок", threshold: 0, cashback: 3, color: "#95a5a6", icon: "🔰" },
-            { name: "🥉 Бронза", threshold: 500, cashback: 5, color: "#cd7f32", icon: "🥉" },
             { name: "🥈 Серебро", threshold: 2000, cashback: 7, color: "#bdc3c7", icon: "🥈" },
             { name: "🥇 Золото", threshold: 8000, cashback: 10, color: "#f1c40f", icon: "🥇" },
             { name: "💎 Бриллиант", threshold: 20000, cashback: 15, color: "#00b4d8", icon: "💎" }
@@ -672,7 +671,6 @@ async function getCompanyTiers(companyId) {
         console.error('Ошибка getCompanyTiers:', error);
         return [
             { name: "🔰 Новичок", threshold: 0, cashback: 3, color: "#95a5a6", icon: "🔰" },
-            { name: "🥉 Бронза", threshold: 500, cashback: 5, color: "#cd7f32", icon: "🥉" },
             { name: "🥈 Серебро", threshold: 2000, cashback: 7, color: "#bdc3c7", icon: "🥈" },
             { name: "🥇 Золото", threshold: 8000, cashback: 10, color: "#f1c40f", icon: "🥇" },
             { name: "💎 Бриллиант", threshold: 20000, cashback: 15, color: "#00b4d8", icon: "💎" }
@@ -722,7 +720,6 @@ async function addMissingColumns() {
             console.log('Добавляем колонку tiers_settings в таблицу companies...');
             const defaultTiers = JSON.stringify([
                 {"name": "🔰 Новичок", "threshold": 0, "cashback": 3, "color": "#95a5a6", "icon": "🔰"},
-                {"name": "🥉 Бронза", "threshold": 500, "cashback": 5, "color": "#cd7f32", "icon": "🥉"},
                 {"name": "🥈 Серебро", "threshold": 2000, "cashback": 7, "color": "#bdc3c7", "icon": "🥈"},
                 {"name": "🥇 Золото", "threshold": 8000, "cashback": 10, "color": "#f1c40f", "icon": "🥇"},
                 {"name": "💎 Бриллиант", "threshold": 20000, "cashback": 15, "color": "#00b4d8", "icon": "💎"}
@@ -967,7 +964,6 @@ async function insertTestData() {
             
             const defaultTiers = JSON.stringify([
                 {"name": "🔰 Новичок", "threshold": 0, "cashback": 3, "color": "#95a5a6", "icon": "🔰"},
-                {"name": "🥉 Бронза", "threshold": 500, "cashback": 5, "color": "#cd7f32", "icon": "🥉"},
                 {"name": "🥈 Серебро", "threshold": 2000, "cashback": 7, "color": "#bdc3c7", "icon": "🥈"},
                 {"name": "🥇 Золото", "threshold": 8000, "cashback": 10, "color": "#f1c40f", "icon": "🥇"},
                 {"name": "💎 Бриллиант", "threshold": 20000, "cashback": 15, "color": "#00b4d8", "icon": "💎"}
@@ -1191,7 +1187,6 @@ async function addCompany(companyData) {
     const { company, name, email, phone, password, brandColor, description } = companyData;
     const defaultTiers = JSON.stringify([
         { name: "🔰 Новичок", threshold: 0, multiplier: 1, cashback: 3, color: "#95a5a6", icon: "🔰" },
-        { name: "🥉 Бронза", threshold: 500, multiplier: 1.2, cashback: 5, color: "#cd7f32", icon: "🥉" },
         { name: "🥈 Серебро", threshold: 2000, multiplier: 1.5, cashback: 7, color: "#bdc3c7", icon: "🥈" },
         { name: "🥇 Золото", threshold: 8000, multiplier: 2, cashback: 10, color: "#f1c40f", icon: "🥇" },
         { name: "💎 Бриллиант", threshold: 20000, multiplier: 2.5, cashback: 15, color: "#00b4d8", icon: "💎" }
@@ -1199,7 +1194,7 @@ async function addCompany(companyData) {
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 const result = await query(
     `INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, active, created_at) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, NOW()) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, NOW()) 
      RETURNING id, company, email, brand_color as "brandColor", description, created_at`,
     [company, name, email, phone || '', hashedPassword, brandColor || '#2A4B7C', description || `Добро пожаловать в ${company}!`, defaultTiers]
 );
@@ -4251,7 +4246,7 @@ async function addMiniAppStatusColumn() {
             console.log('Колонка mini_app_active добавлена');
         }
     } catch (error) {
-        console.error('❌ Ошибка добавления mini_app_active:', error);
+        console.error('Ошибка добавления mini_app_active:', error);
     }
 }
 
