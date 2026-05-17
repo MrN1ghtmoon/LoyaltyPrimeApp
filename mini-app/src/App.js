@@ -7,6 +7,7 @@ import { LoyaltyCard } from './components/LoyaltyCard';
 import { DiceRoll } from './components/DiceRoll';
 import { ScratchCard } from './components/ScratchCard';
 import { Giveaways } from './components/Giveaways';
+import { getHoursWord, getMinutesWord } from './utils/dateUtils';
 
 // mini-app/src/App.js
 const API_URL = 'http://localhost:3001'; // Локальный бэкенд
@@ -1596,183 +1597,231 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
         <span>Дата регистрации:</span>
         <span style={{ fontWeight:700, color:'#ffd966' }}>{currentGroupData?.regDate}</span>
       </div>
-	      {/* Блок с уведомлением о боте */}
-<div style={{ 
-  marginTop: 16, 
-  background: 'rgba(52, 152, 219, 0.15)', 
-  borderRadius: 20, 
-  padding: '16px',
-  border: `1px solid ${selectedGroup?.color || '#3498db'}40`
-}}>
-  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-    <div style={{ flex: 1 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#ffd966', marginBottom: 6 }}>
-        Важно для получения уведомлений!
-      </div>
-      <div style={{ fontSize: 13, color: 'white', opacity: 0.85, marginBottom: 16, lineHeight: 1.5 }}>
-        Если вы зашли в приложение не через бота, но при этом хотите получать уведомления или персонализированные скидки — необходимо перейти в бота и начать диалог.
-      </div>
-      <button
-        onClick={() => {
-          // Открывает диалог с ботом (сообществом)
-          // ID сообщества: 237231570
-          // Формат ссылки: https://vk.com/im?sel=-237231570
-          vkBridge.send('VKWebAppOpenLink', { 
-            url: 'https://vk.com/im?sel=-237231570'
-          }).catch(err => {
-            console.error('Ошибка открытия диалога:', err);
-            // Fallback: открыть в новой вкладке если VK Bridge не сработал
-            window.open('https://vk.com/im?sel=-237231570', '_blank');
-          });
-        }}
-        style={{
-          background: 'linear-gradient(135deg, #4a76a8, #3b5998)',
-          border: 'none',
-          padding: '12px 20px',
-          borderRadius: 24,
-          color: 'white',
-          fontWeight: 600,
-          cursor: 'pointer',
-          fontSize: 14,
-          width: '100%',
-          transition: 'transform 0.2s, box-shadow 0.2s'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(74,118,168,0.4)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = 'none';
-        }}
-      >
-        Перейти в бота
-      </button>
-    </div>
-  </div>
-</div>
-    </div>
-	{/* Блок с выбранным адресом */}
-    {selectedLocation && (
-        <div 
-            style={{ 
-                background: 'rgba(30,35,48,0.7)', 
-                borderRadius: 28, 
-                padding: 16, 
-                marginBottom: 16,
+      
+      {/* Блок с уведомлением о боте */}
+      <div style={{ 
+        marginTop: 16, 
+        background: 'rgba(52, 152, 219, 0.15)', 
+        borderRadius: 20, 
+        padding: '16px',
+        border: `1px solid ${selectedGroup?.color || '#3498db'}40`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#ffd966', marginBottom: 6 }}>
+              Важно для получения уведомлений!
+            </div>
+            <div style={{ fontSize: 13, color: 'white', opacity: 0.85, marginBottom: 16, lineHeight: 1.5 }}>
+              Если вы зашли в приложение не через бота, но при этом хотите получать уведомления или персонализированные скидки — необходимо перейти в бота и начать диалог.
+            </div>
+            <button
+              onClick={() => {
+                vkBridge.send('VKWebAppOpenLink', { 
+                  url: 'https://vk.com/im?sel=-237231570'
+                }).catch(err => {
+                  console.error('Ошибка открытия диалога:', err);
+                  window.open('https://vk.com/im?sel=-237231570', '_blank');
+                });
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #4a76a8, #3b5998)',
+                border: 'none',
+                padding: '12px 20px',
+                borderRadius: 24,
+                color: 'white',
+                fontWeight: 600,
                 cursor: 'pointer',
-                border: `1px solid ${selectedGroup?.color}40`
-            }}
-            onClick={() => setShowLocationSelector(true)}
-        >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                    {selectedLocation.city && (
-                        <div style={{ fontSize: 13, opacity: 0.7, color: 'white' }}>
-                            {selectedLocation.city}
-                        </div>
-                    )}
-                    <div style={{ fontSize: 14, fontWeight: 500, color: 'white' }}>
-                        {selectedLocation.address?.substring(0, 50)}
-                        {selectedLocation.address?.length > 50 ? '...' : ''}
-                    </div>
-                    {selectedLocation.phone && (
-                        <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, color: 'white' }}>
-                            {selectedLocation.phone}
-                        </div>
-                    )}
-                </div>
-                <div style={{ fontSize: 20, color: 'white' }}>▼</div>
-            </div>
+                fontSize: 14,
+                width: '100%',
+                transition: 'transform 0.2s, box-shadow 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(74,118,168,0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              Перейти в бота
+            </button>
+          </div>
         </div>
-    )}
-    {/* Блок с активными акциями на главной */}
-    {promotions.length > 0 && (
-      <div style={{ background:'rgba(30,35,48,0.7)', borderRadius:28, padding:20, marginTop:20 }}>
-        <h3 style={{ fontSize:18, marginBottom:12, color:'white' }}>Активные акции</h3>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {promotions.slice(0, 3).map(offer => {
-            const endDate = adjustDateToLocal(offer.end_date, selectedGroup?.timezoneOffset || 0);
-            const now = currentTime;
-            
-            const timeLeftMs = endDate ? endDate - now : 0;
-            let timeLeftText = '';
-            let totalSeconds = 0;
-            let totalMinutes = 0;
-            let totalHours = 0;
-            
-            if (timeLeftMs > 0) {
-              totalSeconds = Math.floor(timeLeftMs / 1000);
-              totalMinutes = Math.floor(totalSeconds / 60);
-              totalHours = Math.floor(totalMinutes / 60);
-              const hours = totalHours;
-              const minutes = totalMinutes % 60;
-              const seconds = totalSeconds % 60;
-              
-              if (hours > 0) {
-                if (minutes > 0) {
-                  timeLeftText = `${hours} ${getHoursWord(hours)} ${minutes} ${getMinutesWord(minutes)}`;
-                } else {
-                  timeLeftText = `${hours} ${getHoursWord(hours)}`;
-                }
-              } else if (minutes > 0) {
-                timeLeftText = `${minutes} ${getMinutesWord(minutes)} ${seconds} сек`;
-              } else {
-                timeLeftText = `${seconds} секунд`;
-              }
-            } else {
-              timeLeftText = 'Акция завершена';
-            }
-            
-            const showTimeLeft = timeLeftMs > 0;
-            
-            return (
-              <div key={offer.id} style={{ background:'rgba(0,0,0,0.3)', borderRadius:16, padding:'10px 14px' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <span style={{ fontSize:24 }}>{offer.emoji || '🎯'}</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, color:'white', fontSize:14 }}>{offer.name}</div>
-                    <div style={{ fontSize:11, opacity:0.7, color:'white' }}>{offer.description?.substring(0, 50)}...</div>
-                    {showTimeLeft && (
-                      <div style={{ 
-                        fontSize:11, 
-                        color: totalHours < 1 ? '#ff6b6b' : '#ffd966', 
-                        marginTop:4,
-                        fontWeight: 500,
-                        fontFamily: totalHours > 0 ? 'inherit' : 'monospace'
-                      }}>
-                        Осталось: {timeLeftText}
-                      </div>
-                    )}
-                    {!showTimeLeft && (
-                      <div style={{ fontSize:11, color: '#e74c3c', marginTop:4, fontWeight: 500 }}>
-                        {timeLeftText}
-                      </div>
-                    )}
-                  </div>
-                  <button 
-                    onClick={() => setActiveTab('offers')}
-                    style={{ background:'#ff4d4d', border:'none', padding:'6px 12px', borderRadius:20, color:'white', fontSize:11, cursor:'pointer' }}
-                  >
-                    Подробнее
-                  </button>
-                </div>
+      </div>
+    </div>
+    
+    {/* Блок с выбранным адресом */}
+    {selectedLocation && (
+      <div 
+        style={{ 
+          background: 'rgba(30,35,48,0.7)', 
+          borderRadius: 28, 
+          padding: 16, 
+          marginBottom: 16,
+          cursor: 'pointer',
+          border: `1px solid ${selectedGroup?.color}40`
+        }}
+        onClick={() => setShowLocationSelector(true)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            {selectedLocation.city && (
+              <div style={{ fontSize: 13, opacity: 0.7, color: 'white' }}>
+                {selectedLocation.city}
               </div>
-            );
-          })}
-          {promotions.length > 3 && (
-            <div style={{ textAlign:'center', marginTop:8 }}>
-              <button 
-                onClick={() => setActiveTab('offers')}
-                style={{ background:'transparent', border:'1px solid #ff4d4d', padding:'8px 16px', borderRadius:20, color:'#ff4d4d', fontSize:12, cursor:'pointer' }}
-              >
-                + ещё {promotions.length - 3} акций
-              </button>
+            )}
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'white' }}>
+              {selectedLocation.address?.substring(0, 50)}
+              {selectedLocation.address?.length > 50 ? '...' : ''}
             </div>
-          )}
+            {selectedLocation.phone && (
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, color: 'white' }}>
+                {selectedLocation.phone}
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 20, color: 'white' }}>▼</div>
         </div>
       </div>
     )}
+    
+    {/* Блок с КУПЛЕННЫМИ акциями на главной */}
+    {purchasedPromotions.length > 0 && (() => {
+      // Фильтруем купленные акции, которые ещё не использованы и активны по датам
+      const now = currentTime;
+      const companyOffset = selectedGroup?.timezoneOffset || 0;
+      
+      const validPurchasedPromotions = purchasedPromotions.filter(promo => {
+        // Проверяем, что акция не использована
+        if (promo.used) return false;
+        
+        // Проверяем дату окончания акции (если есть)
+        if (promo.end_date) {
+          const endDate = adjustDateToLocal(promo.end_date, companyOffset);
+          if (endDate < now) return false;
+        }
+        
+        return true;
+      });
+      
+      if (validPurchasedPromotions.length === 0) return null;
+      
+      return (
+        <div style={{ background:'rgba(30,35,48,0.7)', borderRadius:28, padding:20, marginTop:20 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+            <h3 style={{ fontSize:18, color:'white' }}>Мои акции</h3>
+            <span style={{ fontSize:12, color:'#ffd966' }}>доступно: {validPurchasedPromotions.length}</span>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {validPurchasedPromotions.slice(0, 3).map(promo => {
+              const endDate = promo.end_date ? adjustDateToLocal(promo.end_date, companyOffset) : null;
+              const timeLeftMs = endDate ? endDate - now : 0;
+              let timeLeftText = '';
+              let totalSeconds = 0;
+              let totalMinutes = 0;
+              let totalHours = 0;
+              let isExpiringSoon = false;
+              
+              if (timeLeftMs > 0) {
+                totalSeconds = Math.floor(timeLeftMs / 1000);
+                totalMinutes = Math.floor(totalSeconds / 60);
+                totalHours = Math.floor(totalMinutes / 60);
+                const hours = totalHours;
+                const minutes = totalMinutes % 60;
+                const seconds = totalSeconds % 60;
+                
+                if (hours > 0) {
+                  if (minutes > 0) {
+                    timeLeftText = `${hours} ${getHoursWord(hours)} ${minutes} ${getMinutesWord(minutes)}`;
+                  } else {
+                    timeLeftText = `${hours} ${getHoursWord(hours)}`;
+                  }
+                  // Если осталось меньше 24 часов - подсвечиваем
+                  if (hours < 24) isExpiringSoon = true;
+                } else if (minutes > 0) {
+                  timeLeftText = `${minutes} ${getMinutesWord(minutes)} ${seconds} сек`;
+                  isExpiringSoon = true;
+                } else {
+                  timeLeftText = `${seconds} секунд`;
+                  isExpiringSoon = true;
+                }
+              } else {
+                timeLeftText = 'Срок истёк';
+              }
+              
+              const showTimeLeft = timeLeftMs > 0;
+              const rewardType = promo.reward_type || 'discount';
+              const rewardValue = promo.reward_value || 0;
+              const rewardText = rewardType === 'bonus' ? `+${rewardValue} бонусов` : `${rewardValue}% скидка`;
+              
+              return (
+                <div 
+                  key={promo.id} 
+                  style={{ 
+                    background: 'rgba(0,0,0,0.3)', 
+                    borderRadius: 16, 
+                    padding: '12px 14px',
+                    borderLeft: `4px solid ${isExpiringSoon ? '#e74c3c' : selectedGroup?.color || '#2ecc71'}`
+                  }}
+                >
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <span style={{ fontSize:28 }}>{promo.emoji || ''}</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:600, color:'white', fontSize:14 }}>
+                        {promo.name}
+                      </div>
+                      <div style={{ fontSize:11, opacity:0.7, color:'white', marginTop:2 }}>
+                        {rewardText}
+                      </div>
+                      {showTimeLeft && (
+                        <div style={{ 
+                          fontSize:11, 
+                          color: isExpiringSoon ? '#ff6b6b' : '#ffd966', 
+                          marginTop: 6,
+                          fontWeight: 500,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}>
+                          ⏰ {timeLeftText}
+                        </div>
+                      )}
+                      {!showTimeLeft && endDate && (
+                        <div style={{ fontSize:11, color: '#e74c3c', marginTop: 6, fontWeight: 500 }}>
+                          ❌ Срок действия истёк
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ 
+                      background: selectedGroup?.color || '#2ecc71', 
+                      padding:'4px 10px', 
+                      borderRadius: 20, 
+                      fontSize: 10, 
+                      fontWeight: 600, 
+                      color: 'white',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {promo.used ? 'Использована' : 'Активна'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {validPurchasedPromotions.length > 3 && (
+              <div style={{ textAlign:'center', marginTop:8 }}>
+                <button 
+                  onClick={() => setActiveTab('offers')}
+                  style={{ background:'transparent', border:`1px solid ${selectedGroup?.color}`, padding:'8px 16px', borderRadius:20, color:selectedGroup?.color, fontSize:12, cursor:'pointer' }}
+                >
+                  + ещё {validPurchasedPromotions.length - 3} купленных акций
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    })()}
   </>
 )}
 {showLocationSelector && locations && (
