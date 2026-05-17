@@ -2996,3 +2996,54 @@ select.form-input {
         background: #4a5568;
     }
 }
+/* Добавьте в styles.css */
+.audience-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.audience-badge.all {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.audience-badge.new {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.audience-badge.active {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.audience-badge.regular {
+    background: #f3e5f5;
+    color: #6a1b9a;
+}
+
+.audience-badge.dormant {
+    background: #ffebee;
+    color: #c62828;
+}
+
+/* Обновите стиль promotion-item для отображения бейджа аудитории */
+.promotion-item {
+    margin-bottom: 12px;
+    padding: 16px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+.promotion-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}

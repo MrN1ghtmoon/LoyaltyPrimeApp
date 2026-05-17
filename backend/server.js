@@ -267,7 +267,17 @@ app.put('/api/companies/:companyId/timezone', async (req, res) => {
 
 app.get('/api/promotions/:companyId', async (req, res) => {
     try {
-        const promotions = await getPromotions(req.params.companyId);
+        const companyId = req.params.companyId;
+        const userType = req.query.userType; // all, new, active, regular, dormant
+        
+        let promotions;
+        if (userType && userType !== 'all') {
+            // Получаем акции для конкретного типа пользователя + общие
+            promotions = await getPromotions(companyId, userType);
+        } else {
+            promotions = await getPromotions(companyId);
+        }
+        
         res.json(promotions);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -276,7 +286,7 @@ app.get('/api/promotions/:companyId', async (req, res) => {
 
 app.post('/api/promotions', async (req, res) => {
     try {
-        const { companyId, name, emoji, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price } = req.body;
+        const { companyId, name, emoji, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price, target_audience } = req.body;
         
         if (!companyId || !name) {
             return res.status(400).json({ success: false, message: 'companyId и name обязательны' });
@@ -293,7 +303,8 @@ app.post('/api/promotions', async (req, res) => {
             reward_value,
             products,
             is_free,
-            price
+            price,
+            target_audience: target_audience || 'all'
         });
         res.json({ success: true, promotion });
     } catch (error) {
@@ -305,7 +316,7 @@ app.post('/api/promotions', async (req, res) => {
 // Найдите существующий маршрут PUT /api/promotions/:id и замените его на этот:
 app.put('/api/promotions/:id', async (req, res) => {
     try {
-        const { name, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price } = req.body;
+        const { name, description, startDate, endDate, active, reward_type, reward_value, products, is_free, price, target_audience } = req.body;
         
         console.log(`📝 [UPDATE] Обновление акции ${req.params.id}`, { reward_value, price, is_free, endDate });
         
@@ -495,6 +506,10 @@ app.put('/api/promotions/:id', async (req, res) => {
         if (price !== undefined) {
             updates.push(`price = $${paramIndex++}`);
             values.push(price);
+        }
+		if (target_audience !== undefined) {
+            updates.push(`target_audience = $${paramIndex++}`);
+            values.push(target_audience);
         }
         
         if (updates.length === 0) {

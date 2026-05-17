@@ -140,40 +140,128 @@ const getNextTierBySpent = (spent) => {
   
 
 useEffect(() => {
-  // Обновляем акции при переключении на вкладку offers или home
   if ((activeTab === 'offers' || activeTab === 'home') && userId && selectedGroup?.id) {
     
     const refreshData = async () => {
       try {
-        // 1. Обновляем список акций
-        const promotionsResponse = await fetch(`${API_URL}/api/promotions/${selectedGroup.id}`);
+        // 🔥 1. ПОЛУЧАЕМ ТИП ПОЛЬЗОВАТЕЛЯ
+        let userType = 'all';
+        try {
+          console.log(`📡 Запрос классификации для userId=${userId}, companyId=${selectedGroup.id}`);
+          
+          const classificationResponse = await fetch(`${API_URL}/api/users/${userId}/classification/${selectedGroup.id}`);
+          
+          if (!classificationResponse.ok) {
+            console.error(`❌ Ошибка классификации: ${classificationResponse.status}`);
+          } else {
+            const classificationData = await classificationResponse.json();
+            console.log('📊 Данные классификации (RAW):', classificationData);
+            
+            if (classificationData.success) {
+              if (classificationData.classification && classificationData.classification.user_type) {
+                userType = classificationData.classification.user_type;
+                console.log(`✅ Тип пользователя определен: ${userType}`);
+              } else if (classificationData.user_type) {
+                userType = classificationData.user_type;
+                console.log(`✅ Тип пользователя определен (альт): ${userType}`);
+              } else {
+                console.log(`⚠️ Тип пользователя не найден в ответе, используем: ${userType}`);
+                console.log('📋 Полный ответ:', classificationData);
+              }
+            } else {
+              console.error('❌ Ошибка в ответе классификации:', classificationData);
+            }
+          }
+        } catch (e) {
+          console.error('❌ Ошибка получения классификации:', e);
+        }
+        
+        // 🔥 2. ЗАГРУЖАЕМ АКЦИИ
+        const promotionsUrl = `${API_URL}/api/promotions/${selectedGroup.id}?userType=${userType}`;
+        console.log(`📡 Запрос акций: ${promotionsUrl}`);
+        
+        const promotionsResponse = await fetch(promotionsUrl);
         if (promotionsResponse.ok) {
           const allPromos = await promotionsResponse.json();
+          console.log(`📋 Получено акций всего: ${allPromos.length}`);
+          console.log('📋 Список всех акций с аудиторией:', allPromos.map(p => ({ 
+            id: p.id,
+            name: p.name, 
+            audience: p.target_audience || 'all',
+            active: p.active,
+            start: p.start_date,
+            end: p.end_date
+          })));
+          
           const now = new Date();
           const companyOffset = selectedGroup?.timezoneOffset || 0;
           
           const activePromotions = allPromos.filter(promo => {
-            if (!promo.active) return false;
-            if (!promo.start_date || !promo.end_date) return false;
+            // Проверка активности
+            if (!promo.active) {
+              console.log(`❌ Акция "${promo.name}" неактивна (флаг active=false)`);
+              return false;
+            }
+            
+            // Проверка дат
+            if (!promo.start_date || !promo.end_date) {
+              console.log(`❌ Акция "${promo.name}" не имеет дат`);
+              return false;
+            }
+            
             const startDate = adjustDateToLocal(promo.start_date, companyOffset);
             const endDate = adjustDateToLocal(promo.end_date, companyOffset);
-            return now >= startDate && now <= endDate;
+            const isActiveByDate = now >= startDate && now <= endDate;
+            
+            if (!isActiveByDate) {
+              console.log(`❌ Акция "${promo.name}" неактивна по датам (${startDate.toLocaleString()} - ${endDate.toLocaleString()})`);
+              return false;
+            }
+            
+            // 🔥 3. ФИЛЬТРАЦИЯ ПО АУДИТОРИИ
+            const promoAudience = promo.target_audience || 'all';
+            
+            console.log(`🔍 Проверка акции "${promo.name}": аудитория=${promoAudience}, пользователь=${userType}`);
+            
+            // Если акция для всех - показываем
+            if (promoAudience === 'all') {
+              console.log(`✅ Акция "${promo.name}" для всех → показываем`);
+              return true;
+            }
+            
+            // Если акция для новичков и пользователь новичок - показываем
+            if (promoAudience === userType) {
+              console.log(`✅ Акция "${promo.name}" для ${promoAudience} → показываем (пользователь ${userType})`);
+              return true;
+            }
+            
+            // Если пользователь 'new' и акция для 'new' - показываем
+            if (userType === 'new' && promoAudience === 'new') {
+              console.log(`✅ Акция "${promo.name}" для new → показываем`);
+              return true;
+            }
+            
+            // Иначе скрываем
+            console.log(`❌ Акция "${promo.name}" для ${promoAudience}, а пользователь ${userType} → скрываем`);
+            return false;
           });
           
           setPromotions(activePromotions);
+          console.log(`🎯 ИТОГО активных акций для типа ${userType}: ${activePromotions.length}`);
+          console.log('📋 Отображаемые акции:', activePromotions.map(p => ({ name: p.name, audience: p.target_audience })));
+        } else {
+          console.error('Ошибка загрузки акций:', promotionsResponse.status);
         }
         
-        // 2. ✅ ОБНОВЛЯЕМ КУПЛЕННЫЕ АКЦИИ (ВАЖНО!)
+        // Остальной код...
         const purchasedResponse = await fetch(`${API_URL}/api/users/${userId}/promotions/purchased/${selectedGroup.id}`);
         if (purchasedResponse.ok) {
           const purchasedData = await purchasedResponse.json();
           if (purchasedData.success) {
             setPurchasedPromotions(purchasedData.purchased || []);
-            console.log('🔄 Обновлены купленные акции:', purchasedData.purchased?.length);
           }
         }
         
-        // 3. ✅ СИНХРОНИЗИРУЕМ БАЛАНС (на случай если бонусы были списаны)
         await syncBalanceFromDB();
         
       } catch (error) {
@@ -182,13 +270,11 @@ useEffect(() => {
     };
     
     refreshData();
-    
-    // Интервал для автоматического обновления каждые 30 секунд (опционально)
     const interval = setInterval(refreshData, 30000);
-    
     return () => clearInterval(interval);
   }
 }, [activeTab, userId, selectedGroup?.id]);
+
 useEffect(() => {
   const timer = setInterval(() => {
     setCurrentTime(new Date(Date.now() + (selectedGroup?.timezoneOffset || 0) * 60000));
@@ -343,13 +429,27 @@ const loadUserData = async (companyId, vkUserId, userName) => {
         setUserGroupsData(updated);
         saveAllGroupsData(userInfo.id, updated);
         
-        const promosResponse = await fetch(`${API_URL}/api/promotions/${companyId}`);
+        // 🔥 ПОЛУЧАЕМ ТИП ПОЛЬЗОВАТЕЛЯ ИЗ КЛАССИФИКАЦИИ
+        let userType = 'all';
+        try {
+          const classificationResponse = await fetch(`${API_URL}/api/users/${data.user.id}/classification/${companyId}`);
+          const classificationData = await classificationResponse.json();
+          if (classificationData.success && classificationData.classification?.user_type) {
+            userType = classificationData.classification.user_type;
+            console.log(`📊 Тип пользователя при загрузке: ${userType}`);
+          }
+        } catch (e) {
+          console.error('Ошибка получения классификации:', e);
+        }
+        
+        // Загружаем акции с фильтрацией по типу пользователя
+        const promosResponse = await fetch(`${API_URL}/api/promotions/${companyId}?userType=${userType}`);
         if (promosResponse.ok) {
           const allPromos = await promosResponse.json();
           
           // Фильтруем ТОЛЬКО активные акции для VK Mini App (с учетом времени)
           const now = new Date();
-		  const companyOffset = selectedGroup?.timezoneOffset || 0;
+          const companyOffset = selectedGroup?.timezoneOffset || 0;
           
           const activePromotions = allPromos.filter(promo => {
             // 1. Проверяем флаг активности
@@ -358,17 +458,24 @@ const loadUserData = async (companyId, vkUserId, userName) => {
             // 2. Проверяем наличие дат
             if (!promo.start_date || !promo.end_date) return false;
             
+            // 🔥 3. ФИЛЬТРАЦИЯ ПО ТИПУ ПОЛЬЗОВАТЕЛЯ
+            if (promo.target_audience && promo.target_audience !== 'all' && promo.target_audience !== userType) {
+              console.log(`🔒 Акция "${promo.name}" скрыта для типа ${userType} (аудитория: ${promo.target_audience})`);
+              return false;
+            }
+            
             const startDate = adjustDateToLocal(promo.start_date, companyOffset);
             const endDate = adjustDateToLocal(promo.end_date, companyOffset);
             
-            // 3. Проверяем, что текущее время в диапазоне (с учетом часов и минут)
+            // 4. Проверяем, что текущее время в диапазоне
             const isActive = now >= startDate && now <= endDate;
             
             return isActive;
           });
           
           setPromotions(activePromotions);
-          console.log('Активные акции для VK Mini App:', activePromotions.length);
+          console.log(`🎯 Активные акции для типа ${userType}:`, activePromotions.length);
+          console.log('📋 Список активных акций:', activePromotions.map(p => ({ name: p.name, audience: p.target_audience || 'all' })));
         }
         
         // Загружаем дату дня рождения

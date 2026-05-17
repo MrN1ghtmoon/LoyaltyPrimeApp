@@ -1981,10 +1981,30 @@ function renderPromotionsList() {
         return;
     }
     
+    // Маппинг аудиторий для отображения
+    const audienceConfig = {
+        'all': { label: '👥 Все', class: 'audience-all', description: 'Видна всем пользователям' },
+        'new': { label: '🆕 Новички', class: 'audience-new', description: 'Только для новых пользователей' },
+        'active': { label: '⚡ Активные', class: 'audience-active', description: 'Только для активных пользователей' },
+        'regular': { label: '⭐ Постоянные', class: 'audience-regular', description: 'Только для постоянных клиентов' },
+        'dormant': { label: '😴 Спящие', class: 'audience-dormant', description: 'Только для пользователей без покупок 15+ дней' }
+    };
+    
     container.innerHTML = promotions.map(promo => {
         const startDate = promo.start_date ? new Date(promo.start_date) : null;
         const endDate = promo.end_date ? new Date(promo.end_date) : null;
         const now = new Date();
+        
+        // Получаем информацию об аудитории
+        const targetAudience = promo.target_audience || 'all';
+        const audience = audienceConfig[targetAudience] || audienceConfig['all'];
+        
+        // Бейдж аудитории
+        const audienceBadge = `
+            <span class="audience-badge ${audience.class}" title="${audience.description}">
+                ${audience.label}
+            </span>
+        `;
         
         // Проверяем, указаны ли даты
         const hasDates = startDate && endDate;
@@ -1996,6 +2016,7 @@ function renderPromotionsList() {
                     <div class="promotion-header">
                         <div class="promotion-emojis">${promo.emoji || '🎯'}</div>
                         <div class="promotion-name">${escapeHtml(promo.name)}</div>
+                        ${audienceBadge}
                         <div class="promotion-reward" style="background:#ffd966; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700;">${promo.reward_type === 'bonus' ? `+${promo.reward_value} бонусов` : `${promo.reward_value}% скидка`}</div>
                         <div class="promotion-status inactive" style="background:#e2e3e5; color:#383d41;"> Неактивна</div>
                         <button class="btn-edit" onclick="editPromotion(${promo.id})" style="background:#17a2b8; color:white; border:none; padding:6px 12px; border-radius:8px; cursor:pointer;">✏️</button>
@@ -2058,6 +2079,7 @@ function renderPromotionsList() {
                 <div class="promotion-header">
                     <div class="promotion-emojis">${promo.emoji || '🎯'}</div>
                     <div class="promotion-name">${escapeHtml(promo.name)}</div>
+                    ${audienceBadge}
                     <div class="promotion-reward" style="background:#ffd966; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700;">${rewardText}</div>
                     ${priceDisplay}
                     <div class="promotion-status ${status}">${statusText}</div>
@@ -2107,6 +2129,39 @@ function showAddPromotionModal() {
     document.getElementById('promoPriceField').style.display = 'block';
     document.getElementById('promoFreeNote').style.display = 'none';
     
+    // Добавляем селектор аудитории, если его нет
+    let audienceContainer = document.getElementById('promoAudienceContainer');
+    if (!audienceContainer) {
+        const priceField = document.getElementById('promoPriceField');
+        audienceContainer = document.createElement('div');
+        audienceContainer.id = 'promoAudienceContainer';
+        if (priceField && priceField.parentNode) {
+            priceField.parentNode.insertBefore(audienceContainer, priceField.nextSibling);
+        }
+    }
+    
+    // Рендерим селектор аудитории
+    audienceContainer.innerHTML = renderPromotionAudienceSelect('all');
+    
+    // Добавляем обработчик для подсказки
+    const audienceSelect = document.getElementById('promoTargetAudience');
+    if (audienceSelect) {
+        audienceSelect.addEventListener('change', (e) => {
+            const hintSpan = document.getElementById('promoAudienceHint');
+            const options = [
+                { value: 'all', desc: 'Акция видна всем пользователям' },
+                { value: 'new', desc: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
+                { value: 'active', desc: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
+                { value: 'regular', desc: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
+                { value: 'dormant', desc: 'Для пользователей без покупок 15+ дней' }
+            ];
+            const selected = options.find(opt => opt.value === e.target.value);
+            if (hintSpan && selected) {
+                hintSpan.textContent = selected.desc;
+            }
+        });
+    }
+    
     document.getElementById('promotionModalTitle').textContent = 'Создать новую акцию';
     document.getElementById('savePromotionBtn').textContent = 'Создать акцию';
     document.getElementById('deletePromotionBtn').style.display = 'none';
@@ -2137,7 +2192,6 @@ async function editPromotion(promotionId) {
     
     // Заполняем поля - название теперь редактируемое
     const nameInput = document.getElementById('promoName');
-    
     nameInput.value = promo.name;
     nameInput.disabled = false;
     nameInput.style.background = 'white';
@@ -2152,7 +2206,7 @@ async function editPromotion(promotionId) {
     // Загружаем значение скидки
     document.getElementById('promoDiscountValue').value = promo.reward_value || 0;
     
-    // Бесплатная акция и цена (обратная логика: is_free вместо requires_purchase)
+    // Бесплатная акция и цена
     document.getElementById('promoIsFree').checked = promo.is_free || false;
     document.getElementById('promoPrice').value = promo.price || 100;
     
@@ -2163,6 +2217,38 @@ async function editPromotion(promotionId) {
     } else {
         document.getElementById('promoPriceField').style.display = 'block';
         document.getElementById('promoFreeNote').style.display = 'none';
+    }
+    
+    // Добавляем/обновляем селектор аудитории
+    let audienceContainer = document.getElementById('promoAudienceContainer');
+    if (!audienceContainer) {
+        const priceField = document.getElementById('promoPriceField');
+        audienceContainer = document.createElement('div');
+        audienceContainer.id = 'promoAudienceContainer';
+        if (priceField && priceField.parentNode) {
+            priceField.parentNode.insertBefore(audienceContainer, priceField.nextSibling);
+        }
+    }
+    
+    audienceContainer.innerHTML = renderPromotionAudienceSelect(promo.target_audience || 'all');
+    
+    // Добавляем обработчик для подсказки
+    const audienceSelect = document.getElementById('promoTargetAudience');
+    if (audienceSelect) {
+        audienceSelect.addEventListener('change', (e) => {
+            const hintSpan = document.getElementById('promoAudienceHint');
+            const options = [
+                { value: 'all', desc: 'Акция видна всем пользователям' },
+                { value: 'new', desc: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
+                { value: 'active', desc: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
+                { value: 'regular', desc: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
+                { value: 'dormant', desc: 'Для пользователей без покупок 15+ дней' }
+            ];
+            const selected = options.find(opt => opt.value === e.target.value);
+            if (hintSpan && selected) {
+                hintSpan.textContent = selected.desc;
+            }
+        });
     }
     
     // Даты
@@ -2186,7 +2272,6 @@ async function editPromotion(promotionId) {
     
     document.getElementById('promoActive').checked = promo.active;
     
-    // Обновляем заголовок и кнопку
     document.getElementById('promotionModalTitle').textContent = 'Редактировать акцию';
     document.getElementById('savePromotionBtn').textContent = 'Сохранить изменения';
     document.getElementById('deletePromotionBtn').style.display = 'block';
@@ -2204,6 +2289,7 @@ async function savePromotion() {
     const products = document.getElementById('promoProducts').value.trim();
     const isFree = document.getElementById('promoIsFree').checked;
     const price = isFree ? 0 : (parseInt(document.getElementById('promoPrice').value) || 100);
+	const targetAudience = document.getElementById('promoTargetAudience')?.value || 'all';
     const errorElement = document.getElementById('promotionError');
     
     // Validate name
@@ -2303,7 +2389,8 @@ async function savePromotion() {
             reward_type: 'discount',
             reward_value: rewardValue,
             is_free: isFree,
-            price: price
+            price: price,
+			target_audience: targetAudience
         };
         
         let response;
@@ -5112,4 +5199,30 @@ async function submitForgotPassword() {
         button.textContent = originalText;
         button.disabled = false;
     }
+}
+
+function renderPromotionAudienceSelect(selectedValue) {
+    const audienceOptions = [
+        { value: 'all', label: '👥 Все пользователи', description: 'Акция видна всем пользователям' },
+        { value: 'new', label: '🆕 Новички', description: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
+        { value: 'active', label: '⚡ Активные', description: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
+        { value: 'regular', label: '⭐ Постоянные', description: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
+        { value: 'dormant', label: '😴 Спящие', description: 'Для пользователей без покупок 15+ дней' }
+    ];
+    
+    return `
+        <div class="form-group">
+            <label>👥 Целевая аудитория</label>
+            <select id="promoTargetAudience" class="form-select" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #ddd;">
+                ${audienceOptions.map(opt => `
+                    <option value="${opt.value}" ${selectedValue === opt.value ? 'selected' : ''} title="${opt.description}">
+                        ${opt.label}
+                    </option>
+                `).join('')}
+            </select>
+            <small style="display: block; margin-top: 4px; color: #666;" id="promoAudienceHint">
+                ${audienceOptions.find(opt => opt.value === (selectedValue || 'all'))?.description || 'Акция видна всем пользователям'}
+            </small>
+        </div>
+    `;
 }
