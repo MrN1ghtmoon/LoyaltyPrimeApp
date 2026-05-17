@@ -22,18 +22,15 @@ async function syncSequence() {
     const maxId = parseInt(result.rows[0].max_id);
     
     if (maxId === 0) {
-        // Таблица пустая - сбрасываем на 1
         await pool.query('ALTER SEQUENCE companies_id_seq RESTART WITH 1');
         console.log('✅ Последовательность сброшена на 1 (таблица пуста)');
     } else {
-        // Устанавливаем на maxId
         await pool.query(`SELECT setval('companies_id_seq', $1)`, [maxId]);
         console.log(`✅ Последовательность установлена на ${maxId}`);
     }
 }
 
-// Функция для создания компании (БЕЗ предустановленных акций и заданий)
-// В функции createCompany(), измените INSERT запрос
+// Функция для создания компании (Mini App выключен по умолчанию)
 async function createCompany() {
     console.log('\n📝 Создание новой компании\n');
     
@@ -53,11 +50,13 @@ async function createCompany() {
     try {
         await syncSequence();
         
-        // ИЗМЕНЕНО: явно устанавливаем is_active = false, mini_app_active = false
+        // ✅ ТОЛЬКО mini_app_active = false (CRM всегда доступна)
         const result = await pool.query(
-            `INSERT INTO companies (company, name, email, phone, password, brand_color, description, is_active, mini_app_active, created_at) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, false, false, NOW()) 
-             RETURNING id, company, email`,
+            `INSERT INTO companies (
+                company, name, email, phone, password, brand_color, description, 
+                mini_app_active, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW()) 
+            RETURNING id, company, email, mini_app_active`,
             [company, name, email, phone || '', password, brandColor || '#2ecc71', description || '']
         );
         
@@ -67,8 +66,13 @@ async function createCompany() {
         console.log(`   ID: ${companyId}`);
         console.log(`   Email: ${email}`);
         console.log(`   Пароль: ${password}`);
-        console.log(`   ⚠️ Статус: ЗАБЛОКИРОВАНА (CRM и VK Mini App неактивны)`);
-        console.log(`   Для активации войдите в CRM и включите оба переключателя в настройках.`);
+        console.log(`\n🔒 Статус VK Mini App: ВЫКЛЮЧЕН (заблокирован)`);
+        console.log(`\n📌 Для активации программы лояльности:`);
+        console.log(`   1. Войдите в CRM: http://localhost:3001`);
+        console.log(`   2. Используйте email: ${email} и пароль: ${password}`);
+        console.log(`   3. Перейдите в раздел "Настройки" → "VK Mini App"`);
+        console.log(`   4. Включите переключатель "VK Mini App"`);
+        console.log(`\n💡 После включения клиенты смогут пользоваться программой лояльности.`);
     } catch (error) {
         console.error('❌ Ошибка создания компании:', error.message);
     }
@@ -76,8 +80,7 @@ async function createCompany() {
 
 // Функция для удаления компании
 async function deleteCompany() {
-    // Показываем все компании
-    const companies = await pool.query('SELECT id, company, email FROM companies ORDER BY id');
+    const companies = await pool.query('SELECT id, company, email, mini_app_active FROM companies ORDER BY id');
     
     if (companies.rows.length === 0) {
         console.log('\n📭 Нет компаний в базе данных');
@@ -85,9 +88,18 @@ async function deleteCompany() {
     }
     
     console.log('\n📋 Список компаний:');
+    console.log('┌────┬──────────────────────────┬──────────────────────────┬──────────────┐');
+    console.log('│ ID │ Название                 │ Email                    │ Mini App     │');
+    console.log('├────┼──────────────────────────┼──────────────────────────┼──────────────┤');
+    
     companies.rows.forEach(comp => {
-        console.log(`   ID: ${comp.id} | ${comp.company} | ${comp.email}`);
+        const name = (comp.company || '').substring(0, 24).padEnd(24);
+        const email = (comp.email || '').substring(0, 24).padEnd(24);
+        const status = comp.mini_app_active ? '🟢 Вкл' : '🔴 Выкл';
+        console.log(`│ ${String(comp.id).padEnd(2)} │ ${name} │ ${email} │ ${status.padEnd(12)} │`);
     });
+    
+    console.log('└────┴──────────────────────────┴──────────────────────────┴──────────────┘');
     
     console.log('');
     const answer = await question('Введите ID компании для удаления: ');
@@ -98,7 +110,6 @@ async function deleteCompany() {
         return;
     }
     
-    // Получаем информацию о компании
     const company = await pool.query('SELECT id, company, email FROM companies WHERE id = $1', [companyId]);
     
     if (company.rows.length === 0) {
@@ -115,8 +126,6 @@ async function deleteCompany() {
     if (confirm.toLowerCase() === 'yes') {
         await pool.query('DELETE FROM companies WHERE id = $1', [companyId]);
         console.log('✅ Компания успешно удалена!');
-        
-        // Синхронизируем последовательность после удаления
         await syncSequence();
     } else {
         console.log('❌ Удаление отменено');
@@ -125,7 +134,9 @@ async function deleteCompany() {
 
 // Функция для просмотра всех компаний
 async function listCompanies() {
-    const companies = await pool.query('SELECT id, company, email, phone, created_at FROM companies ORDER BY id');
+    const companies = await pool.query(
+        'SELECT id, company, email, phone, mini_app_active, created_at FROM companies ORDER BY id'
+    );
     
     if (companies.rows.length === 0) {
         console.log('\n📭 Нет компаний в базе данных');
@@ -133,39 +144,90 @@ async function listCompanies() {
     }
     
     console.log('\n📋 Список компаний:');
-    console.log('┌────┬──────────────────────────┬──────────────────────────┬─────────────┐');
-    console.log('│ ID │ Название                 │ Email                    │ Телефон     │');
-    console.log('├────┼──────────────────────────┼──────────────────────────┼─────────────┤');
+    console.log('┌────┬──────────────────────────┬──────────────────────────┬─────────────┬──────────────┐');
+    console.log('│ ID │ Название                 │ Email                    │ Телефон     │ Mini App     │');
+    console.log('├────┼──────────────────────────┼──────────────────────────┼─────────────┼──────────────┤');
     
     companies.rows.forEach(comp => {
         const name = (comp.company || '').substring(0, 24).padEnd(24);
         const email = (comp.email || '').substring(0, 24).padEnd(24);
         const phone = (comp.phone || '-').substring(0, 11).padEnd(11);
-        console.log(`│ ${String(comp.id).padEnd(2)} │ ${name} │ ${email} │ ${phone} │`);
+        const status = comp.mini_app_active ? '🟢 Включен' : '🔴 Выключен';
+        console.log(`│ ${String(comp.id).padEnd(2)} │ ${name} │ ${email} │ ${phone} │ ${status.padEnd(12)} │`);
     });
     
-    console.log('└────┴──────────────────────────┴──────────────────────────┴─────────────┘');
+    console.log('└────┴──────────────────────────┴──────────────────────────┴─────────────┴──────────────┘');
     console.log(`\n📊 Всего компаний: ${companies.rows.length}`);
+    console.log(`   🟢 Включено (Mini App активен): ${companies.rows.filter(c => c.mini_app_active).length}`);
+    console.log(`   🔴 Выключено (Mini App заблокирован): ${companies.rows.filter(c => !c.mini_app_active).length}`);
+}
+
+// Функция для включения/выключения Mini App (для администратора)
+async function toggleMiniApp() {
+    const companies = await pool.query('SELECT id, company, mini_app_active FROM companies ORDER BY id');
+    
+    if (companies.rows.length === 0) {
+        console.log('\n📭 Нет компаний в базе данных');
+        return;
+    }
+    
+    console.log('\n📋 Список компаний:');
+    companies.rows.forEach(comp => {
+        const status = comp.mini_app_active ? '🟢 Включен' : '🔴 Выключен';
+        console.log(`   ID: ${comp.id} | ${comp.company} | ${status}`);
+    });
+    
+    console.log('');
+    const answer = await question('Введите ID компании для изменения статуса Mini App: ');
+    
+    const companyId = parseInt(answer);
+    if (isNaN(companyId)) {
+        console.log('❌ Некорректный ID');
+        return;
+    }
+    
+    const company = await pool.query('SELECT id, company, mini_app_active FROM companies WHERE id = $1', [companyId]);
+    
+    if (company.rows.length === 0) {
+        console.log('❌ Компания с таким ID не найдена');
+        return;
+    }
+    
+    const currentStatus = company.rows[0].mini_app_active;
+    const newStatus = !currentStatus;
+    
+    console.log(`\n📌 Компания: ${company.rows[0].company}`);
+    console.log(`   Текущий статус: ${currentStatus ? '🟢 Включен' : '🔴 Выключен'}`);
+    console.log(`   Новый статус: ${newStatus ? '🟢 Включен' : '🔴 Выключен'}`);
+    
+    const confirm = await question('\nИзменить статус? (yes/no): ');
+    
+    if (confirm.toLowerCase() === 'yes') {
+        await pool.query('UPDATE companies SET mini_app_active = $1 WHERE id = $2', [newStatus, companyId]);
+        console.log(`✅ Статус Mini App изменён на ${newStatus ? 'Включен' : 'Выключен'}`);
+    } else {
+        console.log('❌ Изменение отменено');
+    }
 }
 
 // Главное меню
 async function showMenu() {
     console.clear();
-    console.log('╔════════════════════════════════════╗');
-    console.log('║     Управление компаниями          ║');
-    console.log('╠════════════════════════════════════╣');
-    console.log('║  1. Показать все компании          ║');
-    console.log('║  2. Создать новую компанию         ║');
-    console.log('║  3. Удалить компанию               ║');
-    console.log('║  4. Выход                          ║');
-    console.log('╚════════════════════════════════════╝');
+    console.log('╔════════════════════════════════════════════╗');
+    console.log('║     Управление компаниями                  ║');
+    console.log('╠════════════════════════════════════════════╣');
+    console.log('║  1. Показать все компании                  ║');
+    console.log('║  2. Создать новую компанию                 ║');
+    console.log('║  3. Удалить компанию                       ║');
+    console.log('║  4. Включить/выключить Mini App            ║');
+    console.log('║  5. Выход                                  ║');
+    console.log('╚════════════════════════════════════════════╝');
     console.log('');
 }
 
 // Основной цикл
 async function main() {
     try {
-        // Проверяем подключение к БД
         await pool.query('SELECT NOW()');
         console.log('✅ Подключение к базе данных установлено\n');
         
@@ -173,7 +235,7 @@ async function main() {
         
         while (running) {
             await showMenu();
-            const choice = await question('Выберите действие (1-4): ');
+            const choice = await question('Выберите действие (1-5): ');
             
             switch (choice) {
                 case '1':
@@ -189,7 +251,11 @@ async function main() {
                     await question('\nНажмите Enter для продолжения...');
                     break;
                 case '4':
-                    console.log('\n👋 Произошел выход');
+                    await toggleMiniApp();
+                    await question('\nНажмите Enter для продолжения...');
+                    break;
+                case '5':
+                    console.log('\n👋 До свидания!');
                     running = false;
                     break;
                 default:

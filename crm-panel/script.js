@@ -5003,38 +5003,19 @@ async function loadMiniAppStatus() {
             const isActive = data.mini_app_active;
             const toggle = document.getElementById('miniAppToggle');
             const statusText = document.getElementById('miniAppStatusText');
-            const warningDiv = document.getElementById('miniAppWarning');
             
-            if (toggle) {
-                toggle.checked = isActive;
-            }
-            
+            if (toggle) toggle.checked = isActive;
             if (statusText) {
                 statusText.textContent = isActive ? 'Включен' : 'Отключен';
                 statusText.style.background = isActive ? '#d4edda' : '#f8d7da';
                 statusText.style.color = isActive ? '#155724' : '#721c24';
             }
             
-            if (warningDiv) {
-                warningDiv.style.display = isActive ? 'none' : 'block';
-            }
-            
-            // Добавлено: Показываем уведомление о статусе блокировки при входе
-            if (!isActive && !sessionStorage.getItem('blocked_notification_shown')) {
-                setTimeout(() => {
-                    showMiniAppStatus(
-                        '⚠️ VK Mini App отключен. Включите его в настройках CRM, чтобы пользователи могли пользоваться приложением.',
-                        'warning'
-                    );
-                    sessionStorage.setItem('blocked_notification_shown', 'true');
-                }, 1000);
-            }
         }
     } catch (error) {
-        console.error('Ошибка загрузки статуса Mini App:', error);
+        console.error('Ошибка:', error);
     }
 }
-
 // Переключение статуса Mini App
 async function toggleMiniApp(isActive) {
     if (!currentBusiness) {

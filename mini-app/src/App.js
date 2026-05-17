@@ -12,14 +12,6 @@ import { getHoursWord, getMinutesWord } from './utils/dateUtils';
 // mini-app/src/App.js
 const API_URL = 'http://localhost:3001'; // Локальный бэкенд
 
-// Или лучше так:
-const getApiUrl = () => {
-  if (window.location.hostname === 'localhost') {
-    return 'http://localhost:3001';
-  }
-  return 'https://ваш-бэкенд.onrender.com'; 
-};
-
 
 // Определяем DEFAULT_TIERS ДО его использования
 const DEFAULT_TIERS = [
@@ -1784,7 +1776,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                           alignItems: 'center',
                           gap: 4
                         }}>
-                          ⏰ {timeLeftText}
+                          {timeLeftText}
                         </div>
                       )}
                       {!showTimeLeft && endDate && (
@@ -2023,12 +2015,12 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                       borderRadius: 8,
                       display: 'inline-block'
                     }}>
-                      ⏰ {timeLeftText}
+                      {timeLeftText}
                     </div>
                   )}
                   {!isCurrentlyActive && endDate && now > endDate && (
                     <div style={{ fontSize:11, marginTop:6, color: '#e74c3c' }}>
-                      ❌ Акция завершена
+                      Акция завершена
                     </div>
                   )}
                   

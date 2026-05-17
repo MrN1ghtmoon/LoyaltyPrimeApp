@@ -29,7 +29,7 @@ async function initDatabase() {
                 password VARCHAR(255) NOT NULL,
                 brand_color VARCHAR(50) DEFAULT '#2A4B7C',
                 description TEXT DEFAULT 'Добро пожаловать в программу лояльности!',
-                is_active BOOLEAN DEFAULT FALSE,
+                mini_app_active BOOLEAN DEFAULT FALSE,
                 settings JSONB DEFAULT '{}',
                 tiers_settings JSONB DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -239,20 +239,14 @@ async function initDatabase() {
             )
         `);
 		
-		await addTimezoneColumn();
         console.log('Таблицы созданы/проверены');
 		
-         await initLocationTables();
-        await addMissingColumns();
+        await initLocationTables();
 		await addGiveawayColumns();
-		await migrateGiveawaysTable();
-        await addPromotionRewardColumns();
         await addGameSettingsTable();  
-        await addGameSettingsColumns();
         await addDailyBonusSettings(); 
         await addTransactionColumns();
         await ensureAllQuestsExist();
-		await checkAndResetQuests();
 		await addQuestColumns();
 		await addBonusSettingsColumn();
 		await addNotificationCampaignColumns();
@@ -414,8 +408,6 @@ async function ensureAllQuestsExist() {
         console.error('❌ Ошибка обеспечения наличия заданий:', error);
     }
 }
-
-// Добавьте эту функцию в database-pg.js после initDatabase()
 
 async function addGameSettingsTable() {
     try {
@@ -971,15 +963,15 @@ async function insertTestData() {
             
             // Добавляем первую компанию
             const result1 = await query(`
-                INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings) 
-                VALUES ('Пиццерия "Маргарита"', 'Иван Петров', 'pizza@test.com', '+7 (999) 123-45-67', '123456', '#e74c3c', 'Итальянская кухня, пицца, паста', $1)
+                INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, mini_app_active) 
+                VALUES ('Пиццерия "Маргарита"', 'Иван Петров', 'pizza@test.com', '+7 (999) 123-45-67', '123456', '#e74c3c', 'Итальянская кухня, пицца, паста', $1, false)
                 RETURNING id
             `, [defaultTiers]);
             
             // Добавляем вторую компанию
             const result2 = await query(`
-                INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings) 
-                VALUES ('Кофейня "Кофеин"', 'Анна Сидорова', 'coffee@test.com', '+7 (999) 234-56-78', '123456', '#8e44ad', 'Ароматный кофе, десерты, выпечка', $1)
+                INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, mini_app_active) 
+                VALUES ('Кофейня "Кофеин"', 'Анна Сидорова', 'coffee@test.com', '+7 (999) 234-56-78', '123456', '#8e44ad', 'Ароматный кофе, десерты, выпечка', $1, false)
                 RETURNING id
             `, [defaultTiers]);
             
@@ -1203,8 +1195,8 @@ async function addCompany(companyData) {
     ]);
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 const result = await query(
-        `INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, is_active, mini_app_active, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, false, NOW()) 
+        `INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, mini_app_active, created_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, NOW()) 
          RETURNING id, company, email, brand_color as "brandColor", description, created_at`,
         [company, name, email, phone || '', hashedPassword, brandColor || '#2A4B7C', description || `Добро пожаловать в ${company}!`, defaultTiers]
     );
@@ -1231,8 +1223,7 @@ async function getAllCompanies() {
             brand_color as "brandColor", 
             description,
             COALESCE(settings->>'company_emoji', '🏢') as "companyEmoji",
-            COALESCE(mini_app_active, false) as "mini_app_active",
-            COALESCE(is_active, false) as "is_active"
+            COALESCE(mini_app_active, false) as "mini_app_active"
         FROM companies 
         ORDER BY created_at DESC
     `);
@@ -1240,7 +1231,7 @@ async function getAllCompanies() {
 }
 
 async function getCompanyById(id) {
-    const result = await query('SELECT *, is_active, mini_app_active FROM companies WHERE id = $1', [id]);
+    const result = await query('SELECT *, mini_app_active FROM companies WHERE id = $1', [id]);
     return result.rows[0];
 }
 
@@ -1428,39 +1419,6 @@ async function updateQuestTargetTypes() {
         console.error('Ошибка обновления target_type:', error);
     }
 }
-async function checkAndResetQuests(userId, companyId) {
-    const now = new Date();
-    
-    // Получаем все задания пользователя
-    const userQuests = await query(`
-        SELECT uqp.*, q.duration_days, q.title
-        FROM user_quest_progress uqp
-        JOIN quests q ON uqp.quest_id = q.id
-        WHERE uqp.user_id = $1 AND q.company_id = $2
-    `, [userId, companyId]);
-    
-    for (const quest of userQuests.rows) {
-        // Если задание выполнено и есть дата выполнения
-        if (quest.completed && quest.updated_at) {
-            const completedDate = new Date(quest.updated_at);
-            const daysSinceCompleted = Math.floor((now - completedDate) / (1000 * 60 * 60 * 24));
-            const durationDays = quest.duration_days || 1;
-            
-            // Если прошло больше дней чем duration_days - сбрасываем задание
-            if (daysSinceCompleted >= durationDays) {
-                await query(`
-                    UPDATE user_quest_progress 
-                    SET progress = 0, 
-                        completed = FALSE, 
-                        claimed = FALSE,
-                        updated_at = NOW()
-                    WHERE user_id = $1 AND quest_id = $2
-                `, [userId, quest.quest_id]);
-            }
-        }
-    }
-}
-
 async function trackPurchaseProgress(userId, companyId, purchaseAmount) {
     try {
         console.log(`🛒 Отслеживание покупки: userId=${userId}, companyId=${companyId}, amount=${purchaseAmount}`);
@@ -1735,7 +1693,6 @@ async function updateUserBalance(userId, change, type, description, metadata = {
                 [userId, user.company_id, change]
             );
         } else if (type === 'spend') {
-            // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: при списании увеличиваем total_spent
             const spendAmount = Math.abs(change);
             await client.query(
                 'UPDATE users SET total_spent = total_spent + $1 WHERE id = $2',
@@ -1895,75 +1852,6 @@ async function claimDailyBonus(userId, companyId, bonusAmount, newStreak) {
     await updateUserBalance(userId, bonusAmount, 'earn', 'Ежедневный бонус');
     
     return result.rows[0];
-}
-// Добавьте эту функцию в addMissingColumns() или выполните отдельно:
-async function addPromotionRewardColumns() {
-    try {
-        const checkRewardType = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'promotions' AND column_name = 'reward_type'
-        `);
-        
-        if (checkRewardType.rows.length === 0) {
-            console.log('Добавляем колонку reward_type в таблицу promotions...');
-            await query(`ALTER TABLE promotions ADD COLUMN reward_type VARCHAR(50) DEFAULT 'bonus'`);
-            console.log('Колонка reward_type добавлена');
-        }
-        
-        const checkRewardValue = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'promotions' AND column_name = 'reward_value'
-        `);
-        
-        if (checkRewardValue.rows.length === 0) {
-            console.log('Добавляем колонку reward_value в таблицу promotions...');
-            await query(`ALTER TABLE promotions ADD COLUMN reward_value INTEGER DEFAULT 0`);
-            console.log('Колонка reward_value добавлена');
-        }
-        
-        // Добавляем колонку products если её нет
-        const checkProducts = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'promotions' AND column_name = 'products'
-        `);
-        
-        if (checkProducts.rows.length === 0) {
-            console.log('Добавляем колонку products в таблицу promotions...');
-            await query(`ALTER TABLE promotions ADD COLUMN products TEXT`);
-            console.log('Колонка products добавлена');
-        }
-        
-        // Добавляем колонку is_free если её нет
-        const checkIsFree = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'promotions' AND column_name = 'is_free'
-        `);
-        
-        if (checkIsFree.rows.length === 0) {
-            console.log('Добавляем колонку is_free в таблицу promotions...');
-            await query(`ALTER TABLE promotions ADD COLUMN is_free BOOLEAN DEFAULT FALSE`);
-            console.log('Колонка is_free добавлена');
-        }
-        
-        // Добавляем колонку price если её нет
-        const checkPrice = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'promotions' AND column_name = 'price'
-        `);
-        
-        if (checkPrice.rows.length === 0) {
-            console.log('Добавляем колонку price в таблицу promotions...');
-            await query(`ALTER TABLE promotions ADD COLUMN price INTEGER DEFAULT 100`);
-            console.log('Колонка price добавлена');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка добавления колонок:', error);
-    }
 }
 
 async function addGameSettingsColumns() {
@@ -2259,7 +2147,6 @@ async function checkPromotionCycle(promotionId) {
 
 // ============ Функции для Розыгрышей (Giveaways) ============
 async function getGiveaways(companyId, includeInactive = false) {
-    await migrateGiveawaysTable();
     
     let queryText = 'SELECT * FROM giveaways WHERE company_id = $1';
     const params = [companyId];
@@ -2881,117 +2768,6 @@ async function addGiveawayColumns() {
     }
 }
 
-async function migrateGiveawaysTable() {
-    try {
-        // Проверяем существование таблицы
-        const tableExists = await query(`
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = 'giveaways'
-            )
-        `);
-        
-        if (!tableExists.rows[0].exists) {
-            console.log('Таблица giveaways не существует, будет создана позже');
-            return;
-        }
-        
-        // Получаем список существующих колонок
-        const columns = await query(`
-            SELECT column_name, is_nullable 
-            FROM information_schema.columns 
-            WHERE table_name = 'giveaways'
-        `);
-        
-        const existingColumns = columns.rows.map(c => c.column_name);
-        console.log('📋 Существующие колонки giveaways:', existingColumns);
-        
-        // Удаляем устаревшие колонки
-        const columnsToDrop = ['title', 'start_date', 'end_date_old'];
-        for (const col of columnsToDrop) {
-            if (existingColumns.includes(col)) {
-                console.log(`Удаляем устаревшую колонку ${col}...`);
-                await query(`ALTER TABLE giveaways DROP COLUMN ${col}`);
-            }
-        }
-        
-        // Обновляем список колонок после удаления
-        const updatedColumns = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'giveaways'
-        `);
-        const currentColumns = updatedColumns.rows.map(c => c.column_name);
-        
-        // Добавляем колонку name если её нет
-        if (!currentColumns.includes('name')) {
-            console.log('Добавляем колонку name...');
-            await query(`ALTER TABLE giveaways ADD COLUMN name VARCHAR(255)`);
-            await query(`UPDATE giveaways SET name = 'Розыгрыш' WHERE name IS NULL`);
-            await query(`ALTER TABLE giveaways ALTER COLUMN name SET NOT NULL`);
-        }
-        
-        // Добавляем колонку link если её нет
-        if (!currentColumns.includes('link')) {
-            console.log('Добавляем колонку link...');
-            await query(`ALTER TABLE giveaways ADD COLUMN link TEXT NOT NULL DEFAULT ''`);
-        }
-        
-        // Добавляем колонку description если её нет
-        if (!currentColumns.includes('description')) {
-            console.log('Добавляем колонку description...');
-            await query(`ALTER TABLE giveaways ADD COLUMN description TEXT`);
-        }
-        
-        // Добавляем колонку active если её нет
-        if (!currentColumns.includes('active')) {
-            console.log('Добавляем колонку active...');
-            await query(`ALTER TABLE giveaways ADD COLUMN active BOOLEAN DEFAULT TRUE`);
-        }
-        
-        // Добавляем колонку is_paid если её нет
-        if (!currentColumns.includes('is_paid')) {
-            console.log('Добавляем колонку is_paid...');
-            await query(`ALTER TABLE giveaways ADD COLUMN is_paid BOOLEAN DEFAULT FALSE`);
-        }
-        
-        // Добавляем колонку bonus_cost если её нет
-        if (!currentColumns.includes('bonus_cost')) {
-            console.log('Добавляем колонку bonus_cost...');
-            await query(`ALTER TABLE giveaways ADD COLUMN bonus_cost INTEGER DEFAULT 0`);
-        }
-        
-        // Добавляем колонку end_date если её нет
-        if (!currentColumns.includes('end_date')) {
-            console.log('Добавляем колонку end_date...');
-            await query(`ALTER TABLE giveaways ADD COLUMN end_date TIMESTAMP`);
-        } else {
-            // Удаляем ограничение NOT NULL если оно есть
-            console.log('Проверяем ограничение NOT NULL на end_date...');
-            const endDateCol = columns.rows.find(c => c.column_name === 'end_date');
-            if (endDateCol && endDateCol.is_nullable === 'NO') {
-                await query(`ALTER TABLE giveaways ALTER COLUMN end_date DROP NOT NULL`);
-                console.log('Удалено ограничение NOT NULL с end_date');
-            }
-        }
-        
-        // Добавляем колонку created_at если её нет
-        if (!currentColumns.includes('created_at')) {
-            console.log('Добавляем колонку created_at...');
-            await query(`ALTER TABLE giveaways ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
-        }
-        
-        // Добавляем колонку updated_at если её нет
-        if (!currentColumns.includes('updated_at')) {
-            console.log('Добавляем колонку updated_at...');
-            await query(`ALTER TABLE giveaways ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
-        }
-        
-        console.log('Все колонки giveaways добавлены/проверены');
-    } catch (error) {
-        console.error('❌ Ошибка миграции giveaways:', error);
-    }
-}
 // Добавляем колонку bonus_settings в таблицу companies
 async function addBonusSettingsColumn() {
     try {
@@ -4347,7 +4123,6 @@ module.exports = {
     usePurchasedPromotion,
     checkPromotionCycle,
 	addQuestColumns,
-	checkAndResetQuests,
     trackPurchaseProgress,
     trackPromotionUsage,
     resetQuestProgress,
@@ -4367,7 +4142,6 @@ module.exports = {
 	addGiveawayColumns,
 	hasUserPurchasedGiveaway,
 	purchaseGiveaway,
-	migrateGiveawaysTable,
     getRealAnalytics,
     recalculateAllUsersClassification,
 	addBonusSettingsColumn,
