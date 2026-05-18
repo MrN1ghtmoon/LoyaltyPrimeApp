@@ -53,11 +53,22 @@ const getUserOffset = () => -(new Date().getTimezoneOffset());
 // Преобразование даты, сохранённой в часовом поясе компании, в локальное время пользователя
 const adjustDateToLocal = (dateString, companyOffset) => {
     if (!dateString) return null;
-    const parsed = new Date(dateString); // интерпретируется как локальное время браузера (может быть неверно)
-    const userOffset = getUserOffset();
-    // Исправляем: к исходному timestamp добавляем (userOffset - companyOffset) минут
-    const correctedTime = parsed.getTime() + (userOffset - companyOffset) * 60000;
-    return new Date(correctedTime);
+    
+    // Парсим дату из БД (которая уже в UTC)
+    const utcDate = new Date(dateString);
+    
+    // Получаем смещение пользователя в минутах
+    const userOffset = -new Date().getTimezoneOffset();
+    
+    // Вычисляем разницу между часовым поясом компании и пользователя
+    const offsetDiff = (userOffset - companyOffset) * 60 * 1000;
+    
+    // Применяем корректировку
+    const localDate = new Date(utcDate.getTime() + offsetDiff);
+    
+    console.log(`📅 Дата: ${dateString}, компания offset: ${companyOffset}, пользователь offset: ${userOffset}, результат: ${localDate.toLocaleString()}`);
+    
+    return localDate;
 };
 const handleRefreshBalance = async () => {
     await syncBalanceFromDB();
@@ -186,8 +197,13 @@ useEffect(() => {
             end: p.end_date
           })));
           
-          const now = new Date();
+          // ✅ ИСПРАВЛЕНО: получаем ЛОКАЛЬНОЕ время вместо UTC
           const companyOffset = selectedGroup?.timezoneOffset || 0;
+          const localNow = getLocalNow(companyOffset);
+          
+          console.log(`📅 Текущее ЛОКАЛЬНОЕ время: ${localNow.toLocaleString()}`);
+          console.log(`📅 Текущее UTC время: ${new Date().toUTCString()}`);
+          console.log(`📅 Смещение компании: ${companyOffset} минут`);
           
           const activePromotions = allPromos.filter(promo => {
             // Проверка активности
@@ -204,10 +220,15 @@ useEffect(() => {
             
             const startDate = adjustDateToLocal(promo.start_date, companyOffset);
             const endDate = adjustDateToLocal(promo.end_date, companyOffset);
-            const isActiveByDate = now >= startDate && now <= endDate;
+            
+            // ✅ ИСПРАВЛЕНО: сравниваем ЛОКАЛЬНОЕ время с ЛОКАЛЬНЫМИ датами
+            const isActiveByDate = localNow >= startDate && localNow <= endDate;
             
             if (!isActiveByDate) {
-              console.log(`❌ Акция "${promo.name}" неактивна по датам (${startDate.toLocaleString()} - ${endDate.toLocaleString()})`);
+              console.log(`❌ Акция "${promo.name}" неактивна по датам`);
+              console.log(`   startDate: ${startDate.toLocaleString()}`);
+              console.log(`   endDate: ${endDate.toLocaleString()}`);
+              console.log(`   localNow: ${localNow.toLocaleString()}`);
               return false;
             }
             
@@ -222,15 +243,9 @@ useEffect(() => {
               return true;
             }
             
-            // Если акция для новичков и пользователь новичок - показываем
+            // Если акция для конкретного типа и пользователь подходит
             if (promoAudience === userType) {
               console.log(`✅ Акция "${promo.name}" для ${promoAudience} → показываем (пользователь ${userType})`);
-              return true;
-            }
-            
-            // Если пользователь 'new' и акция для 'new' - показываем
-            if (userType === 'new' && promoAudience === 'new') {
-              console.log(`✅ Акция "${promo.name}" для new → показываем`);
               return true;
             }
             
@@ -246,7 +261,7 @@ useEffect(() => {
           console.error('Ошибка загрузки акций:', promotionsResponse.status);
         }
         
-        // Остальной код...
+        // Загружаем купленные акции
         const purchasedResponse = await fetch(`${API_URL}/api/users/${userId}/promotions/purchased/${selectedGroup.id}`);
         if (purchasedResponse.ok) {
           const purchasedData = await purchasedResponse.json();
@@ -440,9 +455,11 @@ const loadUserData = async (companyId, vkUserId, userName) => {
         if (promosResponse.ok) {
           const allPromos = await promosResponse.json();
           
-          // Фильтруем ТОЛЬКО активные акции для VK Mini App (с учетом времени)
-          const now = new Date();
+          // используем getLocalNow для получения текущего локального времени
           const companyOffset = selectedGroup?.timezoneOffset || 0;
+          const localNow = getLocalNow(companyOffset);
+          
+          console.log(`📅 Текущее локальное время: ${localNow.toLocaleString()}`);
           
           const activePromotions = allPromos.filter(promo => {
             // 1. Проверяем флаг активности
@@ -451,7 +468,7 @@ const loadUserData = async (companyId, vkUserId, userName) => {
             // 2. Проверяем наличие дат
             if (!promo.start_date || !promo.end_date) return false;
             
-            // 🔥 3. ФИЛЬТРАЦИЯ ПО ТИПУ ПОЛЬЗОВАТЕЛЯ
+            // 3. ФИЛЬТРАЦИЯ ПО ТИПУ ПОЛЬЗОВАТЕЛЯ
             if (promo.target_audience && promo.target_audience !== 'all' && promo.target_audience !== userType) {
               console.log(`🔒 Акция "${promo.name}" скрыта для типа ${userType} (аудитория: ${promo.target_audience})`);
               return false;
@@ -460,8 +477,12 @@ const loadUserData = async (companyId, vkUserId, userName) => {
             const startDate = adjustDateToLocal(promo.start_date, companyOffset);
             const endDate = adjustDateToLocal(promo.end_date, companyOffset);
             
-            // 4. Проверяем, что текущее время в диапазоне
-            const isActive = now >= startDate && now <= endDate;
+            // сравниваем ЛОКАЛЬНОЕ время с ЛОКАЛЬНЫМИ датами
+            const isActive = localNow >= startDate && localNow <= endDate;
+            
+            if (!isActive) {
+              console.log(`❌ Акция "${promo.name}" неактивна по датам (${startDate.toLocaleString()} - ${endDate.toLocaleString()}, сейчас: ${localNow.toLocaleString()})`);
+            }
             
             return isActive;
           });
@@ -504,7 +525,15 @@ const loadUserData = async (companyId, vkUserId, userName) => {
     }
     return null;
 };
-
+const getLocalNow = (companyOffset) => {
+    const now = new Date();
+    const userOffset = -new Date().getTimezoneOffset();
+    const localNow = new Date(now.getTime() + (userOffset - companyOffset) * 60 * 1000);
+    
+    console.log(`🕐 getLocalNow: UTC=${now.toUTCString()}, userOffset=${userOffset}, companyOffset=${companyOffset}, result=${localNow.toLocaleString()}`);
+    
+    return localNow;
+};
   const saveAllGroupsData = (userId, data) => {
     if (userId) localStorage.setItem(`loyaltyPrime_groups_${userId}`, JSON.stringify(data));
   };
@@ -1534,13 +1563,61 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
 </div>
 </header>
 
-      <nav style={{ display:'flex', gap:8, background:'rgba(0,0,0,0.3)', padding:6, borderRadius:60, marginBottom:24, flexWrap:'wrap', justifyContent:'center' }}>
-        {['home','card','offers','giveaways','games','quests','history'].map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{ flex:'0 1 auto', background:activeTab===tab ? brandColor : 'transparent', border:'none', padding:'10px 12px', borderRadius:40, fontSize:12, fontWeight:600, color:activeTab===tab ? 'white' : '#aaa', cursor:'pointer', whiteSpace:'nowrap' }}>
-            {tab==='home'?' Главная':tab==='card'?' Карта':tab==='offers'?' Акции':tab==='giveaways'?'Розыгрыши':tab==='games'?'Игры':tab==='quests'?'Задания':' История'}
-          </button>
-        ))}
-      </nav>
+      <nav style={{ 
+  display: 'flex', 
+  flexDirection: 'column', 
+  gap: 8, 
+  background: 'rgba(0,0,0,0.3)', 
+  padding: 6, 
+  borderRadius: 60, 
+  marginBottom: 24
+}}>
+  <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+    {['home', 'card', 'offers', 'giveaways'].map(tab => (
+      <button 
+        key={tab} 
+        onClick={() => setActiveTab(tab)} 
+        style={{ 
+          flex: 1, 
+          background: activeTab === tab ? brandColor : 'transparent', 
+          border: 'none', 
+          padding: '10px 12px', 
+          borderRadius: 40, 
+          fontSize: 12, 
+          fontWeight: 600, 
+          color: activeTab === tab ? 'white' : '#aaa', 
+          cursor: 'pointer', 
+          whiteSpace: 'nowrap' 
+        }}
+      >
+        {tab === 'home' ? 'Главная' : tab === 'card' ? 'Карта' : tab === 'offers' ? 'Акции' : 'Розыгрыши'}
+      </button>
+    ))}
+  </div>
+  
+  <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+    {['games', 'quests', 'history'].map(tab => (
+      <button 
+        key={tab} 
+        onClick={() => setActiveTab(tab)} 
+        style={{ 
+          flex: 1, 
+          background: activeTab === tab ? brandColor : 'transparent', 
+          border: 'none', 
+          padding: '10px 12px', 
+          borderRadius: 40, 
+          fontSize: 12, 
+          fontWeight: 600, 
+          color: activeTab === tab ? 'white' : '#aaa', 
+          cursor: 'pointer', 
+          whiteSpace: 'nowrap' 
+        }}
+      >
+        {tab === 'games' ? 'Игры' : tab === 'quests' ? 'Задания' : 'История'}
+      </button>
+    ))}
+  </div>
+</nav>
 
       {activeTab === 'card' && selectedGroup && <LoyaltyCard userInfo={userInfo} selectedGroup={selectedGroup} companyTimezoneOffset={selectedGroup?.timezoneOffset || 0} />}
       

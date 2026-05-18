@@ -691,7 +691,6 @@ app.delete('/api/quests/:id', async (req, res) => {
 });
 
 // ============ API ДЛЯ ПОЛЬЗОВАТЕЛЕЙ (VK Mini App) ============
-
 app.post('/api/users/getOrCreate', async (req, res) => {
     try {
         const { vkId, companyId, name } = req.body;

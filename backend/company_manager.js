@@ -30,10 +30,9 @@ async function syncSequence() {
     }
 }
 
-// Функция для создания компании (Mini App выключен по умолчанию)
+// Функция для создания компании (Mini App выключен по умолчанию) 
 async function createCompany() {
     console.log('\n📝 Создание новой компании\n');
-    
     const company = await question('Название компании: ');
     const name = await question('Имя владельца: ');
     const email = await question('Email: ');
@@ -41,16 +40,12 @@ async function createCompany() {
     const password = await question('Пароль: ');
     const brandColor = await question('Цвет бренда (например #2ecc71): ');
     const description = await question('Описание: ');
-    
     if (!company || !name || !email || !password) {
         console.log('❌ Ошибка: Название, имя, email и пароль обязательны');
         return;
     }
-    
     try {
         await syncSequence();
-        
-        // ✅ ТОЛЬКО mini_app_active = false (CRM всегда доступна)
         const result = await pool.query(
             `INSERT INTO companies (
                 company, name, email, phone, password, brand_color, description, 
@@ -77,6 +72,8 @@ async function createCompany() {
         console.error('❌ Ошибка создания компании:', error.message);
     }
 }
+
+
 
 // Функция для удаления компании
 async function deleteCompany() {
@@ -132,7 +129,7 @@ async function deleteCompany() {
     }
 }
 
-// Функция для просмотра всех компаний
+// Функция для просмотра всех компаний 
 async function listCompanies() {
     const companies = await pool.query(
         'SELECT id, company, email, phone, mini_app_active, created_at FROM companies ORDER BY id'
@@ -158,9 +155,10 @@ async function listCompanies() {
     
     console.log('└────┴──────────────────────────┴──────────────────────────┴─────────────┴──────────────┘');
     console.log(`\n📊 Всего компаний: ${companies.rows.length}`);
-    console.log(`   🟢 Включено (Mini App активен): ${companies.rows.filter(c => c.mini_app_active).length}`);
-    console.log(`   🔴 Выключено (Mini App заблокирован): ${companies.rows.filter(c => !c.mini_app_active).length}`);
 }
+
+
+
 
 // Функция для включения/выключения Mini App (для администратора)
 async function toggleMiniApp() {
@@ -219,8 +217,7 @@ async function showMenu() {
     console.log('║  1. Показать все компании                  ║');
     console.log('║  2. Создать новую компанию                 ║');
     console.log('║  3. Удалить компанию                       ║');
-    console.log('║  4. Включить/выключить Mini App            ║');
-    console.log('║  5. Выход                                  ║');
+    console.log('║  4. Выход                                  ║');
     console.log('╚════════════════════════════════════════════╝');
     console.log('');
 }

@@ -1042,10 +1042,12 @@ async function getPromotions(companyId, userType = null) {
     let queryText = 'SELECT * FROM promotions WHERE company_id = $1';
     const params = [companyId];
     
-    if (userType && userType !== 'all') {
+    if (userType && userType !== 'all' && userType !== 'null' && userType !== 'undefined') {
+        // Для конкретного типа пользователя: показываем акции для этого типа И для 'all'
         queryText += ' AND (target_audience = $2 OR target_audience = \'all\')';
         params.push(userType);
     }
+    // Если userType === 'all' - показываем все акции
     
     queryText += ' ORDER BY created_at DESC';
     
@@ -2255,16 +2257,27 @@ async function initializeUserClassification(userId, companyId) {
     if (existing.rows.length === 0) {
         const now = new Date();
         const weekResetDate = new Date(now);
-        // Устанавливаем дату сброса на конец текущей недели (воскресенье)
         weekResetDate.setDate(weekResetDate.getDate() + (7 - weekResetDate.getDay()));
         weekResetDate.setHours(23, 59, 59, 999);
         
         await query(
             `INSERT INTO user_classification 
              (user_id, company_id, user_type, first_visit_date, last_app_visit_date, week_reset_date, classified_at, updated_at) 
-             VALUES ($1, $2, 'new', $3, $3, $4, NOW(), NOW())`,
+             VALUES ($1, $2, 'all', $3, $3, $4, NOW(), NOW())`,
             [userId, companyId, now, weekResetDate]
         );
+        console.log(`📊 Создана запись для пользователя ${userId} с типом 'all'`);
+    } else {
+        const record = existing.rows[0];
+        if (!record.user_type || record.user_type === null) {
+            await query(
+                `UPDATE user_classification 
+                 SET user_type = 'all', updated_at = NOW()
+                 WHERE user_id = $1 AND company_id = $2`,
+                [userId, companyId]
+            );
+            console.log(`📊 Исправлен NULL тип для пользователя ${userId} на 'all'`);
+        }
     }
 }
 
@@ -2353,15 +2366,15 @@ async function recalculateUserType(userId, companyId) {
     
     const totalPurchases = allPurchases.rows.length;
     
-    // Если нет покупок - не включаем в сегментацию (удаляем или помечаем как inactive)
+    // ✅ ИЗМЕНЕНО: для пользователей без покупок устанавливаем 'all'
     if (totalPurchases === 0) {
         await query(
             `UPDATE user_classification 
-             SET user_type = NULL, classified_at = NOW(), updated_at = NOW()
+             SET user_type = 'all', classified_at = NOW(), updated_at = NOW()
              WHERE user_id = $1 AND company_id = $2`,
             [userId, companyId]
         );
-        console.log(`📊 Пользователь ${userId}: нет покупок, исключен из сегментации`);
+        console.log(`📊 Пользователь ${userId}: нет покупок, тип = 'all' (Все пользователи)`);
         return;
     }
     
@@ -2379,9 +2392,9 @@ async function recalculateUserType(userId, companyId) {
         }
     }
     
-    let newUserType = null;
+    let newUserType = 'all'; 
     
-    // ========== ПРАВИЛА СЕГМЕНТАЦИИ (только для пользователей с покупками) ==========
+    // ========== ПРАВИЛА СЕГМЕНТАЦИИ ==========
     
     // 1. СПЯЩИЙ: 1+ покупка и прошло 15+ дней с последней покупки
     if (daysSinceLastPurchase >= 15) {
@@ -2399,21 +2412,19 @@ async function recalculateUserType(userId, companyId) {
     else if (totalPurchases === 1 && daysSinceLastPurchase <= 14) {
         newUserType = 'new';
     }
-    // 5. Если 2+ покупки, но интервал больше 14 дней - спящий (но с покупками)
+    // 5. Если 2+ покупки, но интервал больше 14 дней - спящий
     else if (totalPurchases >= 2 && maxIntervalDays > 14) {
         newUserType = 'dormant';
     }
     
-    // Обновляем тип пользователя (только если есть тип)
-    if (newUserType) {
-        await query(
-            `UPDATE user_classification 
-             SET user_type = $1, classified_at = NOW(), updated_at = NOW()
-             WHERE user_id = $2 AND company_id = $3`,
-            [newUserType, userId, companyId]
-        );
-        console.log(`📊 Пользователь ${userId}: ${newUserType} | Покупок: ${totalPurchases} | Макс. интервал: ${maxIntervalDays} дн | Дней без покупок: ${daysSinceLastPurchase}`);
-    }
+    // Обновляем тип пользователя
+    await query(
+        `UPDATE user_classification 
+         SET user_type = $1, classified_at = NOW(), updated_at = NOW()
+         WHERE user_id = $2 AND company_id = $3`,
+        [newUserType, userId, companyId]
+    );
+    console.log(`📊 Пользователь ${userId}: ${newUserType} | Покупок: ${totalPurchases}`);
 }
 
 // Пересчет классификации всех пользователей компании
