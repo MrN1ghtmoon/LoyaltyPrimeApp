@@ -586,16 +586,30 @@ const updateBalanceAndStats = async (change, type, metadata = {}) => {
     let newTotalSpent = cur.totalSpent || 0;
     let newTotalEarned = cur.totalEarned || 0;
     
+    // 🔥 НАЗВАНИЯ ИГР ДЛЯ ОТОБРАЖЕНИЯ
+    const gameNames = {
+        'wheel': 'Колесо удачи',
+        'dice': 'Кости',
+        'scratch': 'Скретч-карта'
+    };
+    const gameName = metadata.gameType ? gameNames[metadata.gameType] || metadata.gameType : null;
+    
     if (type === 'earn') {
-        // ✅ Добавляем историю ТОЛЬКО если это не синхронизация
         if (!isSync) {
-            addHistory(`Выигрыш в игре: +${change}`, change, 'earn');
+            // 🔥 ИСПРАВЛЕНО: добавляем название игры в описание
+            const description = gameName 
+                ? `Выигрыш в игре "${gameName}": +${change}` 
+                : `Выигрыш в игре: +${change}`;
+            addHistory(description, change, 'earn');
         }
         newTotalEarned += change;
     } else if (type === 'spend') {
         if (!isSync) {
-            const gameType = metadata.gameType || 'игра';
-            addHistory(`Ставка в игре: -${Math.abs(change)}`, change, 'spend');
+            // 🔥 ИСПРАВЛЕНО: добавляем название игры в описание
+            const description = gameName 
+                ? `Ставка в игре "${gameName}": -${Math.abs(change)}` 
+                : `Ставка в игре: -${Math.abs(change)}`;
+            addHistory(description, change, 'spend');
         }
         newTotalSpent += Math.abs(change);
     }
@@ -620,7 +634,9 @@ const updateBalanceAndStats = async (change, type, metadata = {}) => {
                     userId: userId,
                     change: change,
                     type: type,
-                    description: type === 'earn' ? `Начисление ${change} бонусов` : `Списание ${Math.abs(change)} бонусов`,
+                    description: type === 'earn' 
+                        ? (gameName ? `Начисление ${change} бонусов за игру "${gameName}"` : `Начисление ${change} бонусов за игру`)
+                        : (gameName ? `Списание ${Math.abs(change)} бонусов за игру "${gameName}"` : `Списание ${Math.abs(change)} бонусов за игру`),
                     metadata: { source: metadata.source || 'game', gameType: metadata.gameType }
                 })
             });
@@ -684,9 +700,9 @@ const syncBalanceFromDB = async () => {
               if (desc.includes('Покупка') || t.source === 'pos') {
                 icon = '🛒';
               } else if (desc.includes('Задание')) {
-                icon = '✅';
+                icon = '➕';
               } else if (desc.includes('Ежедневный')) {
-                icon = '📅';
+                icon = '➕';
               } else {
                 icon = '➕';
               }
@@ -2263,10 +2279,10 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                 icon = '🛒';
                 itemColor = '#2ecc71';
               } else if (item.desc.includes('задани') || item.desc.includes('Задани')) {
-                icon = '✅';
+                icon = '➕';
                 itemColor = '#3498db';
               } else if (item.desc.includes('бонус') && item.desc.includes('Ежедневный')) {
-                icon = '📅';
+                icon = '➕';
                 itemColor = '#f39c12';
               } else {
                 icon = '➕';
@@ -2277,10 +2293,10 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                 icon = '🎁';
                 itemColor = '#e74c3c';
               } else if (item.desc.includes('акци') || item.desc.includes('promotion')) {
-                icon = '🎯';
+                icon = '';
                 itemColor = '#9b59b6';
               } else if (item.desc.includes('скидк') || item.desc.includes('discount')) {
-                icon = '💰';
+                icon = '';
                 itemColor = '#27ae60';
               } else {
                 icon = '➖';
