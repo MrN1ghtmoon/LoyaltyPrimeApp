@@ -252,6 +252,7 @@ async function initDatabase() {
 		await addNotificationCampaignColumns();
 		await addUserProgressSpentColumn();
 		await createUserGamePlaysTable();
+		await createQuestClaimHistoryTable();
 		await addMiniAppStatusColumn();  
 		await addPromotionCycleStartColumn();
         await insertTestData();
@@ -4083,7 +4084,161 @@ async function updateMiniAppStatus(companyId, isActive) {
     }
 }
 
+// Создание таблицы для отслеживания получения наград за периодические задания
+async function createQuestClaimHistoryTable() {
+    try {
+        await query(`
+            CREATE TABLE IF NOT EXISTS quest_claim_history (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                quest_id INTEGER REFERENCES quests(id) ON DELETE CASCADE,
+                company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+                claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        // Добавляем индекс для быстрого поиска
+        await query(`
+            CREATE INDEX IF NOT EXISTS idx_quest_claim_history_user_quest 
+            ON quest_claim_history(user_id, quest_id, claimed_at)
+        `);
+        
+        // Уникальное ограничение через триггер (более надёжный способ)
+        // Сначала проверяем, существует ли уже ограничение
+        const constraintExists = await query(`
+            SELECT constraint_name 
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'quest_claim_history' 
+            AND constraint_name = 'unique_user_quest_per_day'
+        `);
+        
+        if (constraintExists.rows.length === 0) {
+            // Создаём функцию для триггера
+            await query(`
+                CREATE OR REPLACE FUNCTION check_unique_claim_per_day()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM quest_claim_history
+                        WHERE user_id = NEW.user_id 
+                        AND quest_id = NEW.quest_id 
+                        AND DATE(claimed_at) = DATE(NEW.claimed_at)
+                    ) THEN
+                        RAISE EXCEPTION 'User already claimed this quest today';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql
+            `);
+            
+            // Создаём триггер
+            await query(`
+                DROP TRIGGER IF EXISTS check_unique_claim_trigger ON quest_claim_history;
+                CREATE TRIGGER check_unique_claim_trigger
+                BEFORE INSERT ON quest_claim_history
+                FOR EACH ROW
+                EXECUTE FUNCTION check_unique_claim_per_day()
+            `);
+        }
+        
+        console.log('Таблица quest_claim_history создана/проверена');
+    } catch (error) {
+        console.error('❌ Ошибка создания quest_claim_history:', error);
+        // Если ошибка из-за того, что объект уже существует - игнорируем
+        if (error.code !== '42P07' && !error.message.includes('already exists')) {
+            // Не выбрасываем ошибку, чтобы не прерывать инициализацию
+            console.log('Продолжаем инициализацию несмотря на ошибку...');
+        }
+    }
+}
 
+// Получение даты последнего получения награды за задание
+async function getLastQuestClaimDate(userId, questId) {
+    try {
+        const result = await query(
+            `SELECT claimed_at 
+             FROM quest_claim_history 
+             WHERE user_id = $1 AND quest_id = $2 
+             ORDER BY claimed_at DESC 
+             LIMIT 1`,
+            [userId, questId]
+        );
+        
+        if (result.rows.length > 0) {
+            return result.rows[0].claimed_at;
+        }
+        return null;
+    } catch (error) {
+        console.error('Ошибка получения даты получения награды:', error);
+        return null;
+    }
+}
+
+// Проверка, можно ли получить награду за задание (с учётом duration_days)
+async function canClaimQuestReward(userId, questId, durationDays) {
+    try {
+        const lastClaim = await getLastQuestClaimDate(userId, questId);
+        
+        if (!lastClaim) {
+            return true;
+        }
+        
+        const now = new Date();
+        const lastClaimDate = new Date(lastClaim);
+        const daysSinceLastClaim = Math.floor((now - lastClaimDate) / (1000 * 60 * 60 * 24));
+        
+        return daysSinceLastClaim >= durationDays;
+    } catch (error) {
+        console.error('Ошибка проверки возможности получения награды:', error);
+        return true;
+    }
+}
+
+// Сохранение факта получения награды за задание
+async function saveQuestClaim(userId, questId, companyId) {
+    try {
+        await query(
+            `INSERT INTO quest_claim_history (user_id, quest_id, company_id, claimed_at)
+             VALUES ($1, $2, $3, NOW())`,
+            [userId, questId, companyId]
+        );
+        return true;
+    } catch (error) {
+        // Игнорируем дубликаты (если уже есть запись за сегодня)
+        if (error.code !== '23505') { // not unique violation
+            console.error('Ошибка сохранения получения награды:', error);
+        }
+        return false;
+    }
+}
+
+// Получение времени до следующего доступного получения награды
+async function getTimeUntilNextClaim(userId, questId, durationDays) {
+    try {
+        const lastClaim = await getLastQuestClaimDate(userId, questId);
+        
+        if (!lastClaim) {
+            return null;
+        }
+        
+        const lastClaimDate = new Date(lastClaim);
+        const nextAvailableDate = new Date(lastClaimDate.getTime() + (durationDays * 24 * 60 * 60 * 1000));
+        const now = new Date();
+        
+        if (now >= nextAvailableDate) {
+            return null;
+        }
+        
+        const diffMs = nextAvailableDate - now;
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        
+        return { hours: diffHours, minutes: diffMinutes, nextAvailableDate };
+    } catch (error) {
+        console.error('Ошибка получения времени до следующей награды:', error);
+        return null;
+    }
+}
 
 module.exports = {
     pool,
@@ -4203,5 +4358,9 @@ module.exports = {
 	getTodayString,
 	trackDailyLogin,
 	getMiniAppStatus,
-    updateMiniAppStatus
+    updateMiniAppStatus,
+	getLastQuestClaimDate,
+    canClaimQuestReward,
+    saveQuestClaim,
+    getTimeUntilNextClaim
 };

@@ -103,7 +103,11 @@ const {
 	getTodayString,
 	trackDailyLogin,
 	getMiniAppStatus,
-    updateMiniAppStatus	
+    updateMiniAppStatus,
+getLastQuestClaimDate,
+    canClaimQuestReward,
+    saveQuestClaim,
+    getTimeUntilNextClaim	
 } = require('./database-pg');
 
 const app = express();
@@ -3739,6 +3743,115 @@ app.post('/api/companies/forgot-password', async (req, res) => {
     }
 });
 
+// ============ API ДЛЯ ИСТОРИИ ПОЛУЧЕНИЯ НАГРАД ЗА ЗАДАНИЯ ============
+
+// Получение даты последнего получения награды за задание
+app.get('/api/users/:userId/quests/:questId/last-claim', async (req, res) => {
+    try {
+        const { userId, questId } = req.params;
+        
+        const lastClaim = await getLastQuestClaimDate(userId, questId);
+        res.json({ success: true, lastClaim: lastClaim });
+    } catch (error) {
+        console.error('Ошибка получения даты последнего получения:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Проверка, можно ли получить награду за задание
+app.get('/api/users/:userId/quests/:questId/can-claim', async (req, res) => {
+    try {
+        const { userId, questId } = req.params;
+        const durationDays = parseInt(req.query.durationDays) || 1;
+        
+        const canClaim = await canClaimQuestReward(userId, questId, durationDays);
+        const timeUntilNext = !canClaim ? await getTimeUntilNextClaim(userId, questId, durationDays) : null;
+        
+        res.json({ 
+            success: true, 
+            canClaim: canClaim,
+            timeUntilNext: timeUntilNext
+        });
+    } catch (error) {
+        console.error('Ошибка проверки возможности получения:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Сохранение получения награды за задание (вызывается после успешного начисления)
+app.post('/api/users/:userId/quests/:questId/claim', async (req, res) => {
+    try {
+        const { userId, questId } = req.params;
+        const { companyId, reward } = req.body;
+        
+        // Проверяем, можно ли получить награду
+        const quest = await query('SELECT duration_days FROM quests WHERE id = $1', [questId]);
+        const durationDays = quest.rows[0]?.duration_days || 1;
+        
+        const canClaim = await canClaimQuestReward(userId, questId, durationDays);
+        
+        if (!canClaim) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Бонус пока недоступен. Подождите немного.'
+            });
+        }
+        
+        // Проверяем, выполнено ли задание
+        const progress = await query(
+            `SELECT completed FROM user_quest_progress 
+             WHERE user_id = $1 AND quest_id = $2`,
+            [userId, questId]
+        );
+        
+        if (progress.rows.length === 0 || !progress.rows[0].completed) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Задание ещё не выполнено'
+            });
+        }
+        
+        // Проверяем, не получали ли уже бонус
+        const existingClaim = await query(
+            `SELECT id FROM user_quests 
+             WHERE user_id = $1 AND quest_id = $2`,
+            [userId, questId]
+        );
+        
+        if (existingClaim.rows.length > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Бонус за это задание уже получен'
+            });
+        }
+        
+        // Начисляем бонус
+        await updateUserBalance(userId, reward, 'earn', `Задание выполнено! +${reward} бонусов`);
+        
+        // Записываем получение награды
+        await query(
+            `INSERT INTO user_quests (user_id, quest_id, completed_at, reward_claimed) 
+             VALUES ($1, $2, NOW(), true)`,
+            [userId, questId]
+        );
+        
+        // Обновляем user_quest_progress
+        await query(
+            `UPDATE user_quest_progress 
+             SET claimed = true, updated_at = NOW()
+             WHERE user_id = $1 AND quest_id = $2`,
+            [userId, questId]
+        );
+        
+        // Сохраняем в историю получения наград (для периодических заданий)
+        await saveQuestClaim(userId, questId, companyId);
+        
+        res.json({ success: true, message: `+${reward} бонусов начислено!` });
+    } catch (error) {
+        console.error('Ошибка получения награды:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 
 const PORT = 3001;
