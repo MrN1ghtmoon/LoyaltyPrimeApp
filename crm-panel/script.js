@@ -4001,17 +4001,17 @@ function renderGiveawaysList() {
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                     <div style="flex: 1;">
                         <div style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">
-                            🎰 ${escapeHtml(giveaway.name)}
-                            ${isPaid ? '<span style="background: #ffd966; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">💎 Платный</span>' : '<span style="background: #a8e6cf; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">🎁 Бесплатный</span>'}
-                            ${isExpired ? '<span style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">⏰ Завершен</span>' : ''}
+                            ${escapeHtml(giveaway.name)}
+                            ${isPaid ? '<span style="background: #ffd966; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">Платный</span>' : '<span style="background: #a8e6cf; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">Бесплатный</span>'}
+                            ${isExpired ? '<span style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">Завершен</span>' : ''}
                         </div>
                         <div style="font-size: 13px; color: #666; margin-bottom: 4px;">
                             <a href="${escapeHtml(giveaway.link)}" target="_blank" style="color: #3498db; word-break: break-all;">
                                 ${escapeHtml(giveaway.link)}
                             </a>
                         </div>
-                        ${isPaid ? `<div style="font-size: 13px; color: #e67e22; margin-top: 4px;">💰 Стоимость доступа: ${giveaway.bonus_cost} бонусов</div>` : ''}
-                        ${endDate ? `<div style="font-size: 12px; color: #999; margin-top: 4px;">📅 Действует до: ${endDateText}</div>` : ''}
+                        ${isPaid ? `<div style="font-size: 13px; color: #e67e22; margin-top: 4px;">Стоимость доступа: ${giveaway.bonus_cost} бонусов</div>` : ''}
+                        ${endDate ? `<div style="font-size: 12px; color: #999; margin-top: 4px;">Действует до: ${endDateText}</div>` : ''}
                         ${giveaway.description ? `<div style="font-size: 13px; color: #555; margin-top: 8px;">${escapeHtml(giveaway.description)}</div>` : ''}
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px;">

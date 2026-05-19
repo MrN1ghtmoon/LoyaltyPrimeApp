@@ -340,7 +340,7 @@ const adjustDateToLocal = (dateString) => {
                     color: 'white',
                     marginBottom: 4
                   }}>
-                    🎁 {giveaway.name}
+                    {giveaway.name}
                     {giveaway.is_paid && (
                       <span style={{
                         background: '#ffd966',
@@ -351,7 +351,7 @@ const adjustDateToLocal = (dateString) => {
                         marginLeft: 8,
                         fontWeight: 600
                       }}>
-                        💎 Платный
+                        Платный
                       </span>
                     )}
                     {!giveaway.is_paid && (
@@ -364,7 +364,7 @@ const adjustDateToLocal = (dateString) => {
                         marginLeft: 8,
                         fontWeight: 600
                       }}>
-                        🎁 Бесплатный
+                        Бесплатный
                       </span>
                     )}
                     {isExpired && (
@@ -377,7 +377,7 @@ const adjustDateToLocal = (dateString) => {
                         marginLeft: 8,
                         fontWeight: 600
                       }}>
-                        ⏰ Завершен
+                        Завершен
                       </span>
                     )}
                   </div>
@@ -405,7 +405,7 @@ const adjustDateToLocal = (dateString) => {
                       gap: 8,
                       flexWrap: 'wrap'
                     }}>
-                      <span>📅 До {formattedEndDate}</span>
+                      <span>До {formattedEndDate}</span>
                       {timeLeftText && timeLeftText !== 'Завершен' && (
                         <span style={{ 
                           background: 'rgba(0,0,0,0.3)', 
@@ -414,7 +414,7 @@ const adjustDateToLocal = (dateString) => {
                           fontSize: 11,
                           color: '#ffd966'
                         }}>
-                          ⏰ {timeLeftText}
+                          {timeLeftText}
                         </span>
                       )}
                     </div>
@@ -426,7 +426,7 @@ const adjustDateToLocal = (dateString) => {
                       color: '#e74c3c',
                       marginTop: 6
                     }}>
-                      ⏰ Розыгрыш завершен {formattedEndDate}
+                      Розыгрыш завершен {formattedEndDate}
                     </div>
                   )}
                   
@@ -448,7 +448,7 @@ const adjustDateToLocal = (dateString) => {
                       marginTop: 8,
                       fontWeight: 600
                     }}>
-                      ✅ Доступ куплен
+                      Доступ куплен
                     </div>
                   )}
                 </div>

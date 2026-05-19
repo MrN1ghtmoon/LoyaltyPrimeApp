@@ -4082,6 +4082,9 @@ async function updateMiniAppStatus(companyId, isActive) {
         throw error;
     }
 }
+
+
+
 module.exports = {
     pool,
     query,
