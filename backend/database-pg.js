@@ -255,7 +255,7 @@ async function initDatabase() {
 		await createQuestClaimHistoryTable();
 		await addMiniAppStatusColumn();  
 		await addPromotionCycleStartColumn();
-        await insertTestData();
+
 
     } catch (error) {
         console.error('❌ Ошибка инициализации БД:', error);
@@ -947,96 +947,6 @@ async function addMissingColumns() {
     }
 }
 
-
-async function insertTestData() {
-    try {
-        const result = await query('SELECT COUNT(*) FROM companies');
-        const count = parseInt(result.rows[0].count);
-        if (count === 0) {
-            console.log('Добавление тестовых данных...');
-            
-            const defaultTiers = JSON.stringify([
-                {"name": "🔰 Новичок", "threshold": 0, "cashback": 3, "color": "#95a5a6", "icon": "🔰"},
-                {"name": "🥈 Серебро", "threshold": 2000, "cashback": 7, "color": "#bdc3c7", "icon": "🥈"},
-                {"name": "🥇 Золото", "threshold": 8000, "cashback": 10, "color": "#f1c40f", "icon": "🥇"},
-                {"name": "💎 Бриллиант", "threshold": 20000, "cashback": 15, "color": "#00b4d8", "icon": "💎"}
-            ]);
-            
-            // Добавляем первую компанию
-            const result1 = await query(`
-                INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, mini_app_active) 
-                VALUES ('Пиццерия "Маргарита"', 'Иван Петров', 'pizza@test.com', '+7 (999) 123-45-67', '123456', '#e74c3c', 'Итальянская кухня, пицца, паста', $1, false)
-                RETURNING id
-            `, [defaultTiers]);
-            
-            // Добавляем вторую компанию
-            const result2 = await query(`
-                INSERT INTO companies (company, name, email, phone, password, brand_color, description, tiers_settings, mini_app_active) 
-                VALUES ('Кофейня "Кофеин"', 'Анна Сидорова', 'coffee@test.com', '+7 (999) 234-56-78', '123456', '#8e44ad', 'Ароматный кофе, десерты, выпечка', $1, false)
-                RETURNING id
-            `, [defaultTiers]);
-            
-            // Добавляем предустановленные данные для обеих компаний
-            await addPresetDataForCompany(result1.rows[0].id);
-            await addPresetDataForCompany(result2.rows[0].id);
-            
-            console.log('Тестовые данные добавлены с 20 акциями и 20 заданиями для каждой компании');
-        } else {
-            console.log(`📊 В базе уже есть ${count} компаний`);
-            
-            // Проверяем, есть ли у существующих компаний акции и задания
-            const companies = await getAllCompanies();
-            for (const company of companies) {
-                const promotionsCount = await query('SELECT COUNT(*) FROM promotions WHERE company_id = $1', [company.id]);
-                const questsCount = await query('SELECT COUNT(*) FROM quests WHERE company_id = $1', [company.id]);
-                
-                if (parseInt(promotionsCount.rows[0].count) === 0) {
-                    console.log(`Добавляем предустановленные акции для компании ${company.id}...`);
-                    await addPresetDataForCompany(company.id);
-                }
-                
-                if (parseInt(questsCount.rows[0].count) === 0) {
-                    console.log(`Добавляем предустановленные задания для компании ${company.id}...`);
-                    const presetQuests = getPresetQuests();
-                    for (const quest of presetQuests) {
-                        await query(`
-                            INSERT INTO quests (company_id, emoji, title, description, reward, active, expires_days, created_at, updated_at) 
-                            VALUES ($1, $2, $3, $4, $5, true, 30, NOW(), NOW())
-                        `, [company.id, quest.emoji, quest.title, quest.description, quest.reward]);
-                    }
-                    console.log(`Добавлено ${presetQuests.length} заданий для компании ${company.id}`);
-                }
-                
-                // ОБНОВЛЕНИЕ: миграция существующих уровней — удаляем multiplier
-                const tiersResult = await query('SELECT tiers_settings FROM companies WHERE id = $1', [company.id]);
-                if (tiersResult.rows.length > 0 && tiersResult.rows[0].tiers_settings) {
-                    let tiers = tiersResult.rows[0].tiers_settings;
-                    if (typeof tiers === 'string') {
-                        tiers = JSON.parse(tiers);
-                    }
-                    if (Array.isArray(tiers) && tiers.length > 0 && tiers[0].multiplier !== undefined) {
-                        console.log(`Обновляем уровни для компании ${company.id}, удаляем multiplier...`);
-                        const newTiers = tiers.map(tier => {
-                            const { multiplier, ...rest } = tier;
-                            // Если cashback не задан, используем multiplier * 5 как fallback, но не больше 30%
-                            if (rest.cashback === undefined) {
-                                rest.cashback = Math.min(30, (multiplier || 1) * 5);
-                            }
-                            return rest;
-                        });
-                        await query(
-                            'UPDATE companies SET tiers_settings = $1::jsonb WHERE id = $2',
-                            [JSON.stringify(newTiers), company.id]
-                        );
-                        console.log(`Уровни обновлены для компании ${company.id}`);
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        console.error('❌ Ошибка вставки тестовых данных:', error);
-    }
-}
 
 // ============ CRUD операции для акций ============
 async function getPromotions(companyId, userType = null) {
@@ -2413,8 +2323,8 @@ async function recalculateUserType(userId, companyId) {
     else if (totalPurchases === 1 && daysSinceLastPurchase <= 14) {
         newUserType = 'new';
     }
-    // 5. Если 2+ покупки, но интервал больше 14 дней - спящий
-    else if (totalPurchases >= 2 && maxIntervalDays > 14) {
+    // 5. Если 1+ покупки, но интервал больше 14 дней - спящий
+    else if (totalPurchases >= 1 && maxIntervalDays > 14) {
         newUserType = 'dormant';
     }
     

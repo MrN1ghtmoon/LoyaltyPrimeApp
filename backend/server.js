@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const { 
     initDatabase, 
     addCompany, 
@@ -114,8 +117,8 @@ const app = express();
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 app.use(express.static('crm-panel'));
-const multer = require('multer');
-const path = require('path');
+
+
 
 app.use((req, res, next) => {
     console.log(`📨 ${req.method} ${req.url}`);
@@ -124,55 +127,57 @@ app.use((req, res, next) => {
 
 initDatabase();
 
-// Функция для создания стандартных кампаний для новой компании
-async function createDefaultCampaignsForCompany(companyId) {
+
+// Путь к файлу для хранения заявок
+const DEMO_REQUESTS_FILE = path.join(__dirname, 'demo_requests.json');
+
+// Функция для сохранения заявки в файл (ДОЛЖНА БЫТЬ ДО ЭНДПОИНТА!)
+function saveDemoRequestToFile(requestData) {
     try {
-        const defaultCampaigns = [
-            {
-                name: '😴 Возвращение спящих',
-                title: 'Мы скучаем по вам!',
-                message: 'Вы давно не заходили к нам. Вернитесь и получите специальные бонусы на следующую покупку! 🎁',
-                audience: 'dormant',
-                is_active: false, // По умолчанию выключена
-                interval_days: 7,
-                is_default: true
-            },
-            {
-                name: '🎂 Поздравление с днем рождения',
-                title: 'С днем рождения! 🎉🎂',
-                message: 'Поздравляем вас с днем рождения! Желаем счастья и здоровья! 🎈🎁',
-                audience: 'birthday',
-                is_active: false, // По умолчанию выключена
-                interval_days: 1,
-                is_default: true
-            }
-        ];
+        let requests = [];
         
-        for (const campaign of defaultCampaigns) {
-            await addNotificationCampaign(
-                companyId,
-                campaign.name,
-                campaign.title,
-                campaign.message,
-                campaign.audience,
-                campaign.is_active,
-                campaign.interval_days,
-                null, // image_url
-                campaign.is_default
-            );
+        console.log('📁 Проверка файла:', DEMO_REQUESTS_FILE);
+        
+        // Читаем существующие заявки, если файл существует
+        if (fs.existsSync(DEMO_REQUESTS_FILE)) {
+            console.log('📁 Файл найден, читаем...');
+            const fileContent = fs.readFileSync(DEMO_REQUESTS_FILE, 'utf8');
+            requests = JSON.parse(fileContent);
+            console.log(`📁 Загружено ${requests.length} существующих заявок`);
+        } else {
+            console.log('📁 Файл не найден, будет создан новый');
         }
         
-        console.log(`✅ Стандартные кампании созданы для компании ${companyId}`);
+        // Добавляем новую заявку с timestamp
+        const newRequest = {
+            id: Date.now(),
+            ...requestData,
+            created_at: new Date().toISOString(),
+            status: 'pending'
+        };
+        
+        requests.push(newRequest);
+        
+        // Сохраняем обратно в файл
+        fs.writeFileSync(DEMO_REQUESTS_FILE, JSON.stringify(requests, null, 2), 'utf8');
+        
+        console.log(`✅ Заявка сохранена в файл: ${DEMO_REQUESTS_FILE}`);
+        console.log(`📊 Теперь в файле ${requests.length} заявок`);
+        
+        return newRequest;
     } catch (error) {
-        console.error('❌ Ошибка создания стандартных кампаний:', error);
-        // Не выбрасываем ошибку, чтобы не прерывать регистрацию
+        console.error('❌ Ошибка сохранения заявки в файл:', error);
+        return null;
     }
 }
+
 
 // ============ HEALTH CHECK ============
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend работает на PostgreSQL!' });
 });
+
+
 
 // ============ API ДЛЯ КОМПАНИЙ ============
 
@@ -2326,10 +2331,11 @@ app.post('/api/cashier/login', async (req, res) => {
     }
 });
 
-// Верификация QR-кода кассиром
 app.post('/api/cashier/verify-qr', async (req, res) => {
     try {
         const { vkId, companyId, timestamp, signature } = req.body;
+        
+        console.log('🔍 Верификация QR:', { vkId, companyId, timestamp });
         
         if (!vkId && vkId !== 0) {
             return res.status(400).json({ success: false, message: 'Отсутствует vkId' });
@@ -2347,17 +2353,42 @@ app.post('/api/cashier/verify-qr', async (req, res) => {
             }
         }
         
+        // Преобразуем vkId в строку, companyId в число
+        const vkIdStr = String(vkId);
+        const companyIdNum = parseInt(companyId);
+        
+        console.log('🔍 После преобразования:', { vkIdStr, companyIdNum });
+        
         // Получаем пользователя
-        let user = await getUserByVkId(vkId, companyId);
-if (!user) {
-    user = await createUser(vkId, companyId, `Пользователь ${vkId}`);
-    await initializeUserClassification(user.id, companyId);
-    console.log('Создан новый пользователь через кассу:', user.id);
-}
+        let user = await getUserByVkId(vkIdStr, companyIdNum);
+        if (!user) {
+            user = await createUser(vkIdStr, companyIdNum, `Пользователь ${vkIdStr}`);
+            await initializeUserClassification(user.id, companyIdNum);
+            console.log('Создан новый пользователь через кассу:', user.id);
+        }
+        
+        console.log('📊 Пользователь найден:', { id: user.id, name: user.name, balance: user.bonus_balance });
         
         // ✅ ПОЛУЧАЕМ УРОВНИ КОМПАНИИ
-        const tiers = await getCompanyTiers(companyId);
+        let tiers = await getCompanyTiers(companyIdNum);
+        
+        // ✅ ПРОВЕРКА: если уровней нет или массив пуст, создаём дефолтные
+        if (!tiers || tiers.length === 0) {
+            console.log('⚠️ Уровни не найдены, создаём дефолтные');
+            const defaultTiers = [
+                { name: "🔰 Новичок", threshold: 0, cashback: 3, color: "#95a5a6", icon: "🔰" },
+                { name: "🥈 Серебро", threshold: 2000, cashback: 7, color: "#bdc3c7", icon: "🥈" },
+                { name: "🥇 Золото", threshold: 8000, cashback: 10, color: "#f1c40f", icon: "🥇" },
+                { name: "💎 Бриллиант", threshold: 20000, cashback: 15, color: "#00b4d8", icon: "💎" }
+            ];
+            await updateCompanyTiers(companyIdNum, defaultTiers);
+            tiers = defaultTiers;
+        }
+        
         const totalSpent = user.total_spent || 0;
+        
+        console.log('📊 Уровни компании:', tiers);
+        console.log('📊 Потрачено всего:', totalSpent);
         
         // ✅ ОПРЕДЕЛЯЕМ ТЕКУЩИЙ УРОВЕНЬ ПОЛЬЗОВАТЕЛЯ
         let currentTier = tiers[0];
@@ -2368,8 +2399,16 @@ if (!user) {
             }
         }
         
+        // ✅ ПРОВЕРКА: если currentTier всё ещё undefined
+        if (!currentTier) {
+            console.log('⚠️ currentTier undefined, используем первый уровень');
+            currentTier = tiers[0] || { name: "Новичок", cashback: 3 };
+        }
+        
         // ✅ ПОЛУЧАЕМ КЕШБЭК В ПРОЦЕНТАХ
         const cashbackPercent = currentTier.cashback || 3;
+        
+        console.log('📊 Текущий уровень:', currentTier.name, 'кешбэк:', cashbackPercent);
         
         // ✅ ВОЗВРАЩАЕМ ПОЛНЫЕ ДАННЫЕ
         res.json({ 
@@ -2384,11 +2423,11 @@ if (!user) {
             },
             tier: currentTier.name,
             cashbackPercent: cashbackPercent,
-            tierIcon: currentTier.icon,
-            tierColor: currentTier.color
+            tierIcon: currentTier.icon || '🔰',
+            tierColor: currentTier.color || '#95a5a6'
         });
     } catch (error) {
-        console.error('Ошибка верификации QR:', error);
+        console.error('❌ Ошибка верификации QR:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -2680,11 +2719,12 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// ============ ЭНДПОИНТ ДЛЯ ДЕМО-ЗАЯВКИ ============
-// ============ ЭНДПОИНТ ДЛЯ ДЕМО-ЗАЯВКИ ============
+/// ============ ЭНДПОИНТ ДЛЯ ДЕМО-ЗАЯВКИ ============
 app.post('/api/demo-request', async (req, res) => {
     try {
         const { brandName, owner, email, phone } = req.body;
+        
+        console.log('📨 Получена демо-заявка:', { brandName, owner, email, phone });
         
         // Валидация обязательных полей
         if (!brandName || !owner || !email || !phone) {
@@ -2706,6 +2746,21 @@ app.post('/api/demo-request', async (req, res) => {
         }
         const normalizedPhone = '+7' + cleanPhone.slice(-10);
         
+        // ✅ СОХРАНЯЕМ ЗАЯВКУ В ФАЙЛ
+        const savedRequest = saveDemoRequestToFile({
+            brandName,
+            owner,
+            email,
+            phone: normalizedPhone,
+            rawPhone: phone
+        });
+        
+        if (!savedRequest) {
+            console.error('❌ Не удалось сохранить заявку в файл');
+            // Продолжаем, но логируем ошибку
+        }
+        
+        // Отправка email
         const mailOptions = {
             from: '"LoyaltyPrime" <padavydov@stud.kantiana.ru>',
             to: 'padavydov@stud.kantiana.ru',
@@ -2721,6 +2776,9 @@ Email: ${email}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Свяжитесь с клиентом как можно скорее для демонстрации возможностей LoyaltyPrime.
+
+📁 Заявка сохранена в файл: demo_requests.json
+🆔 ID заявки: ${savedRequest?.id || 'N/A'}
             `,
             html: `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px;">
@@ -2731,6 +2789,7 @@ Email: ${email}
                         <p style="margin: 8px 0;"><strong>Владелец:</strong> ${owner}</p>
                         <p style="margin: 8px 0;"><strong>Email:</strong> ${email}</p>
                         <p style="margin: 8px 0;"><strong>Телефон для связи:</strong> ${normalizedPhone}</p>
+                        <p style="margin: 8px 0;"><strong>ID заявки:</strong> ${savedRequest?.id || 'N/A'}</p>
                     </div>
                     
                     <p style="color: #555;">Свяжитесь с клиентом как можно скорее для демонстрации возможностей <strong>LoyaltyPrime</strong>.</p>
@@ -2744,19 +2803,66 @@ Email: ${email}
         
         await transporter.sendMail(mailOptions);
         
-        console.log(`Демо-заявка отправлена: ${brandName} - ${email} - ${normalizedPhone}`);
+        console.log(`✅ Демо-заявка обработана: ${brandName} - ${email} - ${normalizedPhone}`);
         
         res.json({ 
             success: true, 
-            message: 'Заявка отправлена! Мы свяжемся с вами в ближайшее время.' 
+            message: 'Заявка отправлена! Мы свяжемся с вами в ближайшее время.',
+            requestId: savedRequest?.id
         });
         
     } catch (error) {
-        console.error('Ошибка отправки письма:', error);
+        console.error('❌ Ошибка отправки письма:', error);
         res.status(500).json({ 
             success: false, 
             message: 'Ошибка отправки. Попробуйте позже.' 
         });
+    }
+});
+
+app.get('/api/demo-requests', async (req, res) => {
+    try {
+        if (!fs.existsSync(DEMO_REQUESTS_FILE)) {
+            return res.json({ success: true, requests: [] });
+        }
+        
+        const fileContent = fs.readFileSync(DEMO_REQUESTS_FILE, 'utf8');
+        const requests = JSON.parse(fileContent);
+        
+        res.json({ success: true, requests });
+    } catch (error) {
+        console.error('Ошибка чтения заявок:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+app.put('/api/demo-requests/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, companyId, notes } = req.body;
+        
+        if (!fs.existsSync(DEMO_REQUESTS_FILE)) {
+            return res.status(404).json({ success: false, message: 'Файл не найден' });
+        }
+        
+        const fileContent = fs.readFileSync(DEMO_REQUESTS_FILE, 'utf8');
+        const requests = JSON.parse(fileContent);
+        
+        const requestIndex = requests.findIndex(r => r.id == id);
+        if (requestIndex === -1) {
+            return res.status(404).json({ success: false, message: 'Заявка не найдена' });
+        }
+        
+        requests[requestIndex].status = status || requests[requestIndex].status;
+        requests[requestIndex].companyId = companyId || requests[requestIndex].companyId;
+        requests[requestIndex].notes = notes || requests[requestIndex].notes;
+        requests[requestIndex].processed_at = new Date().toISOString();
+        
+        fs.writeFileSync(DEMO_REQUESTS_FILE, JSON.stringify(requests, null, 2), 'utf8');
+        
+        res.json({ success: true, request: requests[requestIndex] });
+    } catch (error) {
+        console.error('Ошибка обновления заявки:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -3850,6 +3956,9 @@ app.post('/api/users/:userId/quests/:questId/claim', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+
+
 
 
 const PORT = 3001;

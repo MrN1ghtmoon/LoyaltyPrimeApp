@@ -526,8 +526,8 @@ async function loadAnalytics(period = 'month') {
                 
                 const segments = [
                     { name: 'Новичок', desc: '1 покупка, ≤14 дней', count: classif.new || 0, percent: total > 0 ? Math.round((classif.new / total) * 100) : 0, color: '#3498db' },
-                    { name: 'Активный', desc: '2+ покупок, ≤7 дней между', count: classif.active || 0, percent: total > 0 ? Math.round((classif.active / total) * 100) : 0, color: '#2ecc71' },
-                    { name: 'Постоянный', desc: '2+ покупок, ≤3 дней между', count: classif.regular || 0, percent: total > 0 ? Math.round((classif.regular / total) * 100) : 0, color: '#f39c12' },
+                    { name: 'Активный', desc: '2+ покупок, ≤14 дней между', count: classif.active || 0, percent: total > 0 ? Math.round((classif.active / total) * 100) : 0, color: '#2ecc71' },
+                    { name: 'Постоянный', desc: '2+ покупок, ≤5 дней между', count: classif.regular || 0, percent: total > 0 ? Math.round((classif.regular / total) * 100) : 0, color: '#f39c12' },
                     { name: 'Спящий', desc: '1+ покупок, ≥15 дней', count: classif.dormant || 0, percent: total > 0 ? Math.round((classif.dormant / total) * 100) : 0, color: '#e74c3c' }
                 ];
                 
@@ -616,7 +616,13 @@ async function loadAnalytics(period = 'month') {
     }
 }
 
-// Функция для отображения графика активности (неделя - 7 дней, месяц - 12 месяцев)
+// Вспомогательная функция для получения короткого названия месяца
+function getMonthShort(date) {
+    const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    return months[date.getMonth()];
+}
+
+// Функция для отображения графика активности (неделя - 7 дней, месяц - группировка по неделям, год - 12 месяцев)
 function renderActivityChart(period) {
     const activityChart = document.getElementById('activityChart');
     if (!activityChart) return;
@@ -684,7 +690,71 @@ function renderActivityChart(period) {
         });
         
     } else if (period === 'month') {
-        // === МЕСЯЦ: показываем ВСЕ 12 месяцев текущего года ===
+        // === МЕСЯЦ: группируем по неделям ===
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        
+        // Получаем первую дату месяца
+        const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+        // Получаем последнюю дату месяца
+        const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+        
+        // Разбиваем на недели (понедельник - воскресенье)
+        const weeks = [];
+        let weekStart = new Date(firstDayOfMonth);
+        
+        // Находим первый понедельник месяца (или оставляем как есть)
+        while (weekStart.getDay() !== 1 && weekStart.getDay() !== 0) {
+            weekStart.setDate(weekStart.getDate() - 1);
+        }
+        if (weekStart.getDay() === 0) {
+            weekStart.setDate(weekStart.getDate() - 6);
+        }
+        
+        // Создаем карту данных по дням
+        const dataByDate = {};
+        cachedAnalytics.dailyActivity.forEach(item => {
+            const dateKey = item.date.slice(0, 10);
+            dataByDate[dateKey] = parseInt(item.transactions) || 0;
+        });
+        
+        // Группируем по неделям
+        while (weekStart <= lastDayOfMonth) {
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            
+            let weekTransactions = 0;
+            
+            // Суммируем все дни недели
+            for (let d = new Date(weekStart); d <= weekEnd; d.setDate(d.getDate() + 1)) {
+                const dateKey = d.toISOString().slice(0, 10);
+                weekTransactions += dataByDate[dateKey] || 0;
+            }
+            
+            // Формируем метку недели
+            let weekLabel = '';
+            if (weekStart.getMonth() === weekEnd.getMonth()) {
+                weekLabel = `${weekStart.getDate()} - ${weekEnd.getDate()} ${getMonthShort(weekStart)}`;
+            } else {
+                weekLabel = `${weekStart.getDate()} ${getMonthShort(weekStart)} - ${weekEnd.getDate()} ${getMonthShort(weekEnd)}`;
+            }
+            
+            weeks.push({
+                start: new Date(weekStart),
+                end: new Date(weekEnd),
+                transactions: weekTransactions,
+                label: weekLabel
+            });
+            
+            totalTransactions += weekTransactions;
+            weekStart.setDate(weekStart.getDate() + 7);
+        }
+        
+        chartData = weeks;
+        
+    } else if (period === 'year') {
+        // === ГОД: показываем 12 месяцев ===
         const months = [];
         for (let i = 0; i < 12; i++) {
             months.push(new Date(currentYear, i, 1));
@@ -727,8 +797,27 @@ function renderActivityChart(period) {
     const maxValue = Math.max(...chartData.map(d => d.transactions), 1);
     const barMaxHeight = 150;
     
+    // Определяем ширину столбцов в зависимости от периода
+    let barWidth = '45px';
+    let gap = '12px';
+    let labelFontSize = '11px';
+    
+    if (period === 'week') {
+        barWidth = '35px';
+        gap = '8px';
+        labelFontSize = '10px';
+    } else if (period === 'month') {
+        barWidth = '70px';
+        gap = '16px';
+        labelFontSize = '11px';
+    } else if (period === 'year') {
+        barWidth = '45px';
+        gap = '8px';
+        labelFontSize = '10px';
+    }
+    
     activityChart.innerHTML = `
-        <div class="activity-chart" style="display: flex; align-items: flex-end; gap: ${period === 'week' ? '8px' : '16px'}; justify-content: center; min-height: 240px; overflow-x: ${period === 'month' ? 'auto' : 'hidden'}; padding: 20px 10px;">
+        <div class="activity-chart" style="display: flex; align-items: flex-end; gap: ${gap}; justify-content: center; min-height: 240px; overflow-x: auto; padding: 20px 10px;">
             ${chartData.map((item, i) => {
                 const height = Math.max(4, (item.transactions / maxValue) * barMaxHeight);
                 
@@ -738,18 +827,18 @@ function renderActivityChart(period) {
                 else if (item.transactions > maxValue * 0.7) barColor = '#e74c3c';
                 else if (item.transactions > maxValue * 0.4) barColor = '#f39c12';
                 
-                // Для месяца ширина столбцов больше
-                const barWidth = period === 'week' ? '30px' : '45px';
+                // Формируем текст с количеством (для месяцев и недель)
+                let valueDisplay = item.transactions > 0 ? item.transactions : '';
                 
                 return `
                     <div class="bar-container" style="display: flex; flex-direction: column; align-items: center; width: ${barWidth}; flex-shrink: 0;">
                         <div style="position: relative; width: 100%; display: flex; justify-content: center;">
-                            <div class="bar" style="height: ${height}px; width: ${period === 'week' ? '28px' : '40px'}; background: linear-gradient(180deg, ${barColor}, ${barColor}CC); border-radius: 8px 8px 4px 4px; cursor: pointer; transition: transform 0.2s;" 
+                            <div class="bar" style="height: ${height}px; width: ${period === 'week' ? '30px' : (period === 'month' ? '60px' : '38px')}; background: linear-gradient(180deg, ${barColor}, ${barColor}CC); border-radius: 8px 8px 4px 4px; cursor: pointer; transition: transform 0.2s;" 
                                  onmouseenter="this.style.transform='scaleX(1.1)'" onmouseleave="this.style.transform='scaleX(1)'">
-                                ${item.transactions > 0 ? `<span class="bar-value" style="position: absolute; bottom: ${height + 5}px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 600; color: #333; background: white; padding: 2px 8px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap;">${item.transactions}</span>` : ''}
+                                ${item.transactions > 0 ? `<span class="bar-value" style="position: absolute; bottom: ${height + 5}px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 600; color: #333; background: white; padding: 2px 6px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap;">${valueDisplay}</span>` : ''}
                             </div>
                         </div>
-                        <div class="bar-label" style="font-size: ${period === 'week' ? '10px' : '12px'}; font-weight: ${period === 'month' ? '500' : '400'}; color: ${period === 'month' ? '#555' : '#888'}; margin-top: 10px; text-align: center;">
+                        <div class="bar-label" style="font-size: ${labelFontSize}; font-weight: 500; color: #555; margin-top: 10px; text-align: center; max-width: ${barWidth}; word-break: keep-all;">
                             ${item.label}
                         </div>
                     </div>
@@ -757,10 +846,11 @@ function renderActivityChart(period) {
             }).join('')}
         </div>
         <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid #eee; font-size: 13px; color: #666;">
-            Всего транзакций за ${period === 'week' ? 'неделю' : 'год'}: <strong style="color: #667eea; font-size: 16px;">${totalTransactions.toLocaleString()}</strong>
+            Всего транзакций за ${period === 'week' ? 'неделю' : (period === 'month' ? 'месяц' : 'год')}: <strong style="color: #667eea; font-size: 16px;">${totalTransactions.toLocaleString()}</strong>
         </div>
     `;
 }
+
 // Функция для добавления кнопок переключения периода
 function ensureActivityButtons() {
     // Проверяем, есть ли уже кнопки
@@ -787,6 +877,9 @@ function ensureActivityButtons() {
         </button>
         <button class="activity-period-btn" data-period="month" style="padding: 10px 28px; border-radius: 40px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.25s ease; background: #f8f9fa; color: #495057; font-family: inherit; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             Месяц
+        </button>
+        <button class="activity-period-btn" data-period="year" style="padding: 10px 28px; border-radius: 40px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.25s ease; background: #f8f9fa; color: #495057; font-family: inherit; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            Год
         </button>
     `;
     
@@ -870,7 +963,7 @@ function showEmptyAnalytics() {
                     <div class="segment-color" style="background-color: #f39c12"></div>
                     <div>
                         <div class="segment-name">Постоянный</div>
-                        <div style="font-size: 11px; color: #999; margin-top: 2px;">2+ покупок, ≤3 дней между</div>
+                        <div style="font-size: 11px; color: #999; margin-top: 2px;">2+ покупок, ≤5 дней между</div>
                     </div>
                     <div class="segment-count">0 чел.</div>
                     <div class="segment-percent">0%</div>
@@ -902,7 +995,6 @@ function showEmptyAnalytics() {
         ensureActivityButtons();
         activityChart.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #999;">
-                <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
                 <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Нет данных активности</div>
                 <div style="font-size: 13px;">Покупки через страницу кассира появятся здесь</div>
             </div>
@@ -1060,7 +1152,7 @@ async function loadAddressesRevenueForYear(year) {
                 <div class="revenue-header" style="margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 16px;">
                     <div class="revenue-total" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                         <div>
-                            <span class="total-label" style="font-size: 14px; color: #666;">📊 Общая выручка за ${year} год:</span>
+                            <span class="total-label" style="font-size: 14px; color: #666;">Общая выручка за ${year} год:</span>
                             <div class="total-amount" style="font-size: 32px; font-weight: 700; color: #667eea; margin-top: 8px;">${totalRevenue.toLocaleString()} ₽</div>
                         </div>
                         <div style="text-align: right;">
@@ -2151,8 +2243,8 @@ function showAddPromotionModal() {
             const options = [
                 { value: 'all', desc: 'Акция видна всем пользователям' },
                 { value: 'new', desc: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
-                { value: 'active', desc: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
-                { value: 'regular', desc: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
+                { value: 'active', desc: 'Для активных пользователей (2+ покупок, ≤14 дней между)' },
+                { value: 'regular', desc: 'Для постоянных клиентов (2+ покупок, ≤5 дней между)' },
                 { value: 'dormant', desc: 'Для пользователей без покупок 15+ дней' }
             ];
             const selected = options.find(opt => opt.value === e.target.value);
@@ -2240,8 +2332,8 @@ async function editPromotion(promotionId) {
             const options = [
                 { value: 'all', desc: 'Акция видна всем пользователям' },
                 { value: 'new', desc: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
-                { value: 'active', desc: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
-                { value: 'regular', desc: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
+                { value: 'active', desc: 'Для активных пользователей (2+ покупок, ≤14 дней между)' },
+                { value: 'regular', desc: 'Для постоянных клиентов (2+ покупок, ≤5 дней между)' },
                 { value: 'dormant', desc: 'Для пользователей без покупок 15+ дней' }
             ];
             const selected = options.find(opt => opt.value === e.target.value);
@@ -2530,9 +2622,9 @@ function renderQuestsManagerList() {
         // Показываем тип задания и цель
         let questTypeInfo = '';
         if (quest.target_type === 'purchase_count') {
-            questTypeInfo = `<span style="color:#3498db; margin-left:8px;">🛒 Цель: ${quest.target_value} покупок</span>`;
+            questTypeInfo = `<span style="color:#3498db; margin-left:8px;">Цель: ${quest.target_value} покупок</span>`;
         } else if (quest.target_type === 'spend_amount') {
-            questTypeInfo = `<span style="color:#3498db; margin-left:8px;">💰 Цель: ${quest.target_value}₽</span>`;
+            questTypeInfo = `<span style="color:#3498db; margin-left:8px;">Цель: ${quest.target_value}₽</span>`;
         } else if (quest.target_type === 'use_promotion') {
             questTypeInfo = `<span style="color:#3498db; margin-left:8px;">🎁 Цель: Использовать акцию</span>`;
         }
@@ -3691,7 +3783,7 @@ function addMultiplier() {
             text-align: center;
             box-shadow: 0 20px 40px rgba(0,0,0,0.3);
         ">
-            <h3 style="color: white; margin-bottom: 20px;">➕ Добавить множитель</h3>
+            <h3 style="color: white; margin-bottom: 20px;">Добавить множитель</h3>
             <input type="number" 
                    id="newMultiplierInput" 
                    placeholder="Например: 1.5, 2, 3.7..."
@@ -4522,7 +4614,7 @@ let currentEditingAddressId = null;
 
 function openCityModal() {
     currentEditingCityId = null;
-    document.getElementById('cityModalTitle').textContent = '➕ Добавить город';
+    document.getElementById('cityModalTitle').textContent = 'Добавить город';
     document.getElementById('cityName').value = '';
     document.getElementById('citySortOrder').value = 0;
     document.getElementById('cityModal').style.display = 'flex';
@@ -4602,7 +4694,7 @@ function closeCityModal() {
 
 function openAddressModal() {
     currentEditingAddressId = null;
-    document.getElementById('addressModalTitle').textContent = '➕ Добавить адрес';
+    document.getElementById('addressModalTitle').textContent = 'Добавить адрес';
     document.getElementById('addressCityId').value = '';
     document.getElementById('addressText').value = '';
     document.getElementById('addressLatitude').value = '';
@@ -5186,8 +5278,8 @@ function renderPromotionAudienceSelect(selectedValue) {
     const audienceOptions = [
         { value: 'all', label: 'Все пользователи', description: 'Акция видна всем пользователям' },
         { value: 'new', label: 'Новички', description: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
-        { value: 'active', label: 'Активные', description: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
-        { value: 'regular', label: 'Постоянные', description: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
+        { value: 'active', label: 'Активные', description: 'Для активных пользователей (2+ покупок, ≤14 дней между)' },
+        { value: 'regular', label: 'Постоянные', description: 'Для постоянных клиентов (2+ покупок, ≤5 дней между)' },
         { value: 'dormant', label: 'Спящие', description: 'Для пользователей без покупок 15+ дней' }
     ];
     
