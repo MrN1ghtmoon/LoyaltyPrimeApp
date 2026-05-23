@@ -1504,7 +1504,7 @@ async function sendDirectMessage() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`Рассылка отправлена!\n\n📨 Получателей: ${data.sentCount || users.length} пользователей\n👥 Аудитория: ${segmentName}`);
+            alert(`Рассылка отправлена!\n\nПолучателей: ${data.sentCount || users.length} пользователей\nАудитория: ${segmentName}`);
             
             // Очищаем поля
             document.getElementById('notifTitle').value = '';
@@ -1570,14 +1570,14 @@ function renderCampaignsList(campaigns) {
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                     <div style="flex: 1;">
                         <div style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">
-                            ${campaign.is_default ? '📦 ' : ''}${escapeHtml(campaign.name)}
+                            ${campaign.is_default ? ' ' : ''}${escapeHtml(campaign.name)}
                             ${campaign.is_default ? '<span style="font-size: 11px; background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; margin-left: 8px;">Шаблон</span>' : ''}
                         </div>
                         <div style="font-size: 13px; color: #555; margin-bottom: 4px;">📨 ${escapeHtml(campaign.title)}</div>
                         <div style="font-size: 12px; color: #888;">
-                            👥 ${audienceNames[campaign.audience] || campaign.audience} • 
-                            ⏰ Раз в ${campaign.interval_days || 1} ${getDaysWord(campaign.interval_days || 1)}
-                            ${campaign.image_url ? ' • 🖼️ С картинкой' : ''}
+                            ${audienceNames[campaign.audience] || campaign.audience} • 
+                            Раз в ${campaign.interval_days || 1} ${getDaysWord(campaign.interval_days || 1)}
+                            ${campaign.image_url ? ' • С картинкой' : ''}
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
@@ -1587,7 +1587,7 @@ function renderCampaignsList(campaigns) {
                     </div>
                 </div>
                 <div style="font-size: 11px; color: #888; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
-                    🕐 Последняя отправка: ${lastSent}
+                    Последняя отправка: ${lastSent}
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 12px;">
                     <button onclick="editCampaign(${campaign.id})" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">✏️ Редактировать</button>
@@ -1870,7 +1870,7 @@ function renderNotificationsHistory(history) {
                 <div style="font-size: 12px; color: #2ecc71; white-space: nowrap; margin-left: 12px;">${notif.sent_count || 0} чел.</div>
             </div>
             <div style="font-size: 11px; color: #888; margin-top: 8px;">
-                👥 ${segmentNames[notif.audience] || notif.audience} • ${new Date(notif.sent_at || notif.created_at).toLocaleString('ru-RU')}
+                ${segmentNames[notif.audience] || notif.audience} • ${new Date(notif.sent_at || notif.created_at).toLocaleString('ru-RU')}
             </div>
         </div>
     `).join('');
@@ -1983,11 +1983,11 @@ function renderPromotionsList() {
     
     // Маппинг аудиторий для отображения
     const audienceConfig = {
-        'all': { label: '👥 Все', class: 'audience-all', description: 'Видна всем пользователям' },
-        'new': { label: '🆕 Новички', class: 'audience-new', description: 'Только для новых пользователей' },
-        'active': { label: '⚡ Активные', class: 'audience-active', description: 'Только для активных пользователей' },
-        'regular': { label: '⭐ Постоянные', class: 'audience-regular', description: 'Только для постоянных клиентов' },
-        'dormant': { label: '😴 Спящие', class: 'audience-dormant', description: 'Только для пользователей без покупок 15+ дней' }
+        'all': { label: 'Все', class: 'audience-all', description: 'Видна всем пользователям' },
+        'new': { label: 'Новички', class: 'audience-new', description: 'Только для новых пользователей' },
+        'active': { label: 'Активные', class: 'audience-active', description: 'Только для активных пользователей' },
+        'regular': { label: 'Постоянные', class: 'audience-regular', description: 'Только для постоянных клиентов' },
+        'dormant': { label: 'Спящие', class: 'audience-dormant', description: 'Только для пользователей без покупок 15+ дней' }
     };
     
     container.innerHTML = promotions.map(promo => {
@@ -5184,16 +5184,16 @@ async function submitForgotPassword() {
 
 function renderPromotionAudienceSelect(selectedValue) {
     const audienceOptions = [
-        { value: 'all', label: '👥 Все пользователи', description: 'Акция видна всем пользователям' },
-        { value: 'new', label: '🆕 Новички', description: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
-        { value: 'active', label: '⚡ Активные', description: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
-        { value: 'regular', label: '⭐ Постоянные', description: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
-        { value: 'dormant', label: '😴 Спящие', description: 'Для пользователей без покупок 15+ дней' }
+        { value: 'all', label: 'Все пользователи', description: 'Акция видна всем пользователям' },
+        { value: 'new', label: 'Новички', description: 'Только для новых пользователей (1 покупка, ≤14 дней)' },
+        { value: 'active', label: 'Активные', description: 'Для активных пользователей (2+ покупок, ≤7 дней между)' },
+        { value: 'regular', label: 'Постоянные', description: 'Для постоянных клиентов (2+ покупок, ≤3 дней между)' },
+        { value: 'dormant', label: 'Спящие', description: 'Для пользователей без покупок 15+ дней' }
     ];
     
     return `
         <div class="form-group">
-            <label>👥 Целевая аудитория</label>
+            <label>Целевая аудитория</label>
             <select id="promoTargetAudience" class="form-select" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #ddd;">
                 ${audienceOptions.map(opt => `
                     <option value="${opt.value}" ${selectedValue === opt.value ? 'selected' : ''} title="${opt.description}">

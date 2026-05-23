@@ -2282,21 +2282,16 @@ app.post('/api/companies/:companyId/cashier-credentials', async (req, res) => {
     }
 });
 
-// Авторизация кассира
+/// Авторизация кассира
 app.post('/api/cashier/login', async (req, res) => {
     try {
         const { login, password, companyId } = req.body;
-        const match = await bcrypt.compare(password, credentials.password);
-if (!match) {
-    return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
-}
+        
         if (!login || !password) {
             return res.status(400).json({ success: false, message: 'Заполните все поля' });
         }
         
-	
-		
-        let credentials;
+        let credentials = null;
         let targetCompanyId = companyId;
         
         // If companyId is provided, use it (backward compatibility)
@@ -2314,7 +2309,10 @@ if (!match) {
             return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
         }
         
-        if (credentials.password !== password) {
+        // ✅ Используем bcrypt.compare для проверки хешированного пароля
+        const isPasswordValid = await bcrypt.compare(password, credentials.password);
+        
+        if (!isPasswordValid) {
             return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
         }
         

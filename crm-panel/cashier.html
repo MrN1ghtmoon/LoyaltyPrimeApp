@@ -326,26 +326,40 @@
             margin-top: 15px;
             border-left: 4px solid #1976d2;
         }
+#userStats {
+    background: linear-gradient(135deg, #667eea15, #764ba215);
+    border-radius: 12px;
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#purchaseProgress {
+    transition: width 0.5s ease-out;
+}
     </style>
 </head>
 <body>
     <!-- Header with logout button -->
     <div class="header" id="mainHeader" style="display: none;">
-        <h1>🏪 Страница кассира</h1>
+        <h1>Страница кассира</h1>
         <button class="logout-btn" onclick="cashierLogout()">Выйти</button>
     </div>
     
-    <h1 id="pageTitle" style="color: white; text-align: center; margin-bottom: 20px;">🏪 Страница кассира</h1>
+    <h1 id="pageTitle" style="color: white; text-align: center; margin-bottom: 20px;">Страница кассира</h1>
     
     <!-- Login Screen -->
     <div id="loginScreen" class="card login-form">
-        <h2 style="text-align: center;">🔐 Вход кассира</h2>
+        <h2 style="text-align: center;">Вход кассира</h2>
         <div class="form-group">
-            <label>Логин кассира</label>
+            <label>Логин</label>
             <input type="text" id="cashierLogin" class="form-input" placeholder="Введите логин">
         </div>
         <div class="form-group">
-            <label>Пароль кассира</label>
+            <label>Пароль</label>
             <input type="password" id="cashierPassword" class="form-input" placeholder="Введите пароль">
         </div>
         <div id="loginError" class="error hidden"></div>
@@ -406,10 +420,10 @@
         </div>
         
         <!-- User Info Card -->
-        <div class="card" id="userInfoCard" style="display:none;">
-            <h3>Информация о пользователе</h3>
-            <div id="userInfo"></div>
-        </div>
+<div class="card" id="userInfoCard" style="display:none;">
+    <h3>Информация о пользователе</h3>
+    <div id="userInfo"></div>
+</div>
 		<!-- Selection Address Card -->
 <div class="card" id="addressSection" style="display:none;">
     <h3>Выберите адрес заведения</h3>
@@ -427,7 +441,6 @@
         <div>
             <label>Сумма заказа (₽):</label>
             <input type="number" id="orderAmount" placeholder="1000" style="width: calc(100% - 120px);" oninput="onOrderAmountChange()">
-            <button onclick="calculateBonus()">Рассчитать бонусы</button>
         </div>
         <div class="test-buttons">
             <button onclick="setTestAmount(500)" class="test-btn">500₽</button>
@@ -577,7 +590,7 @@
     document.getElementById('mainHeader').style.display = 'flex';
     document.getElementById('pageTitle').style.display = 'none';
     
-    // ✅ СБРАСЫВАЕМ АДРЕС ПРИ ВХОДЕ
+    // СБРАСЫВАЕМ АДРЕС ПРИ ВХОДЕ
     selectedAddress = null;
     availableAddresses = [];
     
@@ -601,11 +614,11 @@
         currentQrData = null;
         currentCompanyId = null;
         
-        // ✅ ОЧИЩАЕМ ВЫБРАННЫЙ АДРЕС
+        // ОЧИЩАЕМ ВЫБРАННЫЙ АДРЕС
         selectedAddress = null;
         availableAddresses = [];
         
-        // ✅ СБРАСЫВАЕМ ВЫБОР ТИПА СКИДКИ
+        // СБРАСЫВАЕМ ВЫБОР ТИПА СКИДКИ
         currentDiscountType = null;
         
         // Reset all UI
@@ -618,7 +631,7 @@
         document.getElementById('orderSection').style.display = 'none';
         document.getElementById('historySection').style.display = 'none';
         
-        // ✅ СКРЫВАЕМ БЛОК ВЫБОРА АДРЕСА
+        // СКРЫВАЕМ БЛОК ВЫБОРА АДРЕСА
         const addressSection = document.getElementById('addressSection');
         if (addressSection) {
             addressSection.style.display = 'none';
@@ -663,7 +676,7 @@
             stopCameraScan();
         }
         
-        // ✅ СБРАСЫВАЕМ RADIO-КНОПКИ И СТИЛИ
+        // СБРАСЫВАЕМ RADIO-КНОПКИ И СТИЛИ
         const spendRadio = document.querySelector('input[value="spend"]');
         const promoRadio = document.querySelector('input[value="promotion"]');
         if (spendRadio) spendRadio.checked = false;
@@ -704,10 +717,10 @@
     selectedPromotion = null;
     availablePromotions = [];
     
-    // ✅ ОЧИЩАЕМ ВЫБРАННЫЙ АДРЕС
+    // ОЧИЩАЕМ ВЫБРАННЫЙ АДРЕС
     selectedAddress = null;
     
-    // ✅ СБРАСЫВАЕМ ВЫБОР ТИПА СКИДКИ
+    // СБРАСЫВАЕМ ВЫБОР ТИПА СКИДКИ
     currentDiscountType = null;
     
     // Reset UI
@@ -723,7 +736,7 @@
     document.getElementById('finalOrderCard').style.display = 'none';
     document.getElementById('selectedPromotionInfo').style.display = 'none';
     
-    // ✅ СКРЫВАЕМ БЛОК ВЫБОРА АДРЕСА
+    // СКРЫВАЕМ БЛОК ВЫБОРА АДРЕСА
     document.getElementById('addressSection').style.display = 'none';
     document.getElementById('selectedAddressInfo').style.display = 'none';
     
@@ -733,7 +746,7 @@
         addressList.innerHTML = '<div class="info">Загрузка адресов...</div>';
     }
     
-    // ✅ СБРАСЫВАЕМ RADIO-КНОПКИ И СТИЛИ
+    // СБРАСЫВАЕМ RADIO-КНОПКИ И СТИЛИ
     const spendRadio = document.querySelector('input[value="spend"]');
     const promoRadio = document.querySelector('input[value="promotion"]');
     if (spendRadio) spendRadio.checked = false;
@@ -756,7 +769,7 @@
     document.getElementById('promotionSection').classList.add('disabled-section');
     document.getElementById('spendAmount').disabled = true;
     
-    // ✅ ОБНОВЛЯЕМ СОСТОЯНИЕ КНОПКИ (если есть)
+    // ОБНОВЛЯЕМ СОСТОЯНИЕ КНОПКИ (если есть)
     if (typeof updateConfirmButtonState === 'function') {
         updateConfirmButtonState();
     }
@@ -1322,18 +1335,15 @@
         currentQrData = qrData;
         currentCompanyId = qrData.companyId;
         
-        // ✅ СБРАСЫВАЕМ ПРЕДЫДУЩИЙ ВЫБРАННЫЙ АДРЕС ПРИ НОВОМ СКАНИРОВАНИИ
         selectedAddress = null;
         availableAddresses = [];
         
-        // ✅ СБРАСЫВАЕМ ВЫБОР ТИПА СКИДКИ
         currentDiscountType = null;
         const spendRadio = document.querySelector('input[value="spend"]');
         const promoRadio = document.querySelector('input[value="promotion"]');
         if (spendRadio) spendRadio.checked = false;
         if (promoRadio) promoRadio.checked = false;
         
-        // Сбрасываем стили кнопок
         const spendLabel = document.getElementById('spendLabel');
         const promotionLabel = document.getElementById('promotionLabel');
         if (spendLabel) {
@@ -1345,14 +1355,12 @@
             promotionLabel.style.borderColor = '#ddd';
         }
         
-        // Блокируем секции
         document.getElementById('spendSection').classList.add('disabled-section');
         document.getElementById('promotionSection').classList.add('disabled-section');
         document.getElementById('spendAmount').disabled = true;
         
         console.log('📡 Verifying QR with backend...');
         
-        // Load bonus settings
         await loadBonusSettings();
         
         const response = await fetch(`${API_URL}/api/cashier/verify-qr`, {
@@ -1373,37 +1381,50 @@
             currentUser = data.user;
             currentCashbackPercent = data.cashbackPercent || 3;
             
-            // Show user info
+            // Получаем статистику покупок пользователя
+            let purchaseStats = { count: 0, totalSpent: 0 };
+            try {
+                const statsResponse = await fetch(`${API_URL}/api/users/${data.user.id}/transactions/${qrData.companyId}?limit=100`);
+                const statsData = await statsResponse.json();
+                if (statsData.success && statsData.transactions) {
+                    const purchases = statsData.transactions.filter(t => 
+                        t.type === 'earn' && t.amount > 0 && t.source === 'pos'
+                    );
+                    purchaseStats.count = purchases.length;
+                    purchaseStats.totalSpent = purchases.reduce((sum, t) => sum + (t.amount || 0), 0);
+                }
+            } catch (statsError) {
+                console.error('Ошибка получения статистики покупок:', statsError);
+            }
+            
+            // Show user info with purchase stats (только Имя, Баланс, Уровень, Статистика)
             document.getElementById('userInfo').innerHTML = `
-    <div class="user-info">
-        <strong>${data.user.name || 'Пользователь'}</strong><br>
-        Баланс: <span class="balance">${data.user.bonus_balance || 0}</span> бонусов<br>
-        Уровень: ${data.tier || 'Новичок'} (кешбэк ${data.cashbackPercent || 3}%)
-    </div>
-`;
+                <div class="user-info">
+                    <strong>${data.user.name || 'Пользователь'}</strong><br>
+                    Баланс: <span class="balance">${data.user.bonus_balance || 0}</span> бонусов<br>
+                    Уровень: ${data.tier || 'Новичок'} (кешбэк ${data.cashbackPercent || 3}%)<br>
+                    Покупок: ${purchaseStats.count || 0} шт. | Потрачено: ${(purchaseStats.totalSpent || 0).toLocaleString()} ₽
+                </div>
+            `;
             
             document.getElementById('availableBonuses').innerText = data.user.bonus_balance || 0;
             document.getElementById('userInfoCard').style.display = 'block';
             document.getElementById('orderSection').style.display = 'block';
             document.getElementById('promotionSection').style.display = 'block';
             
-            // Load promotions and history
             await loadAvailablePromotions();
             await loadUserHistory();
             await loadAddressesForCashier();
             
-            // ✅ СКРЫВАЕМ ИНФОРМАЦИЮ О ПРЕДЫДУЩЕМ ВЫБРАННОМ АДРЕСЕ
             const selectedAddressInfo = document.getElementById('selectedAddressInfo');
             if (selectedAddressInfo) {
                 selectedAddressInfo.style.display = 'none';
             }
             
-            // ✅ ОБНОВЛЯЕМ СОСТОЯНИЕ КНОПКИ (она будет заблокирована, пока адрес и тип скидки не выбраны)
             if (typeof updateConfirmButtonState === 'function') {
                 updateConfirmButtonState();
             }
             
-            // If no promotions available, disable the promotion radio
             if (availablePromotions.length === 0) {
                 const promoRadio = document.querySelector('input[value="promotion"]');
                 if (promoRadio) {
@@ -1415,7 +1436,6 @@
                 if (promoRadio) promoRadio.disabled = false;
             }
             
-            // Stop scanner if running
             if (qrScanner && isScanning) {
                 stopCameraScan();
             }
@@ -1560,7 +1580,7 @@ function updateFinalOrderSummary() {
     
     if (!orderAmount || orderAmount <= 0) {
         document.getElementById('finalOrderCard').style.display = 'none';
-        updateConfirmButtonState(); // ✅ ДОБАВИТЬ
+        updateConfirmButtonState();
         return;
     }
     
@@ -1570,13 +1590,13 @@ function updateFinalOrderSummary() {
     if (currentDiscountType === 'spend') {
         discountRub = Math.floor(currentSpendBonuses / currentBonusSettings.rubToBonus);
         if (currentSpendBonuses > 0) {
-            discountText = `🎁 Скидка бонусами: -${discountRub} ₽ (${currentSpendBonuses} бонусов)`;
+            discountText = `Скидка бонусами: -${discountRub} ₽ (${currentSpendBonuses} бонусов)`;
         } else {
-            discountText = `💸 Без списания бонусов`;
+            discountText = `Без списания бонусов`;
         }
     } else if (currentDiscountType === 'promotion' && selectedPromotion) {
         discountRub = Math.floor(orderAmount * selectedPromotion.discount / 100);
-        discountText = `🎁 Скидка по акции "${selectedPromotion.name}": -${discountRub} ₽ (${selectedPromotion.discount}%)`;
+        discountText = `Скидка по акции "${selectedPromotion.name}": -${discountRub} ₽ (${selectedPromotion.discount}%)`;
     }
     
     const finalAmount = Math.max(0, orderAmount - discountRub);
@@ -1599,7 +1619,7 @@ function updateFinalOrderSummary() {
     
     if (bonusToEarn > 0) {
         const cashbackRub = orderAmount * (currentCashbackPercent || 3) / 100;
-        document.getElementById('bonusToEarnInfo').innerHTML = `⭐ Будет начислено: +${bonusToEarn.toLocaleString()} бонусов<br><span style="font-size: 10px;">(кешбэк ${currentCashbackPercent || 3}% = ${cashbackRub.toFixed(2)}₽ × ${rubToBonus} бонусов/₽)</span>`;
+        document.getElementById('bonusToEarnInfo').innerHTML = `Будет начислено: +${bonusToEarn.toLocaleString()} бонусов<br><span style="font-size: 10px;">(кешбэк ${currentCashbackPercent || 3}% = ${cashbackRub.toFixed(2)}₽ × ${rubToBonus} бонусов/₽)</span>`;
         document.getElementById('bonusToEarnInfo').style.color = '#ffd966';
     } else {
         document.getElementById('bonusToEarnInfo').innerHTML = `Минимальная сумма для начисления: ${minPurchase}₽`;
@@ -1618,7 +1638,6 @@ function updateFinalOrderSummary() {
         confirmBtn.style.opacity = '1';
     }
     
-    // ✅ ДОБАВИТЬ ВЫЗОВ В КОНЦЕ
     updateConfirmButtonState();
 }
 // ============ УПРАВЛЕНИЕ КНОПКОЙ ПОДТВЕРЖДЕНИЯ ============
@@ -1700,7 +1719,7 @@ async function loadAvailablePromotions() {
                         <div>
                             <strong>${promo.name}</strong>
                             <span class="promotion-badge" style="background: ${promo.is_free ? '#3498db' : '#27ae60'}">
-                                ${promo.is_free ? '🎁 Бесплатная' : '💎 Куплена'} -${promo.discount}%
+                                ${promo.is_free ? 'Бесплатная' : 'Куплена'} -${promo.discount}%
                             </span>
                         </div>
                         <span style="font-size: 20px;">${selectedPromotion?.id === promo.id && selectedPromotion?.type === promo.type ? '✅' : '○'}</span>
@@ -1733,13 +1752,13 @@ async function loadAvailablePromotions() {
         event.currentTarget.classList.add('selected');
     }
     
-    const typeText = isFree ? '🎁 Бесплатная акция' : '💎 Купленная акция';
+    const typeText = isFree ? 'Бесплатная акция' : 'Купленная акция';
     
     document.getElementById('selectedPromotionInfo').innerHTML = `
-        <strong>✅ Выбрана акция:</strong> ${name}<br>
-        🎁 Скидка: ${discount}%<br>
+        <strong>Выбрана акция:</strong> ${name}<br>
+        Скидка: ${discount}%<br>
         ${typeText}
-        ${products ? `<div style="margin-top: 5px;">📦 Продукты: ${products}</div>` : ''}
+        ${products ? `<div style="margin-top: 5px;">Продукты: ${products}</div>` : ''}
     `;
     
     // Показываем информацию только если есть выбранная акция
@@ -1785,17 +1804,17 @@ async function loadAvailablePromotions() {
                     
                     document.getElementById('verifyResult').innerHTML = `
                         <div class="success">
-                            ✅ Пользователь: ${result.user.name}<br>
-                            💰 Баланс: ${result.user.balance} бонусов<br>
-                            💸 Кешбэк: ${result.cashbackPercent}%
+                            Пользователь: ${result.user.name}<br>
+                            Баланс: ${result.user.balance} бонусов<br>
+                            Кешбэк: ${result.cashbackPercent}%
                         </div>
                     `;
                     
                     document.getElementById('userInfo').innerHTML = `
                         <div class="user-info">
-                            <strong>👤 ${result.user.name}</strong><br>
-                            💰 Баланс: <span class="balance">${result.user.balance}</span> бонусов<br>
-                            🏆 Уровень: ${result.tier} (x${result.multiplier})
+                            <strong>${result.user.name}</strong><br>
+                            Баланс: <span class="balance">${result.user.balance}</span> бонусов<br>
+                            Уровень: ${result.tier} (x${result.multiplier})
                         </div>
                     `;
                     
@@ -1882,12 +1901,7 @@ async function loadAvailablePromotions() {
         // 2. Переводим рубли в бонусы по курсу
         const bonusEarned = Math.floor(cashbackRub * rubToBonus);
         
-        document.getElementById('bonusResult').innerHTML = `
-            <div class="success">
-                🎉 За заказ на сумму ${amount.toLocaleString()}₽ клиент получит ${bonusEarned.toLocaleString()} бонусов!<br>
-                (кешбэк ${cashbackPercent}% = ${cashbackRub.toFixed(2)}₽ × ${rubToBonus} бонусов/₽)
-            </div>
-        `;
+        
     }
 }
         
@@ -1958,7 +1972,7 @@ const earnResponse = await fetch(`${API_URL}/api/pos/apply-bonus-v2`, {
         cashierId: 'cashier_' + Math.random().toString(36).substr(2, 6),
         addressId: selectedAddress ? selectedAddress.id : null,
         address: selectedAddress ? selectedAddress.address : null,
-        cityName: selectedAddress ? selectedAddress.city_name : null  // ✅ ДОБАВИТЬ город
+        cityName: selectedAddress ? selectedAddress.city_name : null  
     })
 });
         
@@ -1977,12 +1991,12 @@ const earnResponse = await fetch(`${API_URL}/api/pos/apply-bonus-v2`, {
             
             document.getElementById('applyResult').innerHTML = `
                 <div class="success">
-                    ✅ ЗАКАЗ ОФОРМЛЕН!<br>
+                    ЗАКАЗ ОФОРМЛЕН!<br>
                     ━━━━━━━━━━━━━━━━━━━━━<br>
-                    💰 Сумма: ${currentOrderAmount.toLocaleString()} ₽<br>
-                    🎁 ${discountText}<br>
-                    💳 К оплате: ${finalAmount.toLocaleString()} ₽<br>
-                    ⭐ Начислено: +${earnResult.bonusEarned} бонусов
+                    Сумма: ${currentOrderAmount.toLocaleString()} ₽<br>
+                    ${discountText}<br>
+                    К оплате: ${finalAmount.toLocaleString()} ₽<br>
+                    ⭐Начислено: +${earnResult.bonusEarned} бонусов
                 </div>
             `;
             
@@ -2018,115 +2032,189 @@ const earnResponse = await fetch(`${API_URL}/api/pos/apply-bonus-v2`, {
     }
 }
         
-        // ============ ИСТОРИЯ ============
 async function loadUserHistory() {
     if (!currentUser || !currentCompanyId) return;
     
     try {
-        const response = await fetch(`${API_URL}/api/users/${currentUser.id}/transactions/${currentCompanyId}?limit=50`);
+        const response = await fetch(`${API_URL}/api/users/${currentUser.id}/transactions/${currentCompanyId}?limit=100`);
         const result = await response.json();
         
         if (result.success) {
-            let totalEarned = 0, totalSpent = 0;
+            // ========== ПОЛУЧАЕМ ВСЕ ТРАНЗАКЦИИ ==========
+            const allTransactions = result.transactions;
             
-            // ✅ СОРТИРУЕМ ТРАНЗАКЦИИ ПО ДАТЕ (новые сверху)
-            const sortedTransactions = [...result.transactions].sort((a, b) => 
-                new Date(b.createdAt) - new Date(a.createdAt)
-            );
-            
-            const historyHtml = sortedTransactions.map(t => {
-                // Определяем тип транзакции через metadata или описание
+            // ========== ФИЛЬТРУЕМ ПОКУПКИ (начисления за покупки) ==========
+            const purchases = allTransactions.filter(t => {
+                if (t.type !== 'earn') return false;
+                if (!t.amount || t.amount <= 0) return false;
+                
                 let metadata = {};
                 try {
                     metadata = t.metadata ? (typeof t.metadata === 'string' ? JSON.parse(t.metadata) : t.metadata) : {};
                 } catch (e) {}
                 
-                const isPromotionPurchase = metadata.promotion_id || 
-                                           t.description.includes('Покупка акции') || 
-                                           t.description.includes('Бесплатная акция');
-                const isEarn = t.bonusChange > 0 && !isPromotionPurchase;
+                // Исключаем акции, задания, игры, ежедневные бонусы
+                const isPromotion = metadata.promotion_id || 
+                                   t.description?.includes('Покупка акции') || 
+                                   t.description?.includes('Бесплатная акция');
+                const isQuest = t.description?.includes('Задание') || t.description?.includes('задание');
+                const isGame = t.source === 'game' || t.description?.includes('игра') || t.description?.includes('Игра');
+                const isDaily = t.description?.includes('Ежедневный') || t.description?.includes('ежедневный');
+                const isGameWin = t.description?.includes('Выигрыш в игре');
                 
-                let actualBonusChange = t.bonusChange;
+                return !isPromotion && !isQuest && !isGame && !isDaily && !isGameWin;
+            });
+            
+            // ========== РАЗДЕЛЯЕМ СПИСАНИЯ ==========
+            const regularSpends = [];
+            const promotionSpends = [];
+            
+            allTransactions.forEach(t => {
+                if (t.type !== 'spend') return;
+                if (t.bonusChange >= 0) return;
                 
-                // Для покупки акции: если пришло положительное значение, делаем его отрицательным для отображения
-                if (isPromotionPurchase && t.bonusChange > 0) {
-                    actualBonusChange = -t.bonusChange;
-                } else if (isPromotionPurchase && t.bonusChange < 0) {
-                    actualBonusChange = t.bonusChange;
-                }
+                let metadata = {};
+                try {
+                    metadata = t.metadata ? (typeof t.metadata === 'string' ? JSON.parse(t.metadata) : t.metadata) : {};
+                } catch (e) {}
                 
-                if (actualBonusChange > 0) totalEarned += actualBonusChange;
-                if (actualBonusChange < 0) totalSpent += Math.abs(actualBonusChange);
+                const description = (t.description || '').toLowerCase();
                 
-                const date = new Date(t.createdAt).toLocaleString('ru-RU');
+                // Проверка на акцию
+                const isPromotionSpend = 
+                    metadata.promotion_id || 
+                    description.includes('покупка акции') ||
+                    description.includes('бесплатная акция') ||
+                    description.includes('акцию') ||
+                    description.includes('акции') ||
+                    description.includes('акция');
                 
-                let icon = '💸';
-                let title = t.description || 'Списание бонусов';
-                let borderColor = '#e74c3c';
-                let amountText = '';
-                let bonusText = '';
-                
-                if (isPromotionPurchase) {
-                    icon = '🎁';
-                    title = t.description || 'Покупка акции';
-                    borderColor = '#9b59b6';
-                    const spentAmount = Math.abs(actualBonusChange);
-                    if (spentAmount > 0 && actualBonusChange < 0) {
-                        amountText = `<div style="font-size: 12px; color: #9b59b6;">Потрачено: ${spentAmount} бонусов</div>`;
-                        bonusText = `<span style="color: #e74c3c; font-weight: bold;">-${spentAmount} бонусов</span>`;
-                    } else if (spentAmount === 0 || actualBonusChange === 0) {
-                        amountText = `<div style="font-size: 12px; color: #3498db;">Бесплатная акция</div>`;
-                        bonusText = `<span style="color: #3498db; font-weight: bold;">Бесплатно</span>`;
-                    } else {
-                        // Покупка акции (списание)
-                        amountText = `<div style="font-size: 12px; color: #9b59b6;">Потрачено: ${spentAmount} бонусов</div>`;
-                        bonusText = `<span style="color: #e74c3c; font-weight: bold;">-${spentAmount} бонусов</span>`;
-                    }
-                } else if (isEarn) {
-                    icon = '🛒';
-                    title = t.description || 'Начисление бонусов';
-                    borderColor = '#27ae60';
-                    if (t.amount > 0) {
-                        amountText = `<div style="font-size: 12px; color: #27ae60;">Сумма: ${t.amount.toLocaleString()} ₽</div>`;
-                    }
-                    bonusText = `<span style="color: #27ae60; font-weight: bold;">+${actualBonusChange} бонусов</span>`;
+                if (isPromotionSpend) {
+                    promotionSpends.push(t);
                 } else {
-                    // Обычное списание (игры, обмен)
-                    const spentAmount = Math.abs(actualBonusChange);
-                    bonusText = `<span style="color: #e74c3c; font-weight: bold;">-${spentAmount} бонусов</span>`;
-                    
-                    // Дополнительная информация для игр
-                    if (t.source === 'game') {
-                        icon = '🎮';
-                        title = t.description || 'Игровая активность';
-                        borderColor = '#f39c12';
-                    }
+                    regularSpends.push(t);
                 }
+            });
+            
+            // ========== СЧИТАЕМ СТАТИСТИКУ ==========
+            let totalEarnedFromPurchases = 0;
+            purchases.forEach(p => {
+                totalEarnedFromPurchases += (p.bonusChange || 0);
+            });
+            
+            let totalSpentFromRegular = 0;
+            regularSpends.forEach(s => {
+                totalSpentFromRegular += Math.abs(s.bonusChange || 0);
+            });
+            
+            let totalSpentFromPromotions = 0;
+            promotionSpends.forEach(p => {
+                totalSpentFromPromotions += Math.abs(p.bonusChange || 0);
+            });
+            
+            // Сортируем покупки по дате
+            const sortedPurchases = [...purchases].sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+            );
+            
+            // ========== ОТОБРАЖАЕМ ИСТОРИЮ ==========
+            const historyHtml = sortedPurchases.map((purchase, index) => {
+                const amount = purchase.amount || 0;
+                const bonusEarned = purchase.bonusChange || 0;
+                
+                // Ищем списания за этот день
+                const purchaseDate = new Date(purchase.createdAt).toLocaleDateString('ru-RU');
+                const purchaseTime = new Date(purchase.createdAt).getTime();
+                
+                // Списания баллов
+                const sameDayRegularSpends = regularSpends.filter(spend => {
+                    const spendDate = new Date(spend.createdAt).toLocaleDateString('ru-RU');
+                    const spendTime = new Date(spend.createdAt).getTime();
+                    return spendDate === purchaseDate && Math.abs(spendTime - purchaseTime) < 10 * 60 * 1000;
+                });
+                const regularBonusSpent = sameDayRegularSpends.reduce((sum, s) => sum + Math.abs(s.bonusChange || 0), 0);
+                
+                // Списания за акции
+                const sameDayPromotionSpends = promotionSpends.filter(spend => {
+                    const spendDate = new Date(spend.createdAt).toLocaleDateString('ru-RU');
+                    const spendTime = new Date(spend.createdAt).getTime();
+                    return spendDate === purchaseDate && Math.abs(spendTime - purchaseTime) < 10 * 60 * 1000;
+                });
+                const promotionBonusSpent = sameDayPromotionSpends.reduce((sum, s) => sum + Math.abs(s.bonusChange || 0), 0);
+                
+                // Определяем тип операции
+                let operationType = '';
+                let operationColor = '';
+                
+                if (regularBonusSpent > 0) {
+                    operationType = 'Списание баллов';
+                    operationColor = '#e74c3c';
+                } else {
+                    operationType = 'Использование акции';
+                    operationColor = '#9b59b6';
+                }
+                
+                let addressText = '';
+                let metadata = {};
+                try {
+                    metadata = purchase.metadata ? (typeof purchase.metadata === 'string' ? JSON.parse(purchase.metadata) : purchase.metadata) : {};
+                    if (metadata.address) {
+                        addressText = metadata.address;
+                        if (metadata.city_name) addressText += ` (${metadata.city_name})`;
+                    }
+                } catch (e) {}
+                
+                const timeStr = new Date(purchase.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                const dateStr = new Date(purchase.createdAt).toLocaleDateString('ru-RU');
                 
                 return `
-                    <div class="transaction-item" style="border-left: 4px solid ${borderColor}; margin-bottom: 8px; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between;">
+                    <div class="transaction-item" style="border-left: 4px solid ${operationColor}; margin-bottom: 12px; padding: 14px; border-radius: 12px; background: #f8f9fa;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div>
-                                <strong>${icon} ${title}</strong>
-                                <div style="font-size: 11px; color: #888;">${date}</div>
-                                ${amountText}
+                                <strong style="font-size: 15px;">${operationType}</strong>
+                                ${addressText ? `<div style="font-size: 11px; color: #666; margin-top: 4px;">📍 ${addressText}</div>` : ''}
+                                <div style="font-size: 11px; color: #888; margin-top: 2px;">${dateStr} в ${timeStr}</div>
                             </div>
-                            ${bonusText}
+                            <div style="text-align: right;">
+                                <div style="font-size: 16px; font-weight: 700; color: #2c3e50;">${amount.toLocaleString()} ₽</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                                <div>
+                                    <span style="font-size: 12px; color: #666;">Получено:</span>
+                                    <span style="font-size: 14px; font-weight: 700; color: #27ae60; margin-left: 8px;">+${bonusEarned} бонусов</span>
+                                </div>
+                                ${regularBonusSpent > 0 ? `
+                                <div>
+                                    <span style="font-size: 12px; color: #666;">Списано:</span>
+                                    <span style="font-size: 14px; font-weight: 700; color: #e74c3c; margin-left: 8px;">-${regularBonusSpent} бонусов</span>
+                                </div>
+                                ` : ''}
+                                ${promotionBonusSpent > 0 ? `
+                                <div>
+                                    <span style="font-size: 12px; color: #666;">Списано:</span>
+                                    <span style="font-size: 14px; font-weight: 700; color: #9b59b6; margin-left: 8px;">-${promotionBonusSpent} бонусов</span>
+                                </div>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
                 `;
             }).join('');
             
-            document.getElementById('historyList').innerHTML = historyHtml || '<div class="info">📭 Нет операций</div>';
-            document.getElementById('totalEarned').innerText = totalEarned.toLocaleString();
-            document.getElementById('totalSpent').innerText = totalSpent.toLocaleString();
+            // Обновляем UI
+            document.getElementById('historyList').innerHTML = historyHtml || '<div class="info">Нет покупок</div>';
+            document.getElementById('totalEarned').innerText = totalEarnedFromPurchases.toLocaleString();
+            document.getElementById('totalSpent').innerText = (totalSpentFromRegular + totalSpentFromPromotions).toLocaleString();
             document.getElementById('historySection').style.display = 'block';
+            
         } else {
-            document.getElementById('historyList').innerHTML = '<div class="error">❌ Ошибка загрузки истории</div>';
+            document.getElementById('historyList').innerHTML = '<div class="error">Ошибка загрузки истории</div>';
         }
     } catch (error) {
         console.error('Ошибка загрузки истории:', error);
-        document.getElementById('historyList').innerHTML = '<div class="error">❌ Ошибка загрузки истории: ' + error.message + '</div>';
+        document.getElementById('historyList').innerHTML = '<div class="error">Ошибка загрузки истории: ' + error.message + '</div>';
     }
 }
         
@@ -2238,17 +2326,17 @@ async function loadAddressesForCashier() {
             // Скрываем предупреждение
             hideAddressWarning();
             
-            // ✅ УБИРАЕМ АВТОМАТИЧЕСКИЙ ВЫБОР АДРЕСА
+            // УБИРАЕМ АВТОМАТИЧЕСКИЙ ВЫБОР АДРЕСА
             // Кассир должен выбрать адрес самостоятельно
             // const mainAddress = availableAddresses.find(a => a.is_main === true);
             // if (mainAddress) {
             //     selectAddressForOrder(mainAddress.id);
             // }
             
-            // ✅ СБРАСЫВАЕМ ВЫБРАННЫЙ АДРЕС (на случай, если он остался от предыдущей сессии)
+            // СБРАСЫВАЕМ ВЫБРАННЫЙ АДРЕС (на случай, если он остался от предыдущей сессии)
             selectedAddress = null;
             
-            // ✅ ОБНОВЛЯЕМ СОСТОЯНИЕ КНОПКИ (она будет заблокирована, пока адрес не выбран)
+            // ОБНОВЛЯЕМ СОСТОЯНИЕ КНОПКИ (она будет заблокирована, пока адрес не выбран)
             if (typeof updateConfirmButtonState === 'function') {
                 updateConfirmButtonState();
             }
@@ -2306,7 +2394,7 @@ function renderAddressList() {
                         ${addr.phone ? ` • ${addr.phone}` : ''}
                         ${addr.is_main ? '<span style="color: #f39c12; margin-left: 8px;">Основной</span>' : ''}
                     </div>
-                    ${addr.working_hours ? `<div style="font-size: 11px; color: #888; margin-top: 4px;">⏰ ${escapeHtmlForCashier(addr.working_hours)}</div>` : ''}
+                    ${addr.working_hours ? `<div style="font-size: 11px; color: #888; margin-top: 4px;">${escapeHtmlForCashier(addr.working_hours)}</div>` : ''}
                 </div>
                 ${selectedAddress?.id === addr.id ? '<div style="font-size: 20px; color: #27ae60;">✓</div>' : ''}
             </div>
