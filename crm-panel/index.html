@@ -91,7 +91,18 @@
             <label>Название акции</label>
             <input type="text" id="promoName" class="form-input">
         </div>
-        
+         <div class="form-group">
+            <label>Эмодзи акции <span style="color: #ff4d4d;">*</span></label>
+            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+       
+                <div style="flex: 1;">
+                    <input type="text" id="promoEmojiInput" class="form-input" placeholder="Вставьте любой смайлик" value="🎯" style="font-size: 18px; text-align: center;">
+                    <small style="display: block; margin-top: 4px; color: #666;">Вы можете вставить любой смайлик </small>
+                </div>
+            </div>
+       
+        </div>
+		
         <div class="form-group">
             <label>Описание акции</label>
             <textarea id="promoDescription" class="form-input" rows="3" placeholder="Описание акции..."></textarea>
@@ -327,7 +338,7 @@
                 <option value="new">Новичок (1 покупка, ≤14 дней)</option>
                 <option value="active">Активный (2+ покупок, ≤7 дней)</option>
                 <option value="regular">Постоянный (2+ покупок, ≤3 дней)</option>
-                <option value="dormant">Спящий (1+ покупок, ≥15 дней без покупок)</option>
+                <option value="dormant">Спящий (≥15 дней без покупок)</option>
             </select>
             <small style="display: block; margin-top: 4px; color: #666;">
                 Пользователи автоматически классифицируются на основе их покупок
@@ -629,13 +640,7 @@
         <div class="form-group">
             <label>Название города</label>
             <input type="text" id="cityName" class="form-input" placeholder="Например: Москва">
-        </div>
-        
-        <div class="form-group">
-            <label>Порядок сортировки</label>
-            <input type="number" id="citySortOrder" class="form-input" value="0" min="0">
-            <small>Меньше число - выше в списке</small>
-        </div>
+        </div>       
         
         <div style="display: flex; gap: 12px; margin-top: 20px;">
             <button class="btn-save" onclick="saveCity()" style="flex: 1;">Сохранить</button>
@@ -671,16 +676,7 @@
             <label>Часы работы</label>
             <textarea id="addressWorkingHours" class="form-input" rows="3" placeholder="Пн-Пт: 10:00-22:00&#10;Сб-Вс: 11:00-23:00"></textarea>
         </div>
-        
-        <div class="form-group">
-            <label>Координаты (для карты)</label>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="addressLatitude" class="form-input" placeholder="Широта (latitude)" style="flex: 1;">
-                <input type="text" id="addressLongitude" class="form-input" placeholder="Долгота (longitude)" style="flex: 1;">
-            </div>
-            <small>Можно найти на maps.google.com</small>
-        </div>
-        
+              
         <div class="form-group">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="addressIsMain">
@@ -817,7 +813,7 @@
                     <option value="new">Новичок (1 покупка, ≤14 дней)</option>
                     <option value="active">Активный (2+ покупок, ≤7 дней)</option>
                     <option value="regular">Постоянный (2+ покупок, ≤3 дней)</option>
-                    <option value="dormant">Спящий (1+ покупок, ≥15 дней без покупок)</option>
+                    <option value="dormant">Спящий (≥15 дней без покупок)</option>
                     <option value="birthday">С днем рождения (текущий месяц)</option>
                 </select>
             </div>

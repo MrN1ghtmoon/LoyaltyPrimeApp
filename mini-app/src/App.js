@@ -148,7 +148,7 @@ useEffect(() => {
     
     const refreshData = async () => {
       try {
-        // 1. ПОЛУЧАЕМ ТИП ПОЛЬЗОВАТЕЛЯ
+        // 🔥 1. ПОЛУЧАЕМ ТИП ПОЛЬЗОВАТЕЛЯ
         let userType = 'all';
         try {
           console.log(`📡 Запрос классификации для userId=${userId}, companyId=${selectedGroup.id}`);
@@ -180,7 +180,7 @@ useEffect(() => {
           console.error('❌ Ошибка получения классификации:', e);
         }
         
-        //  2. ЗАГРУЖАЕМ АКЦИИ
+        // 🔥 2. ЗАГРУЖАЕМ АКЦИИ
         const promotionsUrl = `${API_URL}/api/promotions/${selectedGroup.id}?userType=${userType}`;
         console.log(`📡 Запрос акций: ${promotionsUrl}`);
         
@@ -197,7 +197,7 @@ useEffect(() => {
             end: p.end_date
           })));
           
-          // получаем ЛОКАЛЬНОЕ время вместо UTC
+          // ✅ ИСПРАВЛЕНО: получаем ЛОКАЛЬНОЕ время вместо UTC
           const companyOffset = selectedGroup?.timezoneOffset || 0;
           const localNow = getLocalNow(companyOffset);
           
@@ -221,7 +221,7 @@ useEffect(() => {
             const startDate = adjustDateToLocal(promo.start_date, companyOffset);
             const endDate = adjustDateToLocal(promo.end_date, companyOffset);
             
-            // сравниваем ЛОКАЛЬНОЕ время с ЛОКАЛЬНЫМИ датами
+            // ✅ ИСПРАВЛЕНО: сравниваем ЛОКАЛЬНОЕ время с ЛОКАЛЬНЫМИ датами
             const isActiveByDate = localNow >= startDate && localNow <= endDate;
             
             if (!isActiveByDate) {
@@ -232,7 +232,7 @@ useEffect(() => {
               return false;
             }
             
-            // 3. ФИЛЬТРАЦИЯ ПО АУДИТОРИИ
+            // 🔥 3. ФИЛЬТРАЦИЯ ПО АУДИТОРИИ
             const promoAudience = promo.target_audience || 'all';
             
             console.log(`🔍 Проверка акции "${promo.name}": аудитория=${promoAudience}, пользователь=${userType}`);
@@ -573,7 +573,7 @@ const addHistory = (desc, pointsChange, type) => {
 const updateBalanceAndStats = async (change, type, metadata = {}) => {
     if (!selectedGroup) return false;
     
-    // Если это синхронизация из DailyQuests, не дублируем историю
+    // ✅ Если это синхронизация из DailyQuests, не дублируем историю
     const isSync = metadata.source === 'sync' || metadata.skipSync === true;
     
     const cur = getCurrentGroupData();
@@ -624,7 +624,7 @@ const updateBalanceAndStats = async (change, type, metadata = {}) => {
     // Сохраняем локально (для быстрого UI)
     saveCurrentGroupData(newData);
     
-    // Отправляем на сервер ТОЛЬКО если это не синхронизация
+    // ✅ Отправляем на сервер ТОЛЬКО если это не синхронизация
     if (userId && !isSync) {
         try {
             const response = await fetch(`${API_URL}/api/users/updateBalance`, {
@@ -643,7 +643,7 @@ const updateBalanceAndStats = async (change, type, metadata = {}) => {
             
             const result = await response.json();
             if (result.success) {
-                // Синхронизируем с сервером (на случай расхождений)
+                // ✅ Синхронизируем с сервером (на случай расхождений)
                 if (result.newTotalSpent !== undefined) {
                     const syncedData = { 
                         ...newData, 
@@ -741,7 +741,7 @@ const syncBalanceFromDB = async () => {
       saveCurrentGroupData(newData);
       console.log('Баланс синхронизирован из БД:', newData.bonusBalance, 'totalSpent:', newData.totalSpent, 'history length:', newData.history.length);
       
-      // ОТПРАВЛЯЕМ СОБЫТИЕ ДЛЯ ОБНОВЛЕНИЯ ВСЕХ ИГР
+      // ✅ ВАЖНО: ОТПРАВЛЯЕМ СОБЫТИЕ ДЛЯ ОБНОВЛЕНИЯ ВСЕХ ИГР
       window.dispatchEvent(new CustomEvent('refreshGamePlays'));
       console.log('🔄 Отправлено событие refreshGamePlays для обновления игр');
     }
@@ -788,7 +788,7 @@ const syncBalanceFromDB = async () => {
       if (response.ok && data.success) {
         setBirthdayDate(date);
         setShowBirthdayModal(false);
-        showModal('Успешно!', 'Дата дня рождения сохранена');
+        showModal('✅ Успешно!', 'Дата дня рождения сохранена');
         return true;
       } else {
         showModal('Ошибка', data.message || 'Не удалось сохранить дату');
@@ -861,7 +861,7 @@ const syncBalanceFromDB = async () => {
           }
         }
         
-        showModal('Успешно!', data.message || `Акция "${promotion.name}" куплена`);
+        showModal('✅ Успешно!', data.message || `Акция "${promotion.name}" куплена`);
       } else {
         showModal('Ошибка', data.message || 'Не удалось купить акцию');
       }
@@ -1736,40 +1736,67 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
       </div>
     </div>
     
-    {/* Блок с выбранным адресом */}
-    {selectedLocation && (
-      <div 
-        style={{ 
-          background: 'rgba(30,35,48,0.7)', 
-          borderRadius: 28, 
-          padding: 16, 
-          marginBottom: 16,
-          cursor: 'pointer',
-          border: `1px solid ${selectedGroup?.color}40`
-        }}
-        onClick={() => setShowLocationSelector(true)}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            {selectedLocation.city && (
-              <div style={{ fontSize: 13, opacity: 0.7, color: 'white' }}>
-                {selectedLocation.city}
-              </div>
-            )}
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'white' }}>
-              {selectedLocation.address?.substring(0, 50)}
-              {selectedLocation.address?.length > 50 ? '...' : ''}
-            </div>
-            {selectedLocation.phone && (
-              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, color: 'white' }}>
-                {selectedLocation.phone}
-              </div>
-            )}
-          </div>
-          <div style={{ fontSize: 20, color: 'white' }}>▼</div>
+    {/* Блок с выбранным адресом и кнопкой для просмотра всех адресов */}
+<div 
+  style={{ 
+    background: 'rgba(30,35,48,0.7)', 
+    borderRadius: 28, 
+    padding: 16, 
+    marginBottom: 16,
+    cursor: 'pointer',
+    border: `1px solid ${selectedGroup?.color}40`,
+    transition: 'all 0.2s ease'
+  }}
+  onClick={() => setShowLocationSelector(true)}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.transform = 'translateY(-2px)';
+    e.currentTarget.style.boxShadow = `0 4px 12px ${selectedGroup?.color}20`;
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.transform = 'translateY(0)';
+    e.currentTarget.style.boxShadow = 'none';
+  }}
+>
+  {/* Текст "Нажмите для просмотра всех адресов компании" */}
+  <div style={{ 
+    textAlign: 'center', 
+    marginBottom: 12,
+    padding: '8px 12px',
+    background: `${selectedGroup?.color}20`,
+    borderRadius: 20,
+    fontSize: 13,
+    fontWeight: 600,
+    color: selectedGroup?.color || '#ffd966'
+  }}>
+    Нажмите для просмотра всех адресов компании
+  </div>
+  
+  {/* Текущий выбранный адрес */}
+  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ flex: 1 }}>
+      {selectedLocation.city && (
+        <div style={{ fontSize: 12, opacity: 0.7, color: 'white' }}>
+          {selectedLocation.city}
         </div>
+      )}
+      <div style={{ 
+        fontSize: 14, 
+        fontWeight: 500, 
+        color: 'white',
+        maxWidth: 'calc(100% - 40px)'
+      }}>
+        {selectedLocation.address?.substring(0, 45)}
+        {selectedLocation.address?.length > 45 ? '...' : ''}
       </div>
-    )}
+      {selectedLocation.phone && (
+        <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4, color: 'white' }}>
+          {selectedLocation.phone}
+        </div>
+      )}
+    </div>
+    <div style={{ fontSize: 18, color: 'white', opacity: 0.5 }}>›</div>
+  </div>
+</div>
     
     {/* Блок с КУПЛЕННЫМИ акциями на главной */}
     {purchasedPromotions.length > 0 && (() => {
@@ -2142,7 +2169,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
             fontWeight:600,
             textAlign:'center'
           }}>
-            {isFree ? 'Получена бесплатно' : `Куплена за ${bonusCost} баллов`}
+            {isFree ? '✅ Получена бесплатно' : `✅ Куплена за ${bonusCost} баллов`}
           </div>
         );
       }
@@ -2268,7 +2295,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
     <div style={{ display:'flex', flexDirection:'column', gap:12 }} id="history-container">
       {currentGroupData?.history?.length > 0 ? (
         <>
-          {/* СОРТИРУЕМ ИСТОРИЮ ПО ДАТЕ (новые сверху) */}
+          {/* ✅ СОРТИРУЕМ ИСТОРИЮ ПО ДАТЕ (новые сверху) */}
           {[...currentGroupData.history].sort((a, b) => new Date(b.date) - new Date(a.date)).map(item => {
             // Определяем тип операции для отображения иконки
             let icon = '';
@@ -2290,7 +2317,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
               }
             } else {
               if (item.desc.includes('обмен')) {
-                icon = '';
+                icon = '🎁';
                 itemColor = '#e74c3c';
               } else if (item.desc.includes('акци') || item.desc.includes('promotion')) {
                 icon = '';
@@ -2334,7 +2361,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
               const response = await fetch(`${API_URL}/api/users/${userId}/transactions/${selectedGroup.id}?limit=100`);
               const data = await response.json();
               if (data.success && data.transactions.length > 0) {
-                // СОРТИРУЕМ ТРАНЗАКЦИИ ПО ДАТЕ (новые сверху)
+                // ✅ СОРТИРУЕМ ТРАНЗАКЦИИ ПО ДАТЕ (новые сверху)
                 const sortedTransactions = [...data.transactions].sort((a, b) => 
                   new Date(b.createdAt) - new Date(a.createdAt)
                 );
@@ -2361,10 +2388,10 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                       icon = '🛒';
                       itemColor = '#2ecc71';
                     } else if (t.description?.includes('Задание')) {
-                      icon = '➕';
+                      icon = '✅';
                       itemColor = '#3498db';
                     } else if (t.description?.includes('Ежедневный')) {
-                      icon = '➕';
+                      icon = '📅';
                       itemColor = '#f39c12';
                     } else {
                       icon = '➕';
@@ -2372,11 +2399,11 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                     }
                   } else {
                     if (isPromotionPurchase) {
-                      icon = '';
+                      icon = '🎯';
                       itemColor = '#9b59b6';
                       displayDesc = t.description;
                     } else if (t.description?.includes('Списание')) {
-                      icon = '➖';
+                      icon = '💸';
                       itemColor = '#e74c3c';
                     } else {
                       icon = '➖';
@@ -2442,7 +2469,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
         }}
         style={{ background:'rgba(255,255,255,0.1)', border:'none', padding:'10px 16px', borderRadius:20, color:'white', cursor:'pointer', marginTop:8 }}
       >
-        Загрузить историю из базы данных
+        🔄 Загрузить историю из базы данных
       </button>
     </div>
   </div>

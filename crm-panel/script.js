@@ -4616,7 +4616,6 @@ function openCityModal() {
     currentEditingCityId = null;
     document.getElementById('cityModalTitle').textContent = 'Добавить город';
     document.getElementById('cityName').value = '';
-    document.getElementById('citySortOrder').value = 0;
     document.getElementById('cityModal').style.display = 'flex';
 }
 
@@ -4627,13 +4626,11 @@ function editCity(cityId) {
     currentEditingCityId = cityId;
     document.getElementById('cityModalTitle').textContent = 'Редактировать город';
     document.getElementById('cityName').value = city.name;
-    document.getElementById('citySortOrder').value = city.sort_order || 0;
     document.getElementById('cityModal').style.display = 'flex';
 }
 
 async function saveCity() {
     const name = document.getElementById('cityName').value.trim();
-    const sortOrder = parseInt(document.getElementById('citySortOrder').value) || 0;
     
     if (!name) {
         alert('Введите название города');
@@ -4646,13 +4643,13 @@ async function saveCity() {
             response = await fetch(`${API_URL}/api/cities/${currentEditingCityId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, isActive: true, sortOrder })
+                body: JSON.stringify({ name, isActive: true})
             });
         } else {
             response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/cities`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, sortOrder })
+                body: JSON.stringify({ name })
             });
         }
         
@@ -4697,8 +4694,6 @@ function openAddressModal() {
     document.getElementById('addressModalTitle').textContent = 'Добавить адрес';
     document.getElementById('addressCityId').value = '';
     document.getElementById('addressText').value = '';
-    document.getElementById('addressLatitude').value = '';
-    document.getElementById('addressLongitude').value = '';
     document.getElementById('addressPhone').value = '';
     document.getElementById('addressWorkingHours').value = '';
     document.getElementById('addressIsMain').checked = false;
@@ -4722,8 +4717,6 @@ function editAddress(addressId) {
         cities.map(c => `<option value="${c.id}" ${address.city_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
     
     document.getElementById('addressText').value = address.address;
-    document.getElementById('addressLatitude').value = address.latitude || '';
-    document.getElementById('addressLongitude').value = address.longitude || '';
     document.getElementById('addressPhone').value = address.phone || '';
     document.getElementById('addressWorkingHours').value = address.working_hours || '';
     document.getElementById('addressIsMain').checked = address.is_main || false;
@@ -4733,8 +4726,6 @@ function editAddress(addressId) {
 async function saveAddress() {
     const cityId = document.getElementById('addressCityId').value || null;
     const address = document.getElementById('addressText').value.trim();
-    const latitude = document.getElementById('addressLatitude').value || null;
-    const longitude = document.getElementById('addressLongitude').value || null;
     const phone = document.getElementById('addressPhone').value || null;
     const workingHours = document.getElementById('addressWorkingHours').value || null;
     const isMain = document.getElementById('addressIsMain').checked;
@@ -4750,13 +4741,13 @@ async function saveAddress() {
             response = await fetch(`${API_URL}/api/addresses/${currentEditingAddressId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cityId, address, latitude, longitude, phone, workingHours, isMain, isActive: true })
+                body: JSON.stringify({ cityId, address, phone, workingHours, isMain, isActive: true })
             });
         } else {
             response = await fetch(`${API_URL}/api/companies/${currentBusiness.id}/addresses`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cityId, address, latitude, longitude, phone, workingHours, isMain })
+                body: JSON.stringify({ cityId, address, phone, workingHours, isMain })
             });
         }
         

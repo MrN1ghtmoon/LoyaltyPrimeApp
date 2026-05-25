@@ -221,19 +221,18 @@ app.post('/api/companies/login', async (req, res) => {
         
         if (result.rows.length > 0) {
             const company = result.rows[0];
-            // РџСЂСЏРјРѕРµ СЃСЂР°РІРЅРµРЅРёРµ СЃС‚СЂРѕРє (Р±РµР· С…РµС€РёСЂРѕРІР°РЅРёСЏ)
-            const match = (company.password === password);
+            const match = await bcrypt.compare(password, company.password);
             
             if (match) {
                 res.json({ success: true, company: company });
             } else {
-                res.status(401).json({ success: false, message: 'РќРµРІРµСЂРЅС‹Р№ email РёР»Рё РїР°СЂРѕР»СЊ' });
+                res.status(401).json({ success: false, message: 'Неверный email или пароль' });
             }
         } else {
-            res.status(401).json({ success: false, message: 'РќРµРІРµСЂРЅС‹Р№ email РёР»Рё РїР°СЂРѕР»СЊ' });
+            res.status(401).json({ success: false, message: 'Неверный email или пароль' });
         }
     } catch (error) {
-        res.status(500).json({ success: false, message: 'РћС€РёР±РєР° СЃРµСЂРІРµСЂР°' });
+        res.status(500).json({ success: false, message: 'Ошибка сервера' });
     }
 });
 
@@ -3235,7 +3234,6 @@ app.get('/api/companies/:companyId/users/segment/:segment', async (req, res) => 
     }
 });
 
-// Р”РѕР±Р°РІСЊС‚Рµ СЌС‚Рё СЌРЅРґРїРѕРёРЅС‚С‹ РІ server.js
 
 // ============ API Р”Р›РЇ Р“РћР РћР”РћР’ Р РђР”Р Р•РЎРћР’ (CRM) ============
 
@@ -3252,11 +3250,11 @@ app.get('/api/companies/:companyId/cities', async (req, res) => {
 // Р”РѕР±Р°РІР»РµРЅРёРµ РіРѕСЂРѕРґР°
 app.post('/api/companies/:companyId/cities', async (req, res) => {
     try {
-        const { name, sortOrder } = req.body;
+        const { name } = req.body;
         if (!name) {
             return res.status(400).json({ success: false, message: 'РќР°Р·РІР°РЅРёРµ РіРѕСЂРѕРґР° РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ' });
         }
-        const city = await addCity(req.params.companyId, name, sortOrder || 0);
+        const city = await addCity(req.params.companyId, name);
         res.json({ success: true, city });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -3266,8 +3264,8 @@ app.post('/api/companies/:companyId/cities', async (req, res) => {
 // РћР±РЅРѕРІР»РµРЅРёРµ РіРѕСЂРѕРґР°
 app.put('/api/cities/:cityId', async (req, res) => {
     try {
-        const { name, isActive, sortOrder } = req.body;
-        const city = await updateCity(req.params.cityId, name, isActive, sortOrder);
+        const { name, isActive} = req.body;
+        const city = await updateCity(req.params.cityId, name, isActive);
         res.json({ success: true, city });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -3298,12 +3296,12 @@ app.get('/api/companies/:companyId/addresses', async (req, res) => {
 // Р”РѕР±Р°РІР»РµРЅРёРµ Р°РґСЂРµСЃР°
 app.post('/api/companies/:companyId/addresses', async (req, res) => {
     try {
-        const { cityId, address, latitude, longitude, phone, workingHours, isMain, sortOrder } = req.body;
+        const { cityId, address, phone, workingHours, isMain } = req.body;
         if (!address) {
             return res.status(400).json({ success: false, message: 'РђРґСЂРµСЃ РѕР±СЏР·Р°С‚РµР»РµРЅ' });
         }
         const newAddress = await addAddress(req.params.companyId, {
-            cityId, address, latitude, longitude, phone, workingHours, isMain, sortOrder
+            cityId, address, phone, workingHours, isMain
         });
         res.json({ success: true, address: newAddress });
     } catch (error) {
@@ -3314,9 +3312,9 @@ app.post('/api/companies/:companyId/addresses', async (req, res) => {
 // РћР±РЅРѕРІР»РµРЅРёРµ Р°РґСЂРµСЃР°
 app.put('/api/addresses/:addressId', async (req, res) => {
     try {
-        const { cityId, address, latitude, longitude, phone, workingHours, isMain, isActive, sortOrder } = req.body;
+        const { cityId, address, phone, workingHours, isMain, isActive,  } = req.body;
         const updatedAddress = await updateAddress(req.params.addressId, {
-            cityId, address, latitude, longitude, phone, workingHours, isMain, isActive, sortOrder
+            cityId, address, phone, workingHours, isMain, isActive
         });
         res.json({ success: true, address: updatedAddress });
     } catch (error) {
@@ -3958,7 +3956,32 @@ app.post('/api/users/:userId/quests/:questId/claim', async (req, res) => {
 });
 
 
-
+// Удаление акции
+app.delete('/api/promotions/:id', async (req, res) => {
+    try {
+        const promotionId = req.params.id;
+        
+        // Проверяем, существует ли акция
+        const checkResult = await query('SELECT * FROM promotions WHERE id = $1', [promotionId]);
+        
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Акция не найдена' });
+        }
+        
+        // Удаляем связанные записи в user_purchased_promotions
+        await query('DELETE FROM user_purchased_promotions WHERE promotion_id = $1', [promotionId]);
+        
+        // Удаляем саму акцию
+        await query('DELETE FROM promotions WHERE id = $1', [promotionId]);
+        
+        console.log(`? Акция ${promotionId} успешно удалена`);
+        res.json({ success: true, message: 'Акция успешно удалена' });
+        
+    } catch (error) {
+        console.error('? Ошибка удаления акции:', error);
+        res.status(500).json({ success: false, error: error.message, message: 'Ошибка сервера при удалении акции' });
+    }
+});
 
 
 const PORT = 3001;

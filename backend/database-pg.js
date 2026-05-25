@@ -54,6 +54,7 @@ async function initDatabase() {
                 start_date TIMESTAMP,
                 end_date TIMESTAMP,
                 active BOOLEAN DEFAULT TRUE,
+				target_audience VARCHAR(50) DEFAULT 'all',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -3190,7 +3191,6 @@ async function initLocationTables() {
                 company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
                 name VARCHAR(100) NOT NULL,
                 is_active BOOLEAN DEFAULT true,
-                sort_order INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(company_id, name)
@@ -3204,13 +3204,10 @@ async function initLocationTables() {
                 company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
                 city_id INTEGER REFERENCES cities(id) ON DELETE SET NULL,
                 address TEXT NOT NULL,
-                latitude DECIMAL(10, 8),
-                longitude DECIMAL(11, 8),
                 phone VARCHAR(50),
                 working_hours TEXT,
                 is_main BOOLEAN DEFAULT false,
                 is_active BOOLEAN DEFAULT true,
-                sort_order INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
             )
@@ -3238,7 +3235,7 @@ async function initLocationTables() {
 // Получить все города компании
 async function getCities(companyId) {
     const result = await query(
-        'SELECT * FROM cities WHERE company_id = $1 AND is_active = true ORDER BY sort_order, name',
+        'SELECT * FROM cities WHERE company_id = $1 AND is_active = true ORDER BY name',
         [companyId]
     );
     return result.rows;
@@ -3251,27 +3248,27 @@ async function getCityById(cityId) {
 }
 
 // Добавить город
-async function addCity(companyId, name, sortOrder = 0) {
+async function addCity(companyId, name) {
     const result = await query(
-        `INSERT INTO cities (company_id, name, sort_order) 
-         VALUES ($1, $2, $3) 
+        `INSERT INTO cities (company_id, name) 
+         VALUES ($1, $2) 
          ON CONFLICT (company_id, name) DO UPDATE SET 
             is_active = true, 
             updated_at = NOW()
          RETURNING *`,
-        [companyId, name, sortOrder]
+        [companyId, name]
     );
     return result.rows[0];
 }
 
 // Обновить город
-async function updateCity(cityId, name, isActive, sortOrder) {
+async function updateCity(cityId, name, isActive) {
     const result = await query(
         `UPDATE cities 
-         SET name = $1, is_active = $2, sort_order = $3, updated_at = NOW()
-         WHERE id = $4 
+         SET name = $1, is_active = $2, updated_at = NOW()
+         WHERE id = $3 
          RETURNING *`,
-        [name, isActive, sortOrder, cityId]
+        [name, isActive, cityId]
     );
     return result.rows[0];
 }
@@ -3299,7 +3296,7 @@ async function getAddresses(companyId, cityId = null) {
         params.push(cityId);
     }
     
-    queryText += ` ORDER BY a.is_main DESC, a.sort_order, a.address`;
+    queryText += ` ORDER BY a.is_main DESC, a.address`;
     
     const result = await query(queryText, params);
     return result.rows;
@@ -3319,7 +3316,7 @@ async function getAddressById(addressId) {
 
 // Добавить адрес
 async function addAddress(companyId, addressData) {
-    const { cityId, address, latitude, longitude, phone, workingHours, isMain, sortOrder = 0 } = addressData;
+    const { cityId, address, phone, workingHours, isMain } = addressData;
     
     // Если этот адрес устанавливается как основной, сбрасываем флаг у других адресов
     if (isMain) {
@@ -3330,17 +3327,17 @@ async function addAddress(companyId, addressData) {
     }
     
     const result = await query(
-        `INSERT INTO addresses (company_id, city_id, address, latitude, longitude, phone, working_hours, is_main, sort_order) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+        `INSERT INTO addresses (company_id, city_id, address, phone, working_hours, is_main) 
+         VALUES ($1, $2, $3, $4, $5, $6) 
          RETURNING *`,
-        [companyId, cityId || null, address, latitude || null, longitude || null, phone || null, workingHours || null, isMain || false, sortOrder]
+        [companyId, cityId || null, address, phone || null, workingHours || null, isMain || false]
     );
     return result.rows[0];
 }
 
 // Обновить адрес
 async function updateAddress(addressId, addressData) {
-    const { cityId, address, latitude, longitude, phone, workingHours, isMain, isActive, sortOrder } = addressData;
+    const { cityId, address, phone, workingHours, isMain, isActive } = addressData;
     
     // Если этот адрес устанавливается как основной, сбрасываем флаг у других адресов
     if (isMain) {
@@ -3355,14 +3352,11 @@ async function updateAddress(addressId, addressData) {
     
     const result = await query(
         `UPDATE addresses 
-         SET city_id = $1, address = $2, latitude = $3, longitude = $4, 
-             phone = $5, working_hours = $6, is_main = $7, is_active = $8, 
-             sort_order = $9, updated_at = NOW()
-         WHERE id = $10 
+         SET city_id = $1, address = $2, phone = $3, working_hours = $4, 
+             is_main = $5, is_active = $6, updated_at = NOW()
+         WHERE id = $7 
          RETURNING *`,
-        [cityId || null, address, latitude || null, longitude || null, 
-         phone || null, workingHours || null, isMain || false, isActive !== undefined ? isActive : true, 
-         sortOrder || 0, addressId]
+        [cityId || null, address, phone || null, workingHours || null, isMain || false, isActive !== undefined ? isActive : true, addressId]
     );
     return result.rows[0];
 }
@@ -3391,9 +3385,7 @@ async function getMainLocation(companyId) {
             address: address.rows[0].address,
             addressId: address.rows[0].id,
             phone: address.rows[0].phone,
-            workingHours: address.rows[0].working_hours,
-            latitude: address.rows[0].latitude,
-            longitude: address.rows[0].longitude
+            workingHours: address.rows[0].working_hours
         };
     }
     
@@ -3403,7 +3395,7 @@ async function getMainLocation(companyId) {
          FROM addresses a
          LEFT JOIN cities c ON a.city_id = c.id
          WHERE a.company_id = $1 AND a.is_active = true
-         ORDER BY a.sort_order
+         ORDER BY a.address
          LIMIT 1`,
         [companyId]
     );
@@ -3414,9 +3406,7 @@ async function getMainLocation(companyId) {
             address: address.rows[0].address,
             addressId: address.rows[0].id,
             phone: address.rows[0].phone,
-            workingHours: address.rows[0].working_hours,
-            latitude: address.rows[0].latitude,
-            longitude: address.rows[0].longitude
+            workingHours: address.rows[0].working_hours
         };
     }
     
@@ -3472,7 +3462,7 @@ async function updateUserSelectedLocation(userId, companyId, addressId) {
 // Получить выбранную локацию пользователя
 async function getUserSelectedLocation(userId, companyId) {
     const result = await query(
-        `SELECT usl.*, a.address, a.city_id, c.name as city_name, a.phone, a.working_hours, a.latitude, a.longitude
+        `SELECT usl.*, a.address, a.city_id, c.name as city_name, a.phone, a.working_hours
          FROM user_selected_locations usl
          LEFT JOIN addresses a ON usl.selected_address_id = a.id
          LEFT JOIN cities c ON a.city_id = c.id
