@@ -29,16 +29,12 @@ const {
     updateUserProgress,
     updateQuestProgress,
     getAllUserQuestProgress,
-    checkDailyBonusClaimed,
-    claimDailyBonus,
     query,
     getCompanyTiers,      
     updateCompanyTiers,
     getPresetQuests,
 	getGameSettings,
     saveGameSettings,
-	getDailyBonusSettings,
-	updateDailyBonusSettings,
     getUserTransactions,
     updateBalanceWithTransaction,
     updateUserBirthday,
@@ -107,10 +103,11 @@ const {
 	trackDailyLogin,
 	getMiniAppStatus,
     updateMiniAppStatus,
-getLastQuestClaimDate,
+	getLastQuestClaimDate,
     canClaimQuestReward,
     saveQuestClaim,
-    getTimeUntilNextClaim	
+    getTimeUntilNextClaim,
+	createDefaultCampaignsForCompany	
 } = require('./database-pg');
 
 const app = express();
@@ -911,67 +908,6 @@ app.get('/api/users/:userId/transactions/:companyId', async (req, res) => {
         });
     } catch (error) {
         console.error('Ошибка получения транзакций:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.post('/api/users/dailyBonus/check', async (req, res) => {
-    try {
-        const { userId, companyId } = req.body;
-        
-        // Проверяем настройки ежедневного бонуса
-        const settings = await getDailyBonusSettings(companyId);
-        if (!settings.enabled) {
-            return res.json({ claimed: true, disabled: true });
-        }
-        
-        const claimed = await checkDailyBonusClaimed(userId, companyId);
-        res.json({ claimed, settings });
-    } catch (error) {
-        console.error('Ошибка проверки бонуса:', error);
-        res.json({ claimed: false });
-    }
-});
-
-app.post('/api/users/dailyBonus/claim', async (req, res) => {
-    try {
-        const { userId, companyId, bonusAmount, streak } = req.body;
-        const result = await claimDailyBonus(userId, companyId, bonusAmount, streak);
-        res.json({ success: true, result });
-    } catch (error) {
-        console.error('Ошибка начисления бонуса:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// ============ API ДЛЯ НАСТРОЕК ЕЖЕДНЕВНОГО БОНУСА ============
-
-app.get('/api/companies/:companyId/dailyBonusSettings', async (req, res) => {
-    try {
-        const companyId = parseInt(req.params.companyId);
-        const settings = await getDailyBonusSettings(companyId);
-        res.json({ success: true, settings });
-    } catch (error) {
-        console.error('Ошибка получения настроек ежедневного бонуса:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.put('/api/companies/:companyId/dailyBonusSettings', async (req, res) => {
-    try {
-        const companyId = parseInt(req.params.companyId);
-        const { enabled, baseAmount, streakBonus } = req.body;
-        
-        const settings = {
-            enabled: enabled !== undefined ? enabled : true,
-            baseAmount: baseAmount || 10,
-            streakBonus: streakBonus || 5
-        };
-        
-        await updateDailyBonusSettings(companyId, settings);
-        res.json({ success: true, settings });
-    } catch (error) {
-        console.error('Ошибка обновления настроек ежедневного бонуса:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -2996,11 +2932,10 @@ app.put('/api/companies/:companyId/bonus-settings', async (req, res) => {
 // ============ API ДЛЯ УВЕДОМЛЕНИЙ ============
 
 // Отправка рассылки
-// Отправка рассылки
 app.post('/api/companies/:companyId/notifications/send', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { audience, title, message, image_url, button_link, button_text } = req.body;
+        const { audience, title, message} = req.body;
         
         console.log('📨 Запрос на отправку рассылки:', { companyId, audience, title, message: message?.substring(0, 50) });
         
@@ -3034,9 +2969,6 @@ app.post('/api/companies/:companyId/notifications/send', async (req, res) => {
             notification_id: result.rows[0].id,
             title: title,
             message: message,
-            image_url: image_url || null,
-            button_link: button_link || null,
-            button_text: button_text || 'Перейти',
             users: users
         };
         
@@ -3096,7 +3028,7 @@ app.get('/api/companies/:companyId/campaigns', async (req, res) => {
 app.post('/api/companies/:companyId/campaigns', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { name, title, message, audience, is_active, interval_days, image_url, is_default, button_link, button_text } = req.body;
+        const { name, title, message, audience, is_active, interval_days, is_default } = req.body;
         
         console.log('📝 Запрос на создание кампании:', { companyId, name, title, audience, interval_days });
         
@@ -3111,11 +3043,9 @@ app.post('/api/companies/:companyId/campaigns', async (req, res) => {
             message, 
             audience || 'all', 
             is_active !== undefined ? is_active : true,
-            interval_days || 1,
-            image_url || null,
+            interval_days || 1,   
             is_default || false,
-            button_link || null,
-            button_text || 'Перейти'
+            
         );
         
         console.log('✅ Кампания создана:', campaign);
@@ -3131,7 +3061,7 @@ app.post('/api/companies/:companyId/campaigns', async (req, res) => {
 app.put('/api/campaigns/:campaignId', async (req, res) => {
     try {
         const { campaignId } = req.params;
-        const { name, title, message, audience, is_active, interval_days, image_url, button_link, button_text } = req.body;
+        const { name, title, message, audience, is_active, interval_days} = req.body;
         
         const campaign = await updateNotificationCampaign(
             campaignId,
@@ -3140,10 +3070,7 @@ app.put('/api/campaigns/:campaignId', async (req, res) => {
             message,
             audience,
             is_active,
-            interval_days,
-            image_url,
-            button_link || null,
-            button_text || 'Перейти'
+            interval_days
         );
         
         res.json({ success: true, campaign });
@@ -3196,9 +3123,6 @@ app.post('/api/campaigns/:campaignId/execute', async (req, res) => {
                 campaign_id: campaignId,
                 title: result.campaign.title,
                 message: result.campaign.message,
-                image_url: result.image_url,
-                button_link: result.button_link,
-                button_text: result.button_text,
                 users: result.users
             };
             

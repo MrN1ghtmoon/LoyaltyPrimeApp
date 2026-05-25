@@ -219,11 +219,12 @@ async function initDatabase() {
                 id SERIAL PRIMARY KEY,
                 company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
                 name VARCHAR(255) NOT NULL,
-                trigger_type VARCHAR(50), -- nullable, not used anymore
                 title VARCHAR(255) NOT NULL,
                 message TEXT NOT NULL,
                 audience VARCHAR(50) DEFAULT 'all',
                 is_active BOOLEAN DEFAULT TRUE,
+				is_default BOOLEAN DEFAULT FALSE,
+				last_sent_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -245,12 +246,10 @@ async function initDatabase() {
         await initLocationTables();
 		await addGiveawayColumns();
         await addGameSettingsTable();  
-        await addDailyBonusSettings(); 
         await addTransactionColumns();
         await ensureAllQuestsExist();
 		await addQuestColumns();
 		await addBonusSettingsColumn();
-		await addNotificationCampaignColumns();
 		await addUserProgressSpentColumn();
 		await createUserGamePlaysTable();
 		await createQuestClaimHistoryTable();
@@ -262,24 +261,6 @@ async function initDatabase() {
         console.error('❌ Ошибка инициализации БД:', error);
     }
 }
-async function addDailyBonusSettings() {
-    try {
-        const checkTable = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'companies' AND column_name = 'daily_bonus_settings'
-        `);
-        
-        if (checkTable.rows.length === 0) {
-            console.log('Добавляем колонку daily_bonus_settings в таблицу companies...');
-            await query(`ALTER TABLE companies ADD COLUMN daily_bonus_settings JSONB DEFAULT '{"enabled": true, "baseAmount": 10, "streakBonus": 5}'`);
-            console.log('Колонка daily_bonus_settings добавлена');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка добавления daily_bonus_settings:', error);
-    }
-}
-
 // Добавляем недостающие колонки в таблицу transactions
 async function addTransactionColumns() {
     try {
@@ -325,41 +306,6 @@ async function addTransactionColumns() {
         console.log('Все колонки transactions проверены');
     } catch (error) {
         console.error('❌ Ошибка добавления колонок transactions:', error);
-    }
-}
-
-async function getDailyBonusSettings(companyId) {
-    try {
-        const result = await query(
-            'SELECT daily_bonus_settings FROM companies WHERE id = $1',
-            [companyId]
-        );
-        
-        if (result.rows.length > 0) {
-            let settings = result.rows[0].daily_bonus_settings;
-            if (typeof settings === 'string') {
-                settings = JSON.parse(settings);
-            }
-            return settings || { enabled: true, baseAmount: 10, streakBonus: 5 };
-        }
-        
-        return { enabled: true, baseAmount: 10, streakBonus: 5 };
-    } catch (error) {
-        console.error('Ошибка получения настроек ежедневного бонуса:', error);
-        return { enabled: true, baseAmount: 10, streakBonus: 5 };
-    }
-}
-
-async function updateDailyBonusSettings(companyId, settings) {
-    try {
-        await query(
-            'UPDATE companies SET daily_bonus_settings = $1 WHERE id = $2',
-            [JSON.stringify(settings), companyId]
-        );
-        return { success: true };
-    } catch (error) {
-        console.error('Ошибка обновления настроек ежедневного бонуса:', error);
-        throw error;
     }
 }
 
@@ -529,11 +475,11 @@ async function getGameSettings(companyId, gameType) {
         
         return {
             settings: defaultSettings,
-            active: true
+            active: false
         };
     } catch (error) {
         console.error('Ошибка getGameSettings:', error);
-        return { settings: {}, active: true };
+        return { settings: {}, active: false };
     }
 }
 
@@ -2746,18 +2692,6 @@ async function addNotificationCampaignColumns() {
             console.log('Колонка interval_days добавлена');
         }
         
-        // Проверяем и добавляем колонку image_url
-        const checkImage = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'notification_campaigns' AND column_name = 'image_url'
-        `);
-        
-        if (checkImage.rows.length === 0) {
-            console.log('Добавляем колонку image_url в таблицу notification_campaigns...');
-            await query(`ALTER TABLE notification_campaigns ADD COLUMN image_url TEXT`);
-            console.log('Колонка image_url добавлена');
-        }
         
         // Проверяем и добавляем колонку is_default
         const checkDefault = await query(`
@@ -2785,14 +2719,6 @@ async function addNotificationCampaignColumns() {
             console.log('Колонка last_sent_at добавлена');
         }
         
-        // Исправляем колонку trigger_type - делаем nullable (допускает NULL)
-        console.log('Изменяем колонку trigger_type на nullable...');
-        try {
-            await query(`ALTER TABLE notification_campaigns ALTER COLUMN trigger_type DROP NOT NULL`);
-            console.log('Колонка trigger_type теперь допускает NULL');
-        } catch (error) {
-            console.log('Колонка trigger_type уже nullable или не существует:', error.message);
-        }
         
         // Проверяем и добавляем колонку audience в таблицу notifications (если её нет)
         const checkNotifAudience = await query(`
@@ -2845,45 +2771,7 @@ async function addNotificationCampaignColumns() {
             await query(`ALTER TABLE notifications ADD COLUMN sent_at TIMESTAMP`);
             console.log('Колонка sent_at добавлена в notifications');
         }
-        
-        // Проверяем и добавляем колонку button_link в таблицу notification_campaigns
-        const checkButtonLink = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'notification_campaigns' AND column_name = 'button_link'
-        `);
-        
-        if (checkButtonLink.rows.length === 0) {
-            console.log('Добавляем колонку button_link в таблицу notification_campaigns...');
-            await query(`ALTER TABLE notification_campaigns ADD COLUMN button_link TEXT`);
-            console.log('Колонка button_link добавлена');
-        }
-        
-        // Проверяем и добавляем колонку button_text в таблицу notification_campaigns
-        const checkButtonText = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'notification_campaigns' AND column_name = 'button_text'
-        `);
-        
-        if (checkButtonText.rows.length === 0) {
-            console.log('Добавляем колонку button_text в таблицу notification_campaigns...');
-            await query(`ALTER TABLE notification_campaigns ADD COLUMN button_text VARCHAR(50) DEFAULT 'Перейти'`);
-            console.log('Колонка button_text добавлена');
-        }
-        
-        // Проверяем и добавляем колонку image_url в таблицу notifications
-        const checkNotifImage = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'notifications' AND column_name = 'image_url'
-        `);
-        
-        if (checkNotifImage.rows.length === 0) {
-            console.log('Добавляем колонку image_url в таблицу notifications...');
-            await query(`ALTER TABLE notifications ADD COLUMN image_url TEXT`);
-            console.log('Колонка image_url добавлена в notifications');
-        }
+            
         
         console.log('Все колонки notification_campaigns проверены');
     } catch (error) {
@@ -2955,14 +2843,14 @@ async function getNotificationCampaigns(companyId) {
 }
 
 // Добавление кампании
-async function addNotificationCampaign(companyId, name, title, message, audience, isActive = true, intervalDays = 1, imageUrl = null, isDefault = false, buttonLink = null, buttonText = 'Перейти') {
+async function addNotificationCampaign(companyId, name, title, message, audience, isActive = true, intervalDays = 1, isDefault = false) {
     try {
         const result = await query(
-            `INSERT INTO notification_campaigns (company_id, name, title, message, audience, is_active, interval_days, image_url, is_default, button_link, button_text)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-             RETURNING *`,
-            [companyId, name, title, message, audience, isActive, intervalDays, imageUrl, isDefault, buttonLink, buttonText]
-        );
+        `INSERT INTO notification_campaigns (company_id, name, title, message, audience, is_active, interval_days, is_default)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [companyId, name, title, message, audience, isActive, intervalDays, isDefault]
+    );
         console.log(`Кампания добавлена: ${name}`);
         return result.rows[0];
     } catch (error) {
@@ -2972,15 +2860,15 @@ async function addNotificationCampaign(companyId, name, title, message, audience
 }
 
 // Обновление кампании
-async function updateNotificationCampaign(campaignId, name, title, message, audience, isActive, intervalDays, imageUrl, buttonLink, buttonText) {
+async function updateNotificationCampaign(campaignId, name, title, message, audience, isActive, intervalDays) {
     try {
         const result = await query(
-            `UPDATE notification_campaigns 
-             SET name = $2, title = $3, message = $4, audience = $5, is_active = $6, interval_days = $7, image_url = $8, updated_at = NOW(), button_link = $9, button_text = $10
-             WHERE id = $1
-             RETURNING *`,
-            [campaignId, name, title, message, audience, isActive, intervalDays, imageUrl, buttonLink, buttonText]
-        );
+        `UPDATE notification_campaigns 
+         SET name = $2, title = $3, message = $4, audience = $5, is_active = $6, interval_days = $7, updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [campaignId, name, title, message, audience, isActive, intervalDays]
+    );
         console.log(`Кампания обновлена: ${name}`);
         return result.rows[0];
     } catch (error) {
@@ -3132,9 +3020,9 @@ async function executeCampaign(campaignId) {
         
         // Сохраняем в историю рассылок
         await query(
-            `INSERT INTO notifications (company_id, title, message, audience, status, sent_count, sent_at, image_url)
-             VALUES ($1, $2, $3, $4, 'sent', $5, NOW(), $6)`,
-            [campaign.company_id, campaign.title, campaign.message, campaign.audience, users.length, campaign.image_url]
+            `INSERT INTO notifications (company_id, title, message, audience, status, sent_count, sent_at)
+             VALUES ($1, $2, $3, $4, 'sent', $5, NOW())`,
+            [campaign.company_id, campaign.title, campaign.message, campaign.audience, users.length]
         );
         
         // Обновляем last_sent_at
@@ -3149,10 +3037,7 @@ async function executeCampaign(campaignId) {
             success: true,
             campaign: campaign,
             users: users.map(u => ({ vk_id: u.vk_id, name: u.name })),
-            sentCount: users.length,
-            image_url: campaign.image_url,
-            button_link: campaign.button_link,
-            button_text: campaign.button_text || 'Перейти'
+            sentCount: users.length
         };
     } catch (error) {
         console.error('❌ Ошибка выполнения кампании:', error);
@@ -3162,13 +3047,13 @@ async function executeCampaign(campaignId) {
 
 
 // Сохранение отправленного уведомления в историю
-async function saveNotificationToHistory(companyId, title, message, audience, sentCount, imageUrl = null) {
+async function saveNotificationToHistory(companyId, title, message, audience, sentCount) {
     try {
         const result = await query(
-            `INSERT INTO notifications (company_id, title, message, audience, status, sent_count, sent_at, image_url)
-             VALUES ($1, $2, $3, $4, 'sent', $5, NOW(), $6)
+            `INSERT INTO notifications (company_id, title, message, audience, status, sent_count, sent_at)
+             VALUES ($1, $2, $3, $4, 'sent', $5, NOW())
              RETURNING *`,
-            [companyId, title, message, audience, sentCount, imageUrl]
+            [companyId, title, message, audience, sentCount]
         );
         return result.rows[0];
     } catch (error) {
@@ -4140,6 +4025,46 @@ async function getTimeUntilNextClaim(userId, questId, durationDays) {
     }
 }
 
+async function createDefaultCampaignsForCompany(companyId) {
+    try {
+        // Создаём стандартные кампании для новой компании
+        const defaultCampaigns = [
+            {
+                name: 'Приветствие нового пользователя',
+                title: 'Добро пожаловать! 🎉',
+                message: 'Спасибо, что стали частью нашей программы лояльности! У вас уже есть 100 бонусов на старте. Желаем приятных покупок!',
+                audience: 'new',
+                is_default: true,
+                interval_days: 1
+            },
+            {
+                name: 'Возврат спящих пользователей',
+                title: 'Мы скучали! 💝',
+                message: 'Давно не виделись! У нас для вас особое предложение. Загляните в раздел "Акции" и получите персональную скидку!',
+                audience: 'dormant',
+                is_default: true,
+                interval_days: 15
+            }
+        ];
+        
+        for (const campaign of defaultCampaigns) {
+            await addNotificationCampaign(
+                companyId,
+                campaign.name,
+                campaign.title,
+                campaign.message,
+                campaign.audience,
+                true,
+                campaign.interval_days,
+                campaign.is_default
+            );
+        }
+        
+        console.log(`Стандартные кампании созданы для компании ${companyId}`);
+    } catch (error) {
+        console.error('Ошибка создания стандартных кампаний:', error);
+    }
+}
 module.exports = {
     pool,
     query,
@@ -4182,8 +4107,6 @@ module.exports = {
 	getUserTransactions,
 	updateBalanceWithTransaction,
 	addSpendTransaction,
-	getDailyBonusSettings,
-	updateDailyBonusSettings,
     updateUserBirthday,
     getUserBirthday,
     purchasePromotion,
@@ -4262,5 +4185,6 @@ module.exports = {
 	getLastQuestClaimDate,
     canClaimQuestReward,
     saveQuestClaim,
-    getTimeUntilNextClaim
+    getTimeUntilNextClaim,
+	createDefaultCampaignsForCompany
 };

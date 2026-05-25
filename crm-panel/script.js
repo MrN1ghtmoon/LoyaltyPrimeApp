@@ -1526,9 +1526,6 @@ async function sendDirectMessage() {
     const segment = document.getElementById('notifSegment')?.value || 'all';
     const title = document.getElementById('notifTitle')?.value || '';
     const message = document.getElementById('notifMessage')?.value || '';
-    const imageUrl = null;
-	const buttonLink = null;
-	const buttonText = null;
     if (!title || !message) {
         alert('❌ Заполните заголовок и текст сообщения');
         return;
@@ -1549,8 +1546,7 @@ async function sendDirectMessage() {
     previewMessage += `Аудитория: ${segmentName}\n`;
     previewMessage += `Заголовок: ${title}\n\n`;
     previewMessage += `Текст:\n${message.substring(0, 200)}${message.length > 200 ? '...' : ''}\n\n`;
-    if (buttonLink) previewMessage += `🔗 Кнопка: ${buttonText} → ${buttonLink}\n`;
-    previewMessage += `\nОтправить?`;
+   
     
     if (!confirm(previewMessage)) {
         return;
@@ -1586,10 +1582,7 @@ async function sendDirectMessage() {
             body: JSON.stringify({ 
                 audience: segment, 
                 title, 
-                message,
-                image_url: imageUrl,
-                button_link: buttonLink,
-                button_text: buttonText
+                message
             })
         });
         
@@ -1665,7 +1658,7 @@ function renderCampaignsList(campaigns) {
                             ${campaign.is_default ? ' ' : ''}${escapeHtml(campaign.name)}
                             ${campaign.is_default ? '<span style="font-size: 11px; background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; margin-left: 8px;">Шаблон</span>' : ''}
                         </div>
-                        <div style="font-size: 13px; color: #555; margin-bottom: 4px;">📨 ${escapeHtml(campaign.title)}</div>
+                        <div style="font-size: 13px; color: #555; margin-bottom: 4px;">${escapeHtml(campaign.title)}</div>
                         <div style="font-size: 12px; color: #888;">
                             ${audienceNames[campaign.audience] || campaign.audience} • 
                             Раз в ${campaign.interval_days || 1} ${getDaysWord(campaign.interval_days || 1)}
@@ -1682,12 +1675,12 @@ function renderCampaignsList(campaigns) {
                     Последняя отправка: ${lastSent}
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button onclick="editCampaign(${campaign.id})" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">✏️ Редактировать</button>
+                    <button onclick="editCampaign(${campaign.id})" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Редактировать</button>
                     <button onclick="toggleCampaign(${campaign.id}, ${!isActive})" style="padding: 8px 16px; background: ${isActive ? '#e74c3c' : '#2ecc71'}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">
                         ${isActive ? 'Выключить' : 'Включить'}
                     </button>
-                    ${!campaign.is_default ? `<button onclick="deleteCampaign(${campaign.id})" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">🗑️ Удалить</button>` : ''}
-                    <button onclick="sendCampaignNow(${campaign.id})" style="padding: 8px 16px; background: #9b59b6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">🚀 Отправить сейчас</button>
+                    ${!campaign.is_default ? `<button onclick="deleteCampaign(${campaign.id})" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Удалить</button>` : ''}
+                    <button onclick="sendCampaignNow(${campaign.id})" style="padding: 8px 16px; background: #9b59b6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px;">Отправить сейчас</button>
                 </div>
             </div>
         `;
@@ -1824,9 +1817,6 @@ async function saveCampaign() {
                 title,
                 message,
                 audience,
-                image_url: null,
-                button_link: null,
-                button_text: null,
                 interval_days: intervalDays,
                 is_active: isActive
             })
