@@ -585,16 +585,16 @@ app.get('/api/quests/:companyId', async (req, res) => {
 
 app.post('/api/quests', async (req, res) => {
     try {
-        const { companyId, emoji, title, description, reward, active, expiresDays } = req.body;
+        const { companyId, emoji, title, description, reward, active, durationDays } = req.body;
         
         if (!title || !reward) {
-            return res.status(400).json({ success: false, message: 'РќР°Р·РІР°РЅРёРµ Рё РЅР°РіСЂР°РґР° РѕР±СЏР·Р°С‚РµР»СЊРЅС‹' });
+            return res.status(400).json({ success: false, message: 'Название и награда обязательны' });
         }
         
-        const quest = await addQuest(companyId, { emoji, title, description, reward, active, expiresDays });
+        const quest = await addQuest(companyId, { emoji, title, description, reward, active, durationDays });
         res.json({ success: true, quest });
     } catch (error) {
-        console.error('РћС€РёР±РєР° РґРѕР±Р°РІР»РµРЅРёСЏ Р·Р°РґР°РЅРёСЏ:', error);
+        console.error('Ошибка добавления задания:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -603,23 +603,16 @@ app.put('/api/quests/:id', async (req, res) => {
     try {
         const { reward, active, durationDays } = req.body;
         
-        // Р’Р°Р»РёРґР°С†РёСЏ durationDays (РѕС‚ 1 РґРѕ 7)
         if (durationDays !== undefined) {
             if (durationDays < 1 || durationDays > 7) {
                 return res.status(400).json({ 
                     success: false, 
-                    message: 'РљРѕР»РёС‡РµСЃС‚РІРѕ РґРЅРµР№ РЅР° РІС‹РїРѕР»РЅРµРЅРёРµ РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ РѕС‚ 1 РґРѕ 7' 
-                });
-            }
-            if (!Number.isInteger(durationDays)) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'РљРѕР»РёС‡РµСЃС‚РІРѕ РґРЅРµР№ РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ С†РµР»С‹Рј С‡РёСЃР»РѕРј' 
+                    message: 'Количество дней на выполнение должно быть от 1 до 7' 
                 });
             }
         }
         
-        // Р•СЃР»Рё active РјРµРЅСЏРµС‚СЃСЏ РЅР° false, СЃР±СЂР°СЃС‹РІР°РµРј РїСЂРѕРіСЂРµСЃСЃ
+        // Если active меняется на false, сбрасываем прогресс
         if (active === false) {
             await resetQuestProgress(req.params.id);
         }
@@ -642,7 +635,7 @@ app.put('/api/quests/:id', async (req, res) => {
         }
         
         if (updates.length === 0) {
-            return res.status(400).json({ success: false, message: 'РќРµС‚ РґР°РЅРЅС‹С… РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ' });
+            return res.status(400).json({ success: false, message: 'Нет данных для обновления' });
         }
         
         updates.push(`updated_at = NOW()`);
@@ -652,12 +645,12 @@ app.put('/api/quests/:id', async (req, res) => {
         const result = await query(queryText, values);
         
         if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Р—Р°РґР°РЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ' });
+            return res.status(404).json({ success: false, message: 'Задание не найдено' });
         }
         
         res.json({ success: true, quest: result.rows[0] });
     } catch (error) {
-        console.error('РћС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ Р·Р°РґР°РЅРёСЏ:', error);
+        console.error('Ошибка обновления задания:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -705,21 +698,15 @@ app.post('/api/users/getOrCreate', async (req, res) => {
             user = await createUser(vkId, companyId, name);
         }
         
-        // РћС‚СЃР»РµР¶РёРІР°РµРј РїРѕСЃРµС‰РµРЅРёРµ РїСЂРёР»РѕР¶РµРЅРёСЏ РґР»СЏ РєР»Р°СЃСЃРёС„РёРєР°С†РёРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+        // Отслеживаем посещение приложения для классификации пользователя
         await initializeUserClassification(user.id, companyId);
         await updateUserClassification(user.id, companyId, 'app_visit');
-		
-		 await trackDailyLogin(user.id, companyId);
         
         const allQuests = await getQuests(companyId);
-        const now = new Date();
-        const activeQuests = allQuests.filter(q => {
-            if (!q.active) return false;
-            const createdAt = new Date(q.created_at);
-            const expiresDays = q.expires_days || 30;
-            const expiresAt = new Date(createdAt.getTime() + expiresDays * 24 * 60 * 60 * 1000);
-            return expiresAt > now;
-        });
+        
+        // ?? ИСПРАВЛЕНО: убираем проверку на expiresDays
+        // Теперь показываем ТОЛЬКО активные задания (без проверки срока действия)
+        const activeQuests = allQuests.filter(q => q.active === true);
         
         const userProgress = await getAllUserQuestProgress(user.id);
         const completedQuests = await getUserCompletedQuests(user.id);
@@ -731,11 +718,10 @@ app.post('/api/users/getOrCreate', async (req, res) => {
             quests: activeQuests,
             userProgress: userProgress,
             completedQuests: completedQuests,
-            totalEarned: progress?.total_earned || 0,
-            streak: progress?.streak || 0
+            totalEarned: progress?.total_earned || 0
         });
     } catch (error) {
-        console.error('РћС€РёР±РєР°:', error);
+        console.error('Ошибка:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -752,18 +738,23 @@ app.get('/api/users/:userId/quests/progress/all', async (req, res) => {
       [userId]
     );
     
+    console.log(`?? ПРОГРЕСС ПОЛЬЗОВАТЕЛЯ ${userId}:`);
+    result.rows.forEach(row => {
+      console.log(`   quest_id=${row.id}, progress=${row.progress}, completed=${row.completed}, claimed=${row.claimed}`);
+    });
+    
     res.json({ success: true, quests: result.rows });
   } catch (error) {
-    console.error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РїСЂРѕРіСЂРµСЃСЃР°:', error);
+    console.error('Ошибка получения прогресса:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.post('/api/users/:userId/quests/progress', async (req, res) => {
     try {
-        const { companyId, quests, totalEarned, streak, lastLoginDate } = req.body;
+        const { companyId, quests, totalEarned } = req.body;
         
-        await updateUserProgress(req.params.userId, companyId, { totalEarned, streak, lastLoginDate });
+        await updateUserProgress(req.params.userId, companyId, { totalEarned });
         
         for (const quest of quests) {
             await updateQuestProgress(req.params.userId, quest.id, quest.progress, quest.completed, quest.claimed);
@@ -780,28 +771,20 @@ app.post('/api/users/completeQuest', async (req, res) => {
     try {
         const { userId, questId, reward } = req.body;
         
-        // РџСЂРѕРІРµСЂСЏРµРј, РЅРµ РёСЃС‚РµРєР»Рѕ Р»Рё Р·Р°РґР°РЅРёРµ
-        const quest = await query('SELECT * FROM quests WHERE id = $1', [questId]);
-        if (quest.rows.length > 0) {
-            const createdAt = new Date(quest.rows[0].created_at);
-            const expiresDays = quest.rows[0].expires_days || 30;
-            const expiresAt = new Date(createdAt.getTime() + expiresDays * 24 * 60 * 60 * 1000);
-            if (expiresAt < new Date()) {
-                return res.status(400).json({ error: 'РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ Р·Р°РґР°РЅРёСЏ РёСЃС‚РµРє' });
-            }
-        }
+        // ?? ИСПРАВЛЕНО: убираем проверку на истечение срока задания
+        // (expires_days больше не используется)
         
-        // вњ… РџР РћР’Р•Р РЇР•Рњ, РќР• РџРћР›РЈР§РР› Р›Р РЈР–Р• Р‘РћРќРЈРЎ
+        // Проверяем, не получал ли уже бонус
         const existing = await query(
             'SELECT * FROM user_quests WHERE user_id = $1 AND quest_id = $2',
             [userId, questId]
         );
         
         if (existing.rows.length > 0) {
-            return res.status(400).json({ error: 'Р‘РѕРЅСѓСЃ Р·Р° СЌС‚Рѕ Р·Р°РґР°РЅРёРµ СѓР¶Рµ РїРѕР»СѓС‡РµРЅ' });
+            return res.status(400).json({ error: 'Бонус за это задание уже получен' });
         }
         
-        // вњ… РџР РћР’Р•Р РЇР•Рњ, Р’Р«РџРћР›РќР•РќРћ Р›Р Р—РђР”РђРќРР• (РїСЂРѕРіСЂРµСЃСЃ >= С†РµР»СЊ)
+        // Проверяем, выполнено ли задание (прогресс >= цель)
         const progressResult = await query(
             `SELECT uqp.progress, q.target_value 
              FROM user_quest_progress uqp
@@ -822,17 +805,17 @@ app.post('/api/users/completeQuest', async (req, res) => {
         
         if (!isCompleted) {
             return res.status(400).json({ 
-                error: `Р—Р°РґР°РЅРёРµ РµС‰С‘ РЅРµ РІС‹РїРѕР»РЅРµРЅРѕ. РџСЂРѕРіСЂРµСЃСЃ: ${currentProgress}/${targetValue}` 
+                error: `Задание ещё не выполнено. Прогресс: ${currentProgress}/${targetValue}` 
             });
         }
         
-        // вњ… Р—РђРџРРЎР«Р’РђР•Рњ Р’Р«РџРћР›РќР•РќРР•
+        // Записываем выполнение
         await query(
             'INSERT INTO user_quests (user_id, quest_id, completed_at, reward_claimed) VALUES ($1, $2, NOW(), $3)',
             [userId, questId, true]
         );
         
-        // вњ… РћР‘РќРћР’Р›РЇР•Рњ user_quest_progress: РїРѕРјРµС‡Р°РµРј РєР°Рє РїРѕР»СѓС‡РµРЅРЅРѕРµ
+        // Обновляем user_quest_progress: помечаем как полученное
         await query(
             `UPDATE user_quest_progress 
              SET claimed = true, updated_at = NOW()
@@ -840,13 +823,13 @@ app.post('/api/users/completeQuest', async (req, res) => {
             [userId, questId]
         );
         
-        // вњ… РќРђР§РРЎР›РЇР•Рњ Р‘РћРќРЈРЎ (С‚РѕР»СЊРєРѕ Р·РґРµСЃСЊ!)
-        await updateUserBalance(userId, reward, 'earn', `Р—Р°РґР°РЅРёРµ РІС‹РїРѕР»РЅРµРЅРѕ! +${reward} Р±РѕРЅСѓСЃРѕРІ`);
+        // Начисляем бонус (только здесь!)
+        await updateUserBalance(userId, reward, 'earn', `Задание выполнено! +${reward} бонусов`);
         
         res.json({ success: true });
         
     } catch (error) {
-        console.error('РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ Р·Р°РґР°РЅРёСЏ:', error);
+        console.error('Ошибка выполнения задания:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1027,9 +1010,37 @@ app.get('/api/users/:userId/promotions/purchased/:companyId', async (req, res) =
     try {
         const { userId, companyId } = req.params;
         const purchased = await getUserPurchasedPromotions(userId, companyId);
-        res.json({ success: true, purchased });
+        
+        // Гарантируем, что promotion_cycle_start передается клиенту
+        const purchasedWithCycle = purchased.map(p => ({
+            id: p.id,
+            user_id: p.user_id,
+            promotion_id: p.promotion_id,
+            company_id: p.company_id,
+            purchased_at: p.purchased_at,
+            promotion_cycle_start: p.promotion_cycle_start || null, 
+            used: p.used,
+            used_at: p.used_at,
+            name: p.name,
+            reward_value: p.reward_value,
+            start_date: p.start_date,
+            end_date: p.end_date,
+            active: p.active,
+            is_free: p.is_free,
+            price: p.price
+        }));
+        
+        console.log(`?? Возвращаем ${purchasedWithCycle.length} купленных акций для пользователя ${userId}`);
+        if (purchasedWithCycle.length > 0) {
+            console.log('Пример:', {
+                promotion_id: purchasedWithCycle[0].promotion_id,
+                promotion_cycle_start: purchasedWithCycle[0].promotion_cycle_start
+            });
+        }
+        
+        res.json({ success: true, purchased: purchasedWithCycle });
     } catch (error) {
-        console.error('РћС€РёР±РєР° РїРѕР»СѓС‡РµРЅРёСЏ РєСѓРїР»РµРЅРЅС‹С… Р°РєС†РёР№:', error);
+        console.error('Ошибка получения купленных акций:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
