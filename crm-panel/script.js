@@ -2155,6 +2155,7 @@ function showAddPromotionModal() {
     document.getElementById('promoStartDate').value = '';
     document.getElementById('promoEndDate').value = '';
     document.getElementById('promoActive').checked = true;
+	document.getElementById('promoEmojiInput').value = '🎯';
     
     // Показываем поле цены
     document.getElementById('promoPriceField').style.display = 'block';
@@ -2240,6 +2241,7 @@ async function editPromotion(promotionId) {
     // Бесплатная акция и цена
     document.getElementById('promoIsFree').checked = promo.is_free || false;
     document.getElementById('promoPrice').value = promo.price || 100;
+	document.getElementById('promoEmojiInput').value = promo.emoji || '🎯';
     
     // Показываем/скрываем поле цены
     if (promo.is_free) {
@@ -2412,6 +2414,7 @@ async function savePromotion() {
     try {
         const promotionData = {
             name,
+			emoji,
             description,
             products,
             startDate, 

@@ -2878,20 +2878,7 @@ async function initLocationTables() {
                 updated_at TIMESTAMP DEFAULT NOW()
             )
         `);
-        
-        // Таблица выбранных локаций пользователей (ДОБАВИТЬ СЮДА)
-        await query(`
-            CREATE TABLE IF NOT EXISTS user_selected_locations (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-                selected_address_id INTEGER NOT NULL REFERENCES addresses(id) ON DELETE CASCADE,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE(user_id, company_id)
-            )
-        `);
-        
+           
         console.log('Таблицы городов, адресов и выбранных локаций созданы/проверены');
     } catch (error) {
         console.error('❌ Ошибка создания таблиц локаций:', error);
@@ -3110,38 +3097,6 @@ async function getAllLocationsForApp(companyId) {
         locationsByCity: locationsByCity,
         mainLocation: await getMainLocation(companyId)
     };
-}
-
-// Обновить выбранную локацию пользователя
-async function updateUserSelectedLocation(userId, companyId, addressId) {
-    const result = await query(
-        `INSERT INTO user_selected_locations (user_id, company_id, selected_address_id, updated_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (user_id, company_id) 
-         DO UPDATE SET selected_address_id = $3, updated_at = NOW()
-         RETURNING *`,
-        [userId, companyId, addressId]
-    );
-    return result.rows[0];
-}
-
-// Получить выбранную локацию пользователя
-async function getUserSelectedLocation(userId, companyId) {
-    const result = await query(
-        `SELECT usl.*, a.address, a.city_id, c.name as city_name, a.phone, a.working_hours
-         FROM user_selected_locations usl
-         LEFT JOIN addresses a ON usl.selected_address_id = a.id
-         LEFT JOIN cities c ON a.city_id = c.id
-         WHERE usl.user_id = $1 AND usl.company_id = $2`,
-        [userId, companyId]
-    );
-    
-    if (result.rows.length > 0) {
-        return result.rows[0];
-    }
-    
-    // Если нет выбранной локации, возвращаем основную
-    return await getMainLocation(companyId);
 }
 
 // ========== CASHIER CREDENTIALS ==========
@@ -3939,8 +3894,6 @@ module.exports = {
     updateAddress,
     deleteAddress,
     getAllLocationsForApp,
-    getUserSelectedLocation,
-    updateUserSelectedLocation,
     getMainLocation,
     // Cashier credentials
     getCashierCredentials,

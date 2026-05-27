@@ -10,5 +10,35 @@
     "status": "completed",
     "processed_at": "2026-05-23T12:51:04.962Z",
     "companyId": 1
+  },
+  {
+    "id": 1779889974548,
+    "brandName": "ООО Делюкс",
+    "owner": "Иванов Иван Иванович",
+    "email": "ivan@mail.ru",
+    "phone": "+78005553535",
+    "rawPhone": "88005553535",
+    "created_at": "2026-05-27T13:52:54.548Z",
+    "status": "pending"
+  },
+  {
+    "id": 1779890035013,
+    "brandName": "ООО Делюкс",
+    "owner": "Иванов Иван Иванович",
+    "email": "ivan@mail.ru",
+    "phone": "+78005553535",
+    "rawPhone": "88005553535",
+    "created_at": "2026-05-27T13:53:55.013Z",
+    "status": "pending"
+  },
+  {
+    "id": 1779890865421,
+    "brandName": "Кофейня Делюкс",
+    "owner": "Иванов Иван Иванович",
+    "email": "delux@mail.ru",
+    "phone": "+78005553535",
+    "rawPhone": "88005553535",
+    "created_at": "2026-05-27T14:07:45.421Z",
+    "status": "pending"
   }
 ]

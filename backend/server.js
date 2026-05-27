@@ -3287,30 +3287,6 @@ app.get('/api/companies/:companyId/locations', async (req, res) => {
     }
 });
 
-// Получение выбранной локации пользователя
-app.get('/api/users/:userId/location/:companyId', async (req, res) => {
-    try {
-        const location = await getUserSelectedLocation(req.params.userId, req.params.companyId);
-        res.json({ success: true, location });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// Сохранение выбранной локации пользователя
-app.post('/api/users/:userId/location/:companyId', async (req, res) => {
-    try {
-        const { addressId } = req.body;
-        if (!addressId) {
-            return res.status(400).json({ success: false, message: 'addressId обязателен' });
-        }
-        const result = await updateUserSelectedLocation(req.params.userId, req.params.companyId, addressId);
-        res.json({ success: true, location: result });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
 // Получение информации об адресе по ID
 app.get('/api/addresses/:addressId/info', async (req, res) => {
     try {

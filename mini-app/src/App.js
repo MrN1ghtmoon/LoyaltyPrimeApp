@@ -41,10 +41,9 @@ export function App() {
   const [showBirthdayModal, setShowBirthdayModal] = useState(false);
   const [purchasedPromotions, setPurchasedPromotions] = useState([]);
   const [locations, setLocations] = useState(null);
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [selectedCityId, setSelectedCityId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [greetingSettings, setGreetingSettings] = useState({ text: 'Добро пожаловать!', emoji: '👋' });
   
 // Получение смещения пользователя (положительное для восточных поясов, напр. Москва = 180)
@@ -362,44 +361,7 @@ const loadLocations = async () => {
         console.error('Ошибка загрузки локаций:', error);
     }
 };
-// Загрузка выбранной локации пользователя
-const loadUserSelectedLocation = async () => {
-    if (!userId || !selectedGroup?.id) return;
-    
-    try {
-        const response = await fetch(`${API_URL}/api/users/${userId}/location/${selectedGroup.id}`);
-        const data = await response.json();
-        
-        if (data.success && data.location) {
-            setSelectedLocation(data.location);
-        } else if (locations?.mainLocation) {
-            setSelectedLocation(locations.mainLocation);
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки выбранной локации:', error);
-    }
-};
-const saveSelectedLocation = async (addressId) => {
-    if (!userId || !selectedGroup?.id) return;
-    
-    try {
-        const response = await fetch(`${API_URL}/api/users/${userId}/location/${selectedGroup.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ addressId })
-        });
-        
-        const data = await response.json();
-        if (data.success) {
-            await loadUserSelectedLocation();
-            setShowLocationSelector(false);
-            showModal('Адрес сохранен', 'Ваш адрес выбран. При следующем посещении он будет использоваться по умолчанию.');
-        }
-    } catch (error) {
-        console.error('Ошибка сохранения локации:', error);
-        showModal('Ошибка', 'Не удалось сохранить адрес');
-    }
-};
+
 const loadUserData = async (companyId, vkUserId, userName) => {
     try {
       const response = await fetch(`${API_URL}/api/users/getOrCreate`, {
@@ -913,11 +875,10 @@ useEffect(() => {
         window.removeEventListener('focus', syncBalanceFromDB);
     };
 }, [userId, selectedGroup, activeTab]);
-  // Добавьте useEffect для загрузки локаций и выбранного адреса
+
 useEffect(() => {
     if (selectedGroup?.id && userId) {
         loadLocations();
-        loadUserSelectedLocation();
     }
 }, [selectedGroup?.id, userId]);
 
@@ -1736,66 +1697,66 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
       </div>
     </div>
     
-    {/* Блок с выбранным адресом и кнопкой для просмотра всех адресов */}
+    {/* Блок для открытия модального окна со всеми адресами */}
 <div 
-  style={{ 
-    background: 'rgba(30,35,48,0.7)', 
-    borderRadius: 28, 
-    padding: 16, 
-    marginBottom: 16,
-    cursor: 'pointer',
-    border: `1px solid ${selectedGroup?.color}40`,
-    transition: 'all 0.2s ease'
-  }}
-  onClick={() => setShowLocationSelector(true)}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.transform = 'translateY(-2px)';
-    e.currentTarget.style.boxShadow = `0 4px 12px ${selectedGroup?.color}20`;
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.transform = 'translateY(0)';
-    e.currentTarget.style.boxShadow = 'none';
-  }}
+    style={{ 
+        background: 'rgba(30,35,48,0.7)', 
+        borderRadius: 28, 
+        padding: 16, 
+        marginBottom: 16,
+        cursor: 'pointer',
+        border: `1px solid ${selectedGroup?.color}40`,
+    }}
+    onClick={() => setShowLocationSelector(true)}
 >
-  {/* Текст "Нажмите для просмотра всех адресов компании" */}
-  <div style={{ 
-    textAlign: 'center', 
-    marginBottom: 12,
-    padding: '8px 12px',
-    background: `${selectedGroup?.color}20`,
-    borderRadius: 20,
-    fontSize: 13,
-    fontWeight: 600,
-    color: selectedGroup?.color || '#ffd966'
-  }}>
-    Нажмите для просмотра всех адресов компании
-  </div>
-  
-  {/* Текущий выбранный адрес */}
-  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-    <div style={{ flex: 1 }}>
-      {selectedLocation.city && (
-        <div style={{ fontSize: 12, opacity: 0.7, color: 'white' }}>
-          {selectedLocation.city}
-        </div>
-      )}
-      <div style={{ 
-        fontSize: 14, 
-        fontWeight: 500, 
-        color: 'white',
-        maxWidth: 'calc(100% - 40px)'
-      }}>
-        {selectedLocation.address?.substring(0, 45)}
-        {selectedLocation.address?.length > 45 ? '...' : ''}
-      </div>
-      {selectedLocation.phone && (
-        <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4, color: 'white' }}>
-          {selectedLocation.phone}
-        </div>
-      )}
+    <div style={{ 
+        textAlign: 'center', 
+        marginBottom: 12,
+        padding: '8px 12px',
+        background: `${selectedGroup?.color}20`,
+        borderRadius: 20,
+        fontSize: 13,
+        fontWeight: 600,
+        color: selectedGroup?.color || '#ffd966'
+    }}>
+        Все адреса компании
     </div>
-    <div style={{ fontSize: 18, color: 'white', opacity: 0.5 }}>›</div>
-  </div>
+    
+    {/* Показываем первый адрес как пример (без галочки "выбран") */}
+    {locations?.addresses?.[0] && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+                {locations.addresses[0].city_name && (
+                    <div style={{ fontSize: 12, opacity: 0.7, color: 'white' }}>
+                        {locations.addresses[0].city_name}
+                    </div>
+                )}
+                <div style={{ fontSize: 14, fontWeight: 500, color: 'white' }}>
+                    {locations.addresses[0].address?.substring(0, 45)}
+                </div>
+                {locations.addresses[0].phone && (
+                    <div style={{ fontSize: 11, opacity: 0.5, marginTop: 4, color: 'white' }}>
+                        {locations.addresses[0].phone}
+                    </div>
+                )}
+            </div>
+            <div style={{ fontSize: 18, color: 'white', opacity: 0.5 }}>›</div>
+        </div>
+    )}
+    
+    {/* Счётчик остальных адресов */}
+    {locations?.addresses?.length > 1 && (
+        <div style={{ 
+            marginTop: 12, 
+            fontSize: 11, 
+            textAlign: 'center', 
+            color: '#aaa',
+            paddingTop: 8,
+            borderTop: '1px solid rgba(255,255,255,0.1)'
+        }}>
+            + ещё {locations.addresses.length - 1} адрес(ов)
+        </div>
+    )}
 </div>
     
     {/* Блок с КУПЛЕННЫМИ акциями на главной */}
@@ -1936,15 +1897,50 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
     })()}
   </>
 )}
+{/* Модальное окно — только просмотр адресов */}
 {showLocationSelector && locations && (
-    <div style={{ position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.95)', backdropFilter:'blur(8px)', display:'flex', alignItems:'flex-start', justifyContent:'center', zIndex:2000, padding:20, overflowY:'auto' }} onClick={() => setShowLocationSelector(false)}>
-        <div style={{ background:'linear-gradient(135deg,#1e2538,#131825)', borderRadius:32, maxWidth:500, width:'100%', maxHeight:'80vh', overflow:'auto', position:'relative' }} onClick={e=>e.stopPropagation()}>
-            <div style={{ padding:24 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-                    <h3 style={{ color:'white', fontSize:20 }}>Выберите адрес</h3>
-                    <button onClick={() => setShowLocationSelector(false)} style={{ background:'none', border:'none', fontSize:24, color:'white', cursor:'pointer' }}>✕</button>
+    <div 
+        style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            width: '100%', 
+            height: '100%', 
+            background: 'rgba(0,0,0,0.95)', 
+            backdropFilter: 'blur(8px)', 
+            display: 'flex', 
+            alignItems: 'flex-start', 
+            justifyContent: 'center', 
+            zIndex: 2000, 
+            padding: 20, 
+            overflowY: 'auto' 
+        }} 
+        onClick={() => setShowLocationSelector(false)}
+    >
+        <div 
+            style={{ 
+                background: 'linear-gradient(135deg,#1e2538,#131825)', 
+                borderRadius: 32, 
+                maxWidth: 500, 
+                width: '100%', 
+                maxHeight: '80vh', 
+                overflow: 'auto', 
+                position: 'relative' 
+            }} 
+            onClick={e => e.stopPropagation()}
+        >
+            <div style={{ padding: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <h3 style={{ color: 'white', fontSize: 20 }}>Наши адреса</h3>
+                    <button 
+                        onClick={() => setShowLocationSelector(false)} 
+                        style={{ background: 'none', border: 'none', fontSize: 24, color: 'white', cursor: 'pointer' }}
+                    >
+                        ✕
+                    </button>
                 </div>
                 
+                {/* Группировка по городам */}
                 {locations?.cities && locations.cities.length > 0 && (
                     <>
                         {locations.cities.map(city => {
@@ -1959,18 +1955,15 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                                     {cityAddresses.map(addr => (
                                         <div 
                                             key={addr.id}
-                                            onClick={() => saveSelectedLocation(addr.id)}
                                             style={{ 
-                                                background: selectedLocation?.addressId === addr.id ? `${selectedGroup?.color}20` : 'rgba(255,255,255,0.05)',
+                                                background: 'rgba(255,255,255,0.05)',
                                                 borderRadius: 20,
                                                 padding: 14,
                                                 marginBottom: 8,
-                                                cursor: 'pointer',
-                                                border: selectedLocation?.addressId === addr.id ? `2px solid ${selectedGroup?.color}` : '1px solid rgba(255,255,255,0.1)'
+                                                border: '1px solid rgba(255,255,255,0.1)'
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                <span style={{ fontSize: 20 }}>{addr.is_main ? '⭐' : ''}</span>
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ color: 'white', fontWeight: 500 }}>{addr.address}</div>
                                                     {addr.phone && (
@@ -1984,9 +1977,6 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                                                         </div>
                                                     )}
                                                 </div>
-                                                {selectedLocation?.addressId === addr.id && (
-                                                    <div style={{ color: '#2ecc71', fontSize: 20 }}>✓</div>
-                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -2003,34 +1993,49 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
                         {locations.addresses.filter(a => !a.city_id).map(addr => (
                             <div 
                                 key={addr.id}
-                                onClick={() => saveSelectedLocation(addr.id)}
                                 style={{ 
-                                    background: selectedLocation?.addressId === addr.id ? `${selectedGroup?.color}20` : 'rgba(255,255,255,0.05)',
+                                    background: 'rgba(255,255,255,0.05)',
                                     borderRadius: 20,
                                     padding: 14,
                                     marginBottom: 8,
-                                    cursor: 'pointer',
-                                    border: selectedLocation?.addressId === addr.id ? `2px solid ${selectedGroup?.color}` : '1px solid rgba(255,255,255,0.1)'
+                                    border: '1px solid rgba(255,255,255,0.1)'
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ color: 'white', fontWeight: 500 }}>{addr.address}</div>
-                                        {addr.phone && <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, color: 'white' }}>{addr.phone}</div>}
-                                    </div>
-                                    {selectedLocation?.addressId === addr.id && <div style={{ color: '#2ecc71', fontSize: 20 }}>✓</div>}
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ color: 'white', fontWeight: 500 }}>{addr.address}</div>
+                                    {addr.phone && (
+                                        <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, color: 'white' }}>
+                                            📞 {addr.phone}
+                                        </div>
+                                    )}
+                                    {addr.working_hours && (
+                                        <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2, color: 'white' }}>
+                                            🕐 {addr.working_hours}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
                     </div>
                 )}
                 
-                {(!locations?.cities || locations.cities.length === 0) && (!locations?.addresses || locations.addresses.length === 0) && (
-                    <div style={{ textAlign: 'center', padding: 40, opacity: 0.6, color: 'white' }}>
-                        <div>Нет доступных адресов</div>
-                        <div style={{ fontSize: 12, marginTop: 8, opacity: 0.5 }}>Обратитесь к администратору</div>
-                    </div>
-                )}
+                {/* Кнопка закрытия внизу */}
+                <button 
+                    onClick={() => setShowLocationSelector(false)}
+                    style={{ 
+                        width: '100%', 
+                        padding: 12, 
+                        background: selectedGroup?.color || '#ff4d4d', 
+                        border: 'none', 
+                        borderRadius: 12, 
+                        color: 'white', 
+                        marginTop: 16, 
+                        cursor: 'pointer',
+                        fontWeight: 600
+                    }}
+                >
+                    Закрыть
+                </button>
             </div>
         </div>
     </div>

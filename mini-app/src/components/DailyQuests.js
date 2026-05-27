@@ -189,7 +189,7 @@ export function DailyQuests({ userBalance, onBalanceUpdate, userId, selectedGrou
     if (lowerTitle.includes('потратить')) {
       return 'spend_amount';
     }
-    if (lowerTitle.includes('покупк')) {
+    if (lowerTitle.includes('покупок') || lowerTitle.includes('покупки')) {
       return 'purchase_count';
     }
     if (lowerTitle.includes('колесо удачи')) {
