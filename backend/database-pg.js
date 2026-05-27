@@ -99,10 +99,7 @@ async function initDatabase() {
                 bonus_earned INTEGER DEFAULT 0,
                 bonus_spent INTEGER DEFAULT 0,
                 description TEXT,
-                items JSONB DEFAULT '[]',
                 source VARCHAR(50) DEFAULT 'pos',
-                store_id VARCHAR(100),
-                cashier_id VARCHAR(100),
                 metadata JSONB DEFAULT '{}',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -174,24 +171,16 @@ async function initDatabase() {
 `);
 
         await query(`
-            CREATE TABLE IF NOT EXISTS user_classification (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
-                user_type VARCHAR(50) DEFAULT 'new', -- new, active, regular, dormant
-                first_visit_date TIMESTAMP,
-                last_purchase_date TIMESTAMP,
-                last_app_visit_date TIMESTAMP,
-                purchases_this_week INTEGER DEFAULT 0,
-                app_visits_this_week INTEGER DEFAULT 0,
-                purchases_last_two_weeks INTEGER DEFAULT 0,
-                consecutive_weeks_with_4_purchases INTEGER DEFAULT 0,
-                week_reset_date TIMESTAMP,
-                classified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, company_id)
-            )
-        `);
+    CREATE TABLE IF NOT EXISTS user_classification (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+        user_type VARCHAR(50) DEFAULT 'all',
+        classified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, company_id)
+    )
+`);
 
         await query(`
             CREATE TABLE IF NOT EXISTS notifications (
@@ -240,7 +229,6 @@ async function initDatabase() {
         await initLocationTables();
 		await addGiveawayColumns();
         await addGameSettingsTable();  
-        await addTransactionColumns();
         await ensureAllQuestsExist();
 		await addQuestColumns();
 		await addBonusSettingsColumn();
@@ -255,58 +243,11 @@ async function initDatabase() {
         console.error('Ошибка инициализации БД:', error);
     }
 }
-// Добавляем недостающие колонки в таблицу transactions
-async function addTransactionColumns() {
-    try {
-        // Проверяем и добавляем колонку store_id
-        const checkStoreId = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'transactions' AND column_name = 'store_id'
-        `);
-        
-        if (checkStoreId.rows.length === 0) {
-            console.log('Добавляем колонку store_id в таблицу transactions...');
-            await query(`ALTER TABLE transactions ADD COLUMN store_id VARCHAR(100)`);
-            console.log('Колонка store_id добавлена');
-        }
-        
-        // Проверяем и добавляем колонку cashier_id
-        const checkCashierId = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'transactions' AND column_name = 'cashier_id'
-        `);
-        
-        if (checkCashierId.rows.length === 0) {
-            console.log('Добавляем колонку cashier_id в таблицу transactions...');
-            await query(`ALTER TABLE transactions ADD COLUMN cashier_id VARCHAR(100)`);
-            console.log('Колонка cashier_id добавлена');
-        }
-        
-        // Проверяем и добавляем колонку metadata
-        const checkMetadata = await query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'transactions' AND column_name = 'metadata'
-        `);
-        
-        if (checkMetadata.rows.length === 0) {
-            console.log('Добавляем колонку metadata в таблицу transactions...');
-            await query(`ALTER TABLE transactions ADD COLUMN metadata JSONB DEFAULT '{}'`);
-            console.log('Колонка metadata добавлена');
-        }
-        
-        console.log('Все колонки transactions проверены');
-    } catch (error) {
-        console.error('❌ Ошибка добавления колонок transactions:', error);
-    }
-}
 
 // Функция для обеспечения наличия всех 20 заданий у каждой компании
 async function ensureAllQuestsExist() {
     try {
-        console.log('🔍 Проверяем наличие всех заданий у компаний...');
+        console.log('Проверяем наличие всех заданий у компаний...');
         
         // Получаем все компании
         const companiesResult = await query('SELECT id FROM companies');
@@ -422,7 +363,6 @@ async function getGameSettings(companyId, gameType) {
                     { name: 'x15', value: 15, multiplier: 15, color: '#e67e22', icon: '🏆', weight: 10 }
                 ],
                 maxSpinsPerDay: 10,
-                freeSpinDaily: false,
 				maxPlaysPerDay: 0
             };
         } else if (gameType === 'scratch') {
@@ -440,7 +380,6 @@ async function getGameSettings(companyId, gameType) {
                     { id: '🎰', name: 'ДЖЕКПОТ', value: 500, multiplier: 50, color: '#ff4d4d', prob: 3 }
                 ],
                 hintCost: 15,
-                freeHintDaily: false,
 				maxPlaysPerDay: 0
             };
         } else if (gameType === 'dice') {
@@ -1694,7 +1633,7 @@ async function addGameSettingsColumns() {
         
         console.log('Все колонки game_settings проверены');
     } catch (error) {
-        console.error('❌ Ошибка добавления колонок game_settings:', error);
+        console.error('Ошибка добавления колонок game_settings:', error);
     }
 }
 // Добавьте эту функцию в database-pg.js после других функций
@@ -1702,7 +1641,7 @@ async function addGameSettingsColumns() {
 // Получение истории покупок пользователя
 async function getUserPurchaseHistory(userId, limit = 50) {
     const result = await query(
-        `SELECT id, amount, bonus_earned, bonus_spent, description, store_id, cashier_id, created_at 
+        `SELECT id, amount, bonus_earned, bonus_spent, description, created_at 
          FROM transactions 
          WHERE user_id = $1 
          ORDER BY created_at DESC 
@@ -1712,13 +1651,13 @@ async function getUserPurchaseHistory(userId, limit = 50) {
     return result.rows;
 }
 
-// Добавление покупки в историю (уже есть в updateUserBalance, но добавим отдельный метод для POS)
-async function addPurchaseTransaction(userId, companyId, amount, bonusEarned, storeId, cashierId) {
+// Добавление покупки в историю
+async function addPurchaseTransaction(userId, companyId, amount, bonusEarned) {
     const result = await query(
-        `INSERT INTO transactions (user_id, company_id, amount, bonus_earned, description, store_id, cashier_id, source, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pos', NOW()) 
+        `INSERT INTO transactions (user_id, company_id, amount, bonus_earned, description, source, created_at) 
+         VALUES ($1, $2, $3, $4, $5, 'pos', NOW()) 
          RETURNING *`,
-        [userId, companyId, amount, bonusEarned, `Покупка на ${amount}₽`, storeId || 'unknown', cashierId || 'cashier_001']
+        [userId, companyId, amount, bonusEarned, `Покупка на ${amount}₽`]
     );
     return result.rows[0];
 }
@@ -1757,12 +1696,12 @@ async function updateBalanceWithTransaction(userId, companyId, change, type, des
     return newBalance;
 }
 // Добавление транзакции списания
-async function addSpendTransaction(userId, companyId, bonusSpent, description, storeId, cashierId) {
+async function addSpendTransaction(userId, companyId, bonusSpent, description) {
     const result = await query(
-        `INSERT INTO transactions (user_id, company_id, bonus_spent, description, store_id, cashier_id, source, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, 'pos', NOW()) 
+        `INSERT INTO transactions (user_id, company_id, bonus_spent, description, source, created_at) 
+         VALUES ($1, $2, $3, $4, 'pos', NOW()) 
          RETURNING *`,
-        [userId, companyId, bonusSpent, description || `Списание ${bonusSpent} бонусов`, storeId || 'unknown', cashierId || 'cashier_001']
+        [userId, companyId, bonusSpent, description || `Списание ${bonusSpent} бонусов`]
     );
     return result.rows[0];
 }
@@ -1770,7 +1709,7 @@ async function addSpendTransaction(userId, companyId, bonusSpent, description, s
 // Получение всех транзакций пользователя с деталями
 async function getUserTransactions(userId, companyId, limit = 100) {
     const result = await query(
-        `SELECT id, amount, bonus_earned, bonus_spent, description, store_id, cashier_id, source, created_at, metadata 
+        `SELECT id, amount, bonus_earned, bonus_spent, description, source, created_at, metadata 
          FROM transactions 
          WHERE user_id = $1 AND company_id = $2 
          ORDER BY created_at DESC 
@@ -1866,18 +1805,21 @@ async function getUserPurchasedPromotions(userId, companyId) {
          JOIN promotions p ON upp.promotion_id = p.id
          WHERE upp.user_id = $1 
            AND upp.company_id = $2 
-           AND upp.used = false
+           -- ❌ УБИРАЕМ: AND upp.used = false
            AND p.active = true
            AND (p.end_date IS NULL OR p.end_date > NOW())
          ORDER BY upp.purchased_at DESC`,
         [userId, companyId]
     );
     
-    // Добавляем логирование для отладки
     console.log(`📦 Найдено ${result.rows.length} купленных акций для пользователя ${userId}`);
+    console.log(`   Из них использовано: ${result.rows.filter(r => r.used).length}`);
+    console.log(`   Не использовано: ${result.rows.filter(r => !r.used).length}`);
+    
     if (result.rows.length > 0) {
         console.log('Пример записи:', {
             promotion_id: result.rows[0].promotion_id,
+            used: result.rows[0].used,
             promotion_cycle_start: result.rows[0].promotion_cycle_start,
             purchased_at: result.rows[0].purchased_at
         });
@@ -2022,92 +1964,46 @@ async function initializeUserClassification(userId, companyId) {
     );
     
     if (existing.rows.length === 0) {
-        const now = new Date();
-        const weekResetDate = new Date(now);
-        weekResetDate.setDate(weekResetDate.getDate() + (7 - weekResetDate.getDay()));
-        weekResetDate.setHours(23, 59, 59, 999);
-        
         await query(
             `INSERT INTO user_classification 
-             (user_id, company_id, user_type, first_visit_date, last_app_visit_date, week_reset_date, classified_at, updated_at) 
-             VALUES ($1, $2, 'all', $3, $3, $4, NOW(), NOW())`,
-            [userId, companyId, now, weekResetDate]
+             (user_id, company_id, user_type, classified_at, updated_at) 
+             VALUES ($1, $2, 'all', NOW(), NOW())`,
+            [userId, companyId]
         );
         console.log(`📊 Создана запись для пользователя ${userId} с типом 'all'`);
-    } else {
-        const record = existing.rows[0];
-        if (!record.user_type || record.user_type === null) {
-            await query(
-                `UPDATE user_classification 
-                 SET user_type = 'all', updated_at = NOW()
-                 WHERE user_id = $1 AND company_id = $2`,
-                [userId, companyId]
-            );
-            console.log(`📊 Исправлен NULL тип для пользователя ${userId} на 'all'`);
-        }
     }
 }
 
 async function updateUserClassification(userId, companyId, activityType) {
-    // activityType: 'purchase' или 'app_visit'
-    const classification = await query(
-        'SELECT * FROM user_classification WHERE user_id = $1 AND company_id = $2',
-        [userId, companyId]
-    );
+    // Обновляем только при покупках
+    if (activityType !== 'purchase') return;
     
-    if (classification.rows.length === 0) {
-        await initializeUserClassification(userId, companyId);
-        return;
-    }
+    // Обновляем дату последней покупки (если поле существует)
+    // Проверяем, есть ли колонка last_purchase_date
+    const checkColumn = await query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'user_classification' AND column_name = 'last_purchase_date'
+    `);
     
-    const user = classification.rows[0];
-    const now = new Date();
-    
-    // Проверяем, нужно ли сбросить недельные счетчики
-    const weekResetDate = new Date(user.week_reset_date);
-    if (now > weekResetDate) {
-        // Сбрасываем недельные счетчики
-        const newWeekResetDate = new Date(now);
-        newWeekResetDate.setDate(newWeekResetDate.getDate() + (7 - newWeekResetDate.getDay()));
-        newWeekResetDate.setHours(23, 59, 59, 999);
-        
+    if (checkColumn.rows.length > 0) {
         await query(
             `UPDATE user_classification 
-             SET purchases_this_week = 0, 
-                 app_visits_this_week = 0,
-                 week_reset_date = $1,
-                 updated_at = NOW()
-             WHERE user_id = $2 AND company_id = $3`,
-            [newWeekResetDate, userId, companyId]
-        );
-        
-        user.purchases_this_week = 0;
-        user.app_visits_this_week = 0;
-    }
-    
-    // Обновляем счетчики активности
-    if (activityType === 'purchase') {
-        await query(
-            `UPDATE user_classification 
-             SET purchases_this_week = purchases_this_week + 1,
-                 purchases_last_two_weeks = purchases_last_two_weeks + 1,
-                 last_purchase_date = NOW(),
-                 updated_at = NOW()
+             SET last_purchase_date = NOW(), updated_at = NOW()
              WHERE user_id = $1 AND company_id = $2`,
             [userId, companyId]
         );
-    } else if (activityType === 'app_visit') {
+    } else {
+        // Если колонки нет, просто обновляем updated_at
         await query(
             `UPDATE user_classification 
-             SET app_visits_this_week = app_visits_this_week + 1,
-                 last_app_visit_date = NOW(),
-                 updated_at = NOW()
+             SET updated_at = NOW()
              WHERE user_id = $1 AND company_id = $2`,
             [userId, companyId]
         );
     }
     
-    // Пересчитываем тип пользователя
+    // Пересчитываем тип
     await recalculateUserType(userId, companyId);
 }
 
@@ -2164,9 +2060,9 @@ async function recalculateUserType(userId, companyId) {
     // ========== ПРАВИЛА СЕГМЕНТАЦИИ ==========
     
     // 1. СПЯЩИЙ: 1+ покупка и прошло 15+ дней с последней покупки
-    if (daysSinceLastPurchase >= 15) {
+    if (totalPurchases >= 1 && maxIntervalDays > 14) {
         newUserType = 'dormant';
-    }
+	}
     // 2. ПОСТОЯННЫЙ: 2+ покупки и максимальный интервал между ними <= 5 дней
     else if (totalPurchases >= 2 && maxIntervalDays <= 5) {
         newUserType = 'regular';
@@ -2179,10 +2075,7 @@ async function recalculateUserType(userId, companyId) {
     else if (totalPurchases === 1 && daysSinceLastPurchase <= 14) {
         newUserType = 'new';
     }
-    // 5. Если 1+ покупки, но интервал больше 14 дней - спящий
-    else if (totalPurchases >= 1 && maxIntervalDays > 14) {
-        newUserType = 'dormant';
-    }
+
     
     // Обновляем тип пользователя
     await query(
@@ -2292,7 +2185,7 @@ switch (period) {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
 }
     
-    // Получаем реальную выручку (только POS-транзакции с amount > 0)
+    // Получаем реальную выручку
     const revenueResult = await query(
         `SELECT 
             COUNT(*) as total_transactions,
@@ -2329,25 +2222,6 @@ switch (period) {
     
     // Получаем классификацию пользователей
     const classificationStats = await getClassificationStats(companyId);
-    
-    // Получаем топ продуктов
-    const topProductsResult = await query(
-        `SELECT 
-            items,
-            COUNT(*) as sales_count,
-            COALESCE(SUM(amount), 0) as revenue
-         FROM transactions
-         WHERE company_id = $1
-         AND source = 'pos'
-         AND amount > 0
-         AND items != '[]'
-         AND items IS NOT NULL
-         AND created_at >= $2
-         GROUP BY items
-         ORDER BY sales_count DESC
-         LIMIT 10`,
-        [companyId, startDate]
-    );
     
     // Получаем активность по дням
     const dailyActivityResult = await query(
@@ -2472,13 +2346,12 @@ switch (period) {
         avgCheck: Math.round(parseInt(avgCheckResult.rows[0].avg_check)),
         avgBonus: Math.round(parseInt(avgCheckResult.rows[0].avg_bonus)),
         dailyActivity: dailyActivityResult.rows,
-        topProducts: topProductsResult.rows,
-        addressesRevenue: addressesRevenue  // НОВОЕ ПОЛЕ
+        addressesRevenue: addressesRevenue
     };
 }
 async function addGiveawayColumns() {
     try {
-        // Проверяем и добавляем колонку is_paid (платный/бесплатный)
+        // Проверяем и добавляем колонку is_paid
         const checkIsPaid = await query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -2533,7 +2406,6 @@ async function addGiveawayColumns() {
                     giveaway_id INTEGER REFERENCES giveaways(id) ON DELETE CASCADE,
                     company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
                     purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    used BOOLEAN DEFAULT FALSE,
                     UNIQUE(user_id, giveaway_id)
                 )
             `);
@@ -2542,7 +2414,7 @@ async function addGiveawayColumns() {
         
         console.log('Все колонки giveaways проверены');
     } catch (error) {
-        console.error('❌ Ошибка добавления колонок giveaways:', error);
+        console.error('Ошибка добавления колонок giveaways:', error);
     }
 }
 

@@ -876,8 +876,6 @@ app.get('/api/users/:userId/transactions/:companyId', async (req, res) => {
             bonusChange: t.bonus_earned > 0 ? t.bonus_earned : -t.bonus_spent,
             description: t.description || (t.bonus_earned > 0 ? 'Начисление бонусов' : 'Списание бонусов'),
             source: t.source || 'app',
-            storeId: t.store_id,
-            cashierId: t.cashier_id,
             createdAt: t.created_at
         }));
         
@@ -1153,7 +1151,7 @@ app.post('/api/pos/check-purchased-promotion', async (req, res) => {
 
 app.post('/api/pos/use-purchased-promotion', async (req, res) => {
     try {
-        const { qrData, promotionId } = req.body;
+        const { qrData, promotionId, promotionCycleStart  } = req.body;
         
         let userData;
         try {
@@ -1193,16 +1191,32 @@ app.post('/api/pos/use-purchased-promotion', async (req, res) => {
         }
         
         // Находим неиспользованный экземпляр
-        const checkResult = await query(
-            `SELECT id 
-             FROM user_purchased_promotions 
-             WHERE user_id = $1 
-               AND promotion_id = $2 
-               AND used = false
-             ORDER BY purchased_at ASC
-             LIMIT 1`,
-            [user.id, promotionId]
-        );
+        let checkResult;
+        if (promotionCycleStart) {
+            checkResult = await query(
+                `SELECT id 
+                 FROM user_purchased_promotions 
+                 WHERE user_id = $1 
+                   AND promotion_id = $2 
+                   AND promotion_cycle_start = $3
+                   AND used = false
+                 ORDER BY purchased_at ASC
+                 LIMIT 1`,
+                [user.id, promotionId, promotionCycleStart]
+            );
+        } else {
+            // fallback ��� ������ �������
+            checkResult = await query(
+                `SELECT id 
+                 FROM user_purchased_promotions 
+                 WHERE user_id = $1 
+                   AND promotion_id = $2 
+                   AND used = false
+                 ORDER BY purchased_at ASC
+                 LIMIT 1`,
+                [user.id, promotionId]
+            );
+        }
         
         if (checkResult.rows.length === 0) {
             return res.status(400).json({ 
@@ -1548,7 +1562,7 @@ app.post('/api/pos/verify-qr', async (req, res) => {
 // Начисление бонусов за покупку
 app.post('/api/pos/apply-bonus', async (req, res) => {
     try {
-        const { qrData, amount, storeId, cashierId } = req.body;
+        const { qrData, amount } = req.body;
         
         if (!amount || amount <= 0) {
             return res.status(400).json({ success: false, message: 'Введите сумму заказа' });
@@ -1592,10 +1606,10 @@ app.post('/api/pos/apply-bonus', async (req, res) => {
         
         // Записываем транзакцию
         await query(
-            `INSERT INTO transactions (user_id, amount, type, description, store_id, cashier_id, created_at) 
-             VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-            [user.id, bonusEarned, 'earn', `Покупка на ${amount}₽ в ${storeId || 'кассе'}`, storeId || 'unknown', cashierId || 'cashier_001']
-        );
+    `INSERT INTO transactions (user_id, amount, type, description, created_at) 
+     VALUES ($1, $2, $3, $4, NOW())`,
+    [user.id, bonusEarned, 'earn', `������� �� ${amount}? � ${'�����'}`]
+);
         
         res.json({
             success: true,
@@ -1614,7 +1628,7 @@ app.post('/api/pos/apply-bonus', async (req, res) => {
 // Списание бонусов
 app.post('/api/pos/spend-bonus', async (req, res) => {
     try {
-        const { qrData, bonusToSpend, storeId, cashierId } = req.body;
+        const { qrData, bonusToSpend } = req.body;
         
         if (!bonusToSpend || bonusToSpend <= 0) {
             return res.status(400).json({ success: false, message: 'Введите сумму списания' });
@@ -1653,9 +1667,9 @@ app.post('/api/pos/spend-bonus', async (req, res) => {
         
         // Записываем транзакцию списания
         await query(
-            `INSERT INTO transactions (user_id, amount, type, description, store_id, cashier_id, created_at) 
+            `INSERT INTO transactions (user_id, amount, type, description, created_at) 
              VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-            [user.id, bonusToSpend, 'spend', `Списание ${bonusToSpend} бонусов в ${storeId || 'кассе'}`, storeId || 'unknown', cashierId || 'cashier_001']
+            [user.id, bonusToSpend, 'spend', `Списание ${bonusToSpend} бонусов в`]
         );
         
         res.json({
@@ -1804,8 +1818,6 @@ app.get('/api/users/:userId/transactions/:companyId', async (req, res) => {
             amount: t.amount || 0,
             bonusChange: t.bonus_earned > 0 ? t.bonus_earned : (t.bonus_spent > 0 ? -t.bonus_spent : 0),
             description: t.description,
-            storeId: t.store_id,
-            cashierId: t.cashier_id,
             source: t.source,
             createdAt: t.created_at,
             metadata: t.metadata
@@ -1868,7 +1880,7 @@ app.post('/api/pos/get-user-balance', async (req, res) => {
 
 app.post('/api/pos/apply-bonus-v2', async (req, res) => {
     try {
-        const { qrData, amount, storeId, cashierId, addressId, address, cityName } = req.body;
+        const { qrData, amount, addressId, address, cityName } = req.body;
         
         if (!amount || amount <= 0) {
             return res.status(400).json({ success: false, message: 'Введите сумму заказа' });
@@ -1908,7 +1920,7 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
         }
         
         // Формируем название адреса для отображения
-        const addressDisplay = address ? `${address}${cityName ? ` (${cityName})` : ''}` : (storeId || 'касса');
+        const addressDisplay = address ? `${address}${cityName ? ` (${cityName})` : ''}` : ('касса');
         
         // Получаем уровень пользователя и его кешбэк (в процентах)
         const tier = await getUserTier(user.total_spent || 0, userData.companyId);
@@ -1942,9 +1954,7 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
             'earn', 
             `Покупка на ${amount}₽ (кешбэк ${cashbackPercent}% = ${cashbackRub.toFixed(2)}₽ → ${bonusEarned} бонусов) - ${addressDisplay}`,
             { 
-                amount, 
-                storeId, 
-                cashierId, 
+                amount,
                 source: 'pos', 
                 cashbackPercent, 
                 cashbackRub, 
@@ -1990,7 +2000,7 @@ app.post('/api/pos/apply-bonus-v2', async (req, res) => {
 
 app.post('/api/pos/spend-bonus-v2', async (req, res) => {
     try {
-        const { qrData, bonusToSpend, storeId, cashierId, addressId, address, cityName } = req.body;
+        const { qrData, bonusToSpend, addressId, address, cityName } = req.body;
         
         if (!bonusToSpend || bonusToSpend <= 0) {
             return res.status(400).json({ success: false, message: 'Введите сумму списания' });
@@ -2017,7 +2027,7 @@ app.post('/api/pos/spend-bonus-v2', async (req, res) => {
         }
         
         // Формируем название адреса для отображения
-        const addressDisplay = address ? `${address}${cityName ? ` (${cityName})` : ''}` : (storeId || 'касса');
+        const addressDisplay = address ? `${address}${cityName ? ` (${cityName})` : ''}` : ('касса');
         
         const newBalance = await updateBalanceWithTransaction(
             user.id,
@@ -2027,8 +2037,6 @@ app.post('/api/pos/spend-bonus-v2', async (req, res) => {
             `Списание ${bonusToSpend} бонусов - ${addressDisplay}`,
             { 
                 bonusToSpend, 
-                storeId, 
-                cashierId, 
                 source: 'pos', 
                 address_id: addressId, 
                 address: address, 
@@ -3549,11 +3557,9 @@ app.get('/api/users/:userId/games/settings/:companyId', async (req, res) => {
             settings: {
                 wheel: {
                     maxPlaysPerDay: wheelSettings.settings.maxPlaysPerDay || 0,
-                    freeSpinDaily: wheelSettings.settings.freeSpinDaily || false
                 },
                 scratch: {
                     maxPlaysPerDay: scratchSettings.settings.maxPlaysPerDay || 0,
-                    freeHintDaily: scratchSettings.settings.freeHintDaily || false
                 },
                 dice: {
                     maxPlaysPerDay: diceSettings.settings.maxPlaysPerDay || 0

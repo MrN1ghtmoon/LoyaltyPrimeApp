@@ -333,7 +333,7 @@ async function checkSavedSession() {
 
 // Сохранение сессии при входе
 function saveSession(company) {
-    console.log('💾 Saving session for:', company.company || company.name);
+    console.log('Saving session for:', company.company || company.name);
     setCookie('crm_company_id', company.id, 7); // 7 дней
     setCookie('crm_company_name', company.company || company.name, 7);
     
@@ -344,7 +344,7 @@ function saveSession(company) {
 
 // Очистка сессии при выходе
 function clearSession() {
-    console.log('🗑️ Clearing session');
+    console.log('Clearing session');
     deleteCookie('crm_company_id');
     deleteCookie('crm_company_name');
     deleteStorage('company_id');
@@ -554,58 +554,7 @@ async function loadAnalytics(period = 'month') {
             
             // Загружаем выручку по адресам
             await loadAddressesRevenueForMonth(currentRevenueMonth, currentRevenueYear);
-            
-            // Обновляем топ продуктов
-            const topProducts = document.getElementById('topProducts');
-            if (topProducts) {
-                const products = data.analytics.topProducts || [];
-                const totalRevenue = data.analytics.revenue || 0;
-                
-                if (products.length > 0) {
-                    topProducts.innerHTML = `
-                        <div class="products-table">
-                            <div class="table-header">
-                                <div>Продукт</div>
-                                <div>Продажи</div>
-                                <div>Выручка</div>
-                                <div>Доля</div>
-                            </div>
-                            ${products.map((p, i) => {
-                                const items = typeof p.items === 'string' ? JSON.parse(p.items) : p.items;
-                                const productName = Array.isArray(items) ? items.join(', ') : String(items);
-                                const salesCount = parseInt(p.sales_count) || 0;
-                                const revenue = parseInt(p.revenue) || 0;
-                                const share = totalRevenue > 0 ? Math.round((revenue / totalRevenue) * 100) : 0;
-                                
-                                return `
-                                    <div class="table-row">
-                                        <div class="product-name">
-                                            <span class="product-rank">${i+1}</span> 
-                                            ${productName.substring(0, 30)}${productName.length > 30 ? '...' : ''}
-                                        </div>
-                                        <div>${salesCount} шт.</div>
-                                        <div>${revenue.toLocaleString()} ₽</div>
-                                        <div>
-                                            <div class="product-bar">
-                                                <div class="product-fill" style="width: ${share}%"></div>
-                                                <span>${share}%</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    `;
-                } else {
-                    topProducts.innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: #999;">
-                            <div style="font-size: 48px; margin-bottom: 16px;">🛒</div>
-                            <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Нет продаж</div>
-                            <div style="font-size: 13px;">Продажи через страницу кассира появятся здесь</div>
-                        </div>
-                    `;
-                }
-            }
+			
         } else {
             console.warn('Аналитика не получена:', data);
             showEmptyAnalytics();
@@ -2425,7 +2374,7 @@ async function savePromotion() {
             timeText = `${remainingMins} минут`;
         }
         
-        errorElement.textContent = `❌ Акция должна длиться минимум 12 часов. Добавьте ещё ${timeText}.`;
+        errorElement.textContent = `Акция должна длиться минимум 12 часов. Добавьте ещё ${timeText}.`;
         errorElement.style.display = 'block';
         setTimeout(() => errorElement.style.display = 'none', 5000);
         return;
@@ -2433,14 +2382,14 @@ async function savePromotion() {
     
     // Валидация значения скидки
     if (rewardValue <= 0) {
-        errorElement.textContent = '❌ Укажите размер скидки (больше 0)';
+        errorElement.textContent = 'Укажите размер скидки (больше 0)';
         errorElement.style.display = 'block';
         setTimeout(() => errorElement.style.display = 'none', 3000);
         return;
     }
     
     if (rewardValue > 100) {
-        errorElement.textContent = '❌ Скидка не может превышать 100%';
+        errorElement.textContent = 'Скидка не может превышать 100%';
         errorElement.style.display = 'block';
         setTimeout(() => errorElement.style.display = 'none', 3000);
         return;
@@ -2448,7 +2397,7 @@ async function savePromotion() {
     
     // Проверка: выбрана ли компания
     if (!currentBusiness || !currentBusiness.id) {
-        errorElement.textContent = '❌ Компания не выбрана. Перезагрузите страницу.';
+        errorElement.textContent = 'Компания не выбрана. Перезагрузите страницу.';
         errorElement.style.display = 'block';
         setTimeout(() => errorElement.style.display = 'none', 3000);
         return;
@@ -2457,7 +2406,7 @@ async function savePromotion() {
     // Сохраняем кнопку для восстановления состояния
     const saveBtn = document.getElementById('savePromotionBtn');
     const originalText = saveBtn.textContent;
-    saveBtn.textContent = '💾 Сохранение...';
+    saveBtn.textContent = 'Сохранение...';
     saveBtn.disabled = true;
     
     try {
@@ -2974,8 +2923,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Добавьте эти функции в script.js
-
 // ========== НАСТРОЙКА КОЛЕСА ФОРТУНЫ ==========
 
 // ОТДЕЛЬНЫЙ МАССИВ ИКОНОК ДЛЯ КОЛЕСА
@@ -3005,7 +2952,6 @@ let wheelSettings = {
         { name: 'x15', value: 15, multiplier: 15, color: '#e67e22', icon: '🏆', weight: 10 }
     ],
     maxSpinsPerDay: 10,
-    freeSpinDaily: false,
     maxPlaysPerDay: 0,
     active: true
 };
@@ -3024,7 +2970,6 @@ async function loadWheelSettings() {
                 spinCost: data.settings.spinCost || 25,
                 sectors: data.settings.sectors || wheelSettings.sectors,
                 maxSpinsPerDay: data.settings.maxSpinsPerDay || 10,
-                freeSpinDaily: data.settings.freeSpinDaily || false,
                 maxPlaysPerDay: data.settings.maxPlaysPerDay || 0,
                 active: data.active !== false
             };
@@ -3064,19 +3009,6 @@ function renderWheelSettings() {
                     <label>Максимум игр в день (0 – без ограничений)</label>
                     <input type="number" id="wheelMaxPlays" value="${wheelSettings.maxPlaysPerDay || 0}" min="0" max="100" onchange="updateWheelMaxPlays(this.value)">
                     <small style="display: block; margin-top: 4px; color: #666;">Ограничение на количество вращений в день для одного пользователя</small>
-                </div>
-                <div class="wheel-setting-group">
-                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                        <span>Бесплатное вращение в день</span>
-                        <input type="checkbox" 
-                               id="wheelFreeSpin" 
-                               ${wheelSettings.freeSpinDaily ? 'checked' : ''} 
-                               onchange="updateWheelFreeSpin(this.checked)"
-                               style="width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #ff4d4d;">
-                        <span id="wheelFreeSpinStatus" style="font-size: 12px; color: ${wheelSettings.freeSpinDaily ? '#2ecc71' : '#888'}">
-                            ${wheelSettings.freeSpinDaily ? 'Включена' : 'Отключена'}
-                        </span>
-                    </label>
                 </div>
             </div>
             
@@ -3169,7 +3101,7 @@ function renderWheelStats() {
     }
 }
 
-// ✅ ОБНОВЛЕННАЯ ФУНКЦИЯ updateSector с сохранением
+// ФУНКЦИЯ  с сохранением
 function updateSector(index, field, value) {
     if (wheelSettings.sectors[index]) {
         wheelSettings.sectors[index][field] = value;
@@ -3179,7 +3111,6 @@ function updateSector(index, field, value) {
     }
 }
 
-// ✅ ОБНОВЛЕННАЯ ФУНКЦИЯ addSector
 function addSector() {
     const newSector = {
         name: `x${wheelSettings.sectors.length + 1}`,
@@ -3195,7 +3126,6 @@ function addSector() {
     saveWheelSettingsDebounced();
 }
 
-// ✅ ОБНОВЛЕННАЯ ФУНКЦИЯ removeSector
 function removeSector(index) {
     if (wheelSettings.sectors.length <= 3) {
         alert('❌ Нельзя удалить сектор. Минимум 3 сектора');
@@ -3209,7 +3139,6 @@ function removeSector(index) {
     }
 }
 
-// ✅ УДАЛИ СТАРУЮ getRandomColor и используй getWheelRandomColor
 
 function updateWheelSpinCost(value) {
     wheelSettings.spinCost = parseInt(value) || 25;
@@ -3219,18 +3148,6 @@ function updateWheelSpinCost(value) {
 
 function updateWheelMaxPlays(value) {
     wheelSettings.maxPlaysPerDay = parseInt(value) || 0;
-    saveWheelSettingsDebounced();
-}
-
-function updateWheelFreeSpin(checked) {
-    wheelSettings.freeSpinDaily = checked;
-    
-    const statusSpan = document.getElementById('wheelFreeSpinStatus');
-    if (statusSpan) {
-        statusSpan.textContent = checked ? 'Включена' : 'Отключена';
-        statusSpan.style.color = checked ? '#2ecc71' : '#888';
-    }
-    
     saveWheelSettingsDebounced();
 }
 
@@ -3269,8 +3186,7 @@ async function saveWheelSettings() {
                 settings: {
                     spinCost: wheelSettings.spinCost,
                     sectors: wheelSettings.sectors,
-                    maxPlaysPerDay: wheelSettings.maxPlaysPerDay || 0,
-                    freeSpinDaily: wheelSettings.freeSpinDaily
+                    maxPlaysPerDay: wheelSettings.maxPlaysPerDay || 0
                 },
                 active: wheelSettings.active
             })
@@ -3319,7 +3235,6 @@ let scratchSettings = {
         { id: '🎰', name: 'ДЖЕКПОТ', value: 500, multiplier: 50, color: '#ff4d4d', prob: 3 }
     ],
     hintCost: 15,
-    freeHintDaily: false,
 	maxPlaysPerDay: 0,
     active: true
 };
@@ -3339,8 +3254,7 @@ async function loadScratchSettings() {
                 maxAttempts: data.settings.maxAttempts || 3,
                 symbols: data.settings.symbols || scratchSettings.symbols,
                 hintCost: data.settings.hintCost || 15,
-                freeHintDaily: data.settings.freeHintDaily || false,
-                maxPlaysPerDay: data.settings.maxPlaysPerDay || 0  // ← ДОБАВЛЯЕМ ЭТУ СТРОКУ
+                maxPlaysPerDay: data.settings.maxPlaysPerDay || 0 
             };
             scratchSettings.active = data.active;
             console.log('Scratch settings loaded, maxPlaysPerDay:', scratchSettings.maxPlaysPerDay);
@@ -3383,20 +3297,7 @@ function renderScratchSettings() {
                 <div class="scratch-setting-group">
                     <label>Стоимость подсказки (бонусов)</label>
                     <input type="number" id="scratchHintCost" value="${scratchSettings.hintCost}" min="0" max="100" onchange="updateScratchHintCost(this.value)">
-                </div>
-                <div class="scratch-setting-group">
-                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                        <span>Бесплатная подсказка в день</span>
-                        <input type="checkbox" 
-                               id="scratchFreeHint" 
-                               ${scratchSettings.freeHintDaily ? 'checked' : ''} 
-                               onchange="updateScratchFreeHint(this.checked)"
-                               style="width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: #ff4d4d;">
-                        <span id="scratchFreeHintStatus" style="font-size: 12px; color: ${scratchSettings.freeHintDaily ? '#2ecc71' : '#888'}">
-                            ${scratchSettings.freeHintDaily ? 'Включена' : 'Отключена'}
-                        </span>
-                    </label>
-                </div>
+                </div>        
             </div>
             
             <div style="margin-top: 20px;">
@@ -3544,18 +3445,6 @@ function updateScratchHintCost(value) {
     saveScratchSettingsDebounced();
 }
 
-function updateScratchFreeHint(checked) {
-    scratchSettings.freeHintDaily = checked;
-    
-    // Обновляем текст статуса
-    const statusSpan = document.getElementById('scratchFreeHintStatus');
-    if (statusSpan) {
-        statusSpan.textContent = checked ? 'Включена' : 'Отключена';
-        statusSpan.style.color = checked ? '#2ecc71' : '#888';
-    }
-    
-    saveScratchSettingsDebounced();
-}
 
 function toggleScratchActive(active) {
     console.log('🔄 Scratch toggled to:', active);
@@ -3595,7 +3484,6 @@ async function saveScratchSettings() {
                     maxAttempts: scratchSettings.maxAttempts,
                     symbols: scratchSettings.symbols,
                     hintCost: scratchSettings.hintCost,
-                    freeHintDaily: scratchSettings.freeHintDaily,
                     maxPlaysPerDay: scratchSettings.maxPlaysPerDay || 0  
                 },
                 active: scratchSettings.active
@@ -3983,14 +3871,14 @@ function updateDiceMaxPlays(value) {
 function toggleDiceActive(active) {
     diceSettings.active = active;
     
-    // ✅ Обновляем текст статуса сразу
+    // Обновляем текст статуса сразу
     const statusSpan = document.getElementById('diceActiveStatus');
     if (statusSpan) {
         statusSpan.textContent = active ? 'Активна' : 'Отключена';
         statusSpan.style.color = active ? '#2ecc71' : '#888';
     }
     
-    // ✅ Обновляем сам чекбокс
+    // Обновляем сам чекбокс
     const checkbox = document.getElementById('diceActive');
     if (checkbox && checkbox.checked !== active) {
         checkbox.checked = active;
