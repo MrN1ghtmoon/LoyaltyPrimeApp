@@ -2174,7 +2174,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
             fontWeight:600,
             textAlign:'center'
           }}>
-            {isFree ? '✅ Получена бесплатно' : `✅ Куплена за ${bonusCost} баллов`}
+            {isFree ? 'Получена бесплатно' : `Куплена за ${bonusCost} баллов`}
           </div>
         );
       }
@@ -2194,7 +2194,7 @@ if (step === 'profile' && selectedGroup && selectedGroup.miniAppActive === false
             width:'100%'
           }}
         >
-          {isFree ? '🎁 Получить бесплатно' : `💰 Купить за ${bonusCost} баллов`}
+          {isFree ? 'Получить бесплатно' : `Купить за ${bonusCost} баллов`}
         </button>
       );
     })()}

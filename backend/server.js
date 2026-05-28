@@ -5,6 +5,7 @@ const nodemailer = require('nodemailer');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+
 const { 
     initDatabase, 
     addCompany, 
@@ -223,13 +224,13 @@ app.post('/api/companies/login', async (req, res) => {
             if (match) {
                 res.json({ success: true, company: company });
             } else {
-                res.status(401).json({ success: false, message: 'Неверный email или пароль' });
+                res.status(401).json({ success: false, message: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ email пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ' });
             }
         } else {
-            res.status(401).json({ success: false, message: 'Неверный email или пароль' });
+            res.status(401).json({ success: false, message: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ email пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ' });
         }
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Ошибка сервера' });
+        res.status(500).json({ success: false, message: 'пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
     }
 });
 
@@ -588,13 +589,13 @@ app.post('/api/quests', async (req, res) => {
         const { companyId, emoji, title, description, reward, active, durationDays } = req.body;
         
         if (!title || !reward) {
-            return res.status(400).json({ success: false, message: 'Название и награда обязательны' });
+            return res.status(400).json({ success: false, message: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
         }
         
         const quest = await addQuest(companyId, { emoji, title, description, reward, active, durationDays });
         res.json({ success: true, quest });
     } catch (error) {
-        console.error('Ошибка добавления задания:', error);
+        console.error('пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -607,12 +608,12 @@ app.put('/api/quests/:id', async (req, res) => {
             if (durationDays < 1 || durationDays > 7) {
                 return res.status(400).json({ 
                     success: false, 
-                    message: 'Количество дней на выполнение должно быть от 1 до 7' 
+                    message: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ 1 пїЅпїЅ 7' 
                 });
             }
         }
         
-        // Если active меняется на false, сбрасываем прогресс
+        // пїЅпїЅпїЅпїЅ active пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ false, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         if (active === false) {
             await resetQuestProgress(req.params.id);
         }
@@ -635,7 +636,7 @@ app.put('/api/quests/:id', async (req, res) => {
         }
         
         if (updates.length === 0) {
-            return res.status(400).json({ success: false, message: 'Нет данных для обновления' });
+            return res.status(400).json({ success: false, message: 'пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
         }
         
         updates.push(`updated_at = NOW()`);
@@ -645,12 +646,12 @@ app.put('/api/quests/:id', async (req, res) => {
         const result = await query(queryText, values);
         
         if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Задание не найдено' });
+            return res.status(404).json({ success: false, message: 'пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
         }
         
         res.json({ success: true, quest: result.rows[0] });
     } catch (error) {
-        console.error('Ошибка обновления задания:', error);
+        console.error('пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -698,14 +699,13 @@ app.post('/api/users/getOrCreate', async (req, res) => {
             user = await createUser(vkId, companyId, name);
         }
         
-        // Отслеживаем посещение приложения для классификации пользователя
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         await initializeUserClassification(user.id, companyId);
         await updateUserClassification(user.id, companyId, 'app_visit');
         
         const allQuests = await getQuests(companyId);
         
-        // ?? ИСПРАВЛЕНО: убираем проверку на expiresDays
-        // Теперь показываем ТОЛЬКО активные задания (без проверки срока действия)
+        // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         const activeQuests = allQuests.filter(q => q.active === true);
         
         const userProgress = await getAllUserQuestProgress(user.id);
@@ -721,7 +721,7 @@ app.post('/api/users/getOrCreate', async (req, res) => {
             totalEarned: progress?.total_earned || 0
         });
     } catch (error) {
-        console.error('Ошибка:', error);
+        console.error('пїЅпїЅпїЅпїЅпїЅпїЅ:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -738,14 +738,14 @@ app.get('/api/users/:userId/quests/progress/all', async (req, res) => {
       [userId]
     );
     
-    console.log(`?? ПРОГРЕСС ПОЛЬЗОВАТЕЛЯ ${userId}:`);
+    console.log(`пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ${userId}:`);
     result.rows.forEach(row => {
       console.log(`   quest_id=${row.id}, progress=${row.progress}, completed=${row.completed}, claimed=${row.claimed}`);
     });
     
     res.json({ success: true, quests: result.rows });
   } catch (error) {
-    console.error('Ошибка получения прогресса:', error);
+    console.error('пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -771,20 +771,19 @@ app.post('/api/users/completeQuest', async (req, res) => {
     try {
         const { userId, questId, reward } = req.body;
         
-        // ?? ИСПРАВЛЕНО: убираем проверку на истечение срока задания
-        // (expires_days больше не используется)
+        // (expires_days пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         
-        // Проверяем, не получал ли уже бонус
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         const existing = await query(
             'SELECT * FROM user_quests WHERE user_id = $1 AND quest_id = $2',
             [userId, questId]
         );
         
         if (existing.rows.length > 0) {
-            return res.status(400).json({ error: 'Бонус за это задание уже получен' });
+            return res.status(400).json({ error: 'пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
         }
         
-        // Проверяем, выполнено ли задание (прогресс >= цель)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ >= пїЅпїЅпїЅпїЅ)
         const progressResult = await query(
             `SELECT uqp.progress, q.target_value 
              FROM user_quest_progress uqp
@@ -805,17 +804,17 @@ app.post('/api/users/completeQuest', async (req, res) => {
         
         if (!isCompleted) {
             return res.status(400).json({ 
-                error: `Задание ещё не выполнено. Прогресс: ${currentProgress}/${targetValue}` 
+                error: `пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: ${currentProgress}/${targetValue}` 
             });
         }
         
-        // Записываем выполнение
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         await query(
             'INSERT INTO user_quests (user_id, quest_id, completed_at, reward_claimed) VALUES ($1, $2, NOW(), $3)',
             [userId, questId, true]
         );
         
-        // Обновляем user_quest_progress: помечаем как полученное
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ user_quest_progress: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         await query(
             `UPDATE user_quest_progress 
              SET claimed = true, updated_at = NOW()
@@ -823,13 +822,13 @@ app.post('/api/users/completeQuest', async (req, res) => {
             [userId, questId]
         );
         
-        // Начисляем бонус (только здесь!)
-        await updateUserBalance(userId, reward, 'earn', `Задание выполнено! +${reward} бонусов`);
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ!)
+        await updateUserBalance(userId, reward, 'earn', `пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ! +${reward} пїЅпїЅпїЅпїЅпїЅпїЅпїЅ`);
         
         res.json({ success: true });
         
     } catch (error) {
-        console.error('Ошибка выполнения задания:', error);
+        console.error('пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1009,7 +1008,7 @@ app.get('/api/users/:userId/promotions/purchased/:companyId', async (req, res) =
         const { userId, companyId } = req.params;
         const purchased = await getUserPurchasedPromotions(userId, companyId);
         
-        // Гарантируем, что promotion_cycle_start передается клиенту
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ promotion_cycle_start пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         const purchasedWithCycle = purchased.map(p => ({
             id: p.id,
             user_id: p.user_id,
@@ -1028,9 +1027,9 @@ app.get('/api/users/:userId/promotions/purchased/:companyId', async (req, res) =
             price: p.price
         }));
         
-        console.log(`?? Возвращаем ${purchasedWithCycle.length} купленных акций для пользователя ${userId}`);
+        console.log(`?? пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ${purchasedWithCycle.length} пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ${userId}`);
         if (purchasedWithCycle.length > 0) {
-            console.log('Пример:', {
+            console.log('пїЅпїЅпїЅпїЅпїЅпїЅ:', {
                 promotion_id: purchasedWithCycle[0].promotion_id,
                 promotion_cycle_start: purchasedWithCycle[0].promotion_cycle_start
             });
@@ -1038,7 +1037,7 @@ app.get('/api/users/:userId/promotions/purchased/:companyId', async (req, res) =
         
         res.json({ success: true, purchased: purchasedWithCycle });
     } catch (error) {
-        console.error('Ошибка получения купленных акций:', error);
+        console.error('пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1151,7 +1150,9 @@ app.post('/api/pos/check-purchased-promotion', async (req, res) => {
 
 app.post('/api/pos/use-purchased-promotion', async (req, res) => {
     try {
-        const { qrData, promotionId, promotionCycleStart  } = req.body;
+        const { qrData, promotionId, promotionCycleStart } = req.body;
+        
+        console.log('рџ”Ќ [DEBUG] РџРѕР»СѓС‡РµРЅ Р·Р°РїСЂРѕСЃ РЅР° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ Р°РєС†РёРё:', { promotionId, promotionCycleStart });
         
         let userData;
         try {
@@ -1164,6 +1165,8 @@ app.post('/api/pos/use-purchased-promotion', async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ' });
         }
+        
+        console.log('рџ‘¤ РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ:', { id: user.id, vkId: user.vk_id });
         
         // РџСЂРѕРІРµСЂСЏРµРј Р°РєС‚РёРІРЅРѕСЃС‚СЊ Р°РєС†РёРё РїРѕ РґР°С‚Р°Рј
         const promoResult = await query(
@@ -1190,6 +1193,17 @@ app.post('/api/pos/use-purchased-promotion', async (req, res) => {
             return res.status(400).json({ success: false, message });
         }
         
+        // рџ”Ќ РЎРЅР°С‡Р°Р»Р° РїРѕСЃРјРѕС‚СЂРёРј РІСЃРµ РЅРµРёСЃРїРѕР»СЊР·РѕРІР°РЅРЅС‹Рµ Р·Р°РїРёСЃРё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РїРѕ СЌС‚РѕР№ Р°РєС†РёРё
+        const allUnused = await query(
+            `SELECT id, promotion_id, used, promotion_cycle_start, purchased_at 
+             FROM user_purchased_promotions 
+             WHERE user_id = $1 AND promotion_id = $2 AND used = false`,
+            [user.id, promotionId]
+        );
+        
+        console.log('рџ“Љ Р’СЃРµ РЅРµРёСЃРїРѕР»СЊР·РѕРІР°РЅРЅС‹Рµ Р·Р°РїРёСЃРё РІ Р‘Р”:', allUnused.rows);
+        console.log('рџ“Љ РС‰РµРј СЃ promotionCycleStart:', promotionCycleStart);
+        
         // РќР°С…РѕРґРёРј РЅРµРёСЃРїРѕР»СЊР·РѕРІР°РЅРЅС‹Р№ СЌРєР·РµРјРїР»СЏСЂ
         let checkResult;
         if (promotionCycleStart) {
@@ -1204,10 +1218,14 @@ app.post('/api/pos/use-purchased-promotion', async (req, res) => {
                  LIMIT 1`,
                 [user.id, promotionId, promotionCycleStart]
             );
-        } else {
-            // fallback для старых записей
+            console.log('рџ”Ќ Р РµР·СѓР»СЊС‚Р°С‚ РїРѕРёСЃРєР° СЃ promotionCycleStart:', checkResult.rows);
+        }
+        
+        // Р•СЃР»Рё РЅРµ РЅР°С€Р»Рё РїРѕ cycle_start, РїСЂРѕР±СѓРµРј РЅР°Р№С‚Рё Р»СЋР±СѓСЋ РЅРµРёСЃРїРѕР»СЊР·РѕРІР°РЅРЅСѓСЋ
+        if (!checkResult || checkResult.rows.length === 0) {
+            console.log('вљ пёЏ РќРµ РЅР°Р№РґРµРЅРѕ РїРѕ cycle_start, РёС‰РµРј Р»СЋР±СѓСЋ РЅРµРёСЃРїРѕР»СЊР·РѕРІР°РЅРЅСѓСЋ...');
             checkResult = await query(
-                `SELECT id 
+                `SELECT id, promotion_cycle_start
                  FROM user_purchased_promotions 
                  WHERE user_id = $1 
                    AND promotion_id = $2 
@@ -1216,12 +1234,19 @@ app.post('/api/pos/use-purchased-promotion', async (req, res) => {
                  LIMIT 1`,
                 [user.id, promotionId]
             );
+            console.log('рџ”Ќ Р РµР·СѓР»СЊС‚Р°С‚ РїРѕРёСЃРєР° Р»СЋР±РѕР№ РЅРµРёСЃРїРѕР»СЊР·РѕРІР°РЅРЅРѕР№:', checkResult.rows);
         }
         
         if (checkResult.rows.length === 0) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'РќРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… СЌРєР·РµРјРїР»СЏСЂРѕРІ СЌС‚РѕР№ Р°РєС†РёРё' 
+                message: 'РќРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… СЌРєР·РµРјРїР»СЏСЂРѕРІ СЌС‚РѕР№ Р°РєС†РёРё',
+                debug: {
+                    userId: user.id,
+                    promotionId: promotionId,
+                    promotionCycleStart: promotionCycleStart,
+                    allUnusedCount: allUnused.rows.length
+                }
             });
         }
         
@@ -1261,15 +1286,17 @@ app.post('/api/pos/use-purchased-promotion', async (req, res) => {
             return five;
         }
         
+        console.log('вњ… РђРєС†РёСЏ СѓСЃРїРµС€РЅРѕ РёСЃРїРѕР»СЊР·РѕРІР°РЅР°! РћСЃС‚Р°Р»РѕСЃСЊ:', remaining);
+        
         res.json({ 
             success: true, 
-            message: `вњ… "${promoName}" РёСЃРїРѕР»СЊР·РѕРІР°РЅР°! РћСЃС‚Р°Р»РѕСЃСЊ: ${remaining} ${getDeclension(remaining, 'РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ', 'РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ', 'РёСЃРїРѕР»СЊР·РѕРІР°РЅРёР№')}`,
+            message: `"${promoName}" РёСЃРїРѕР»СЊР·РѕРІР°РЅР°! РћСЃС‚Р°Р»РѕСЃСЊ: ${remaining} ${getDeclension(remaining, 'РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ', 'РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ', 'РёСЃРїРѕР»СЊР·РѕРІР°РЅРёР№')}`,
             remainingCount: remaining,
             usedPromotion: used.rows[0]
         });
         
     } catch (error) {
-        console.error('РћС€РёР±РєР° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р°РєС†РёРё:', error);
+        console.error('вќЊ РћС€РёР±РєР° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р°РєС†РёРё:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1608,7 +1635,7 @@ app.post('/api/pos/apply-bonus', async (req, res) => {
         await query(
     `INSERT INTO transactions (user_id, amount, type, description, created_at) 
      VALUES ($1, $2, $3, $4, NOW())`,
-    [user.id, bonusEarned, 'earn', `Покупка на ${amount}? в ${'кассе'}`]
+    [user.id, bonusEarned, 'earn', `пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ ${amount}? пїЅ ${'пїЅпїЅпїЅпїЅпїЅ'}`]
 );
         
         res.json({
@@ -3732,7 +3759,7 @@ app.post('/api/companies/forgot-password', async (req, res) => {
                     
                     <div style="background: #fff3cd; padding: 16px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ffc107;">
                         <p style="margin: 0; color: #856404;">
-                            <strong>рџ“ћ Р”РµР№СЃС‚РІРёСЏ:</strong> РЎРІСЏР¶РёС‚РµСЃСЊ СЃ РІР»Р°РґРµР»СЊС†РµРј РїРѕ РЅРѕРјРµСЂСѓ С‚РµР»РµС„РѕРЅР° ${normalizedPhone} РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ Р»РёС‡РЅРѕСЃС‚Рё, 
+                            <strong>Р”РµР№СЃС‚РІРёСЏ:</strong> РЎРІСЏР¶РёС‚РµСЃСЊ СЃ РІР»Р°РґРµР»СЊС†РµРј РїРѕ РЅРѕРјРµСЂСѓ С‚РµР»РµС„РѕРЅР° ${normalizedPhone} РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ Р»РёС‡РЅРѕСЃС‚Рё, 
                             Р·Р°С‚РµРј РїРѕРјРѕРіРёС‚Рµ РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЊ РґРѕСЃС‚СѓРї Рє Р°РєРєР°СѓРЅС‚Сѓ (СЃР±СЂРѕСЃСЊС‚Рµ РїР°СЂРѕР»СЊ РёР»Рё СЃРѕРѕР±С‰РёС‚Рµ РЅРѕРІС‹Р№).
                         </p>
                     </div>
@@ -3873,30 +3900,30 @@ app.post('/api/users/:userId/quests/:questId/claim', async (req, res) => {
 });
 
 
-// Удаление акции
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
 app.delete('/api/promotions/:id', async (req, res) => {
     try {
         const promotionId = req.params.id;
         
-        // Проверяем, существует ли акция
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         const checkResult = await query('SELECT * FROM promotions WHERE id = $1', [promotionId]);
         
         if (checkResult.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Акция не найдена' });
+            return res.status(404).json({ success: false, message: 'пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
         }
         
-        // Удаляем связанные записи в user_purchased_promotions
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ user_purchased_promotions
         await query('DELETE FROM user_purchased_promotions WHERE promotion_id = $1', [promotionId]);
         
-        // Удаляем саму акцию
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         await query('DELETE FROM promotions WHERE id = $1', [promotionId]);
         
-        console.log(`? Акция ${promotionId} успешно удалена`);
-        res.json({ success: true, message: 'Акция успешно удалена' });
+        console.log(`? пїЅпїЅпїЅпїЅпїЅ ${promotionId} пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ`);
+        res.json({ success: true, message: 'пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ' });
         
     } catch (error) {
-        console.error('? Ошибка удаления акции:', error);
-        res.status(500).json({ success: false, error: error.message, message: 'Ошибка сервера при удалении акции' });
+        console.error('? пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ:', error);
+        res.status(500).json({ success: false, error: error.message, message: 'пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ' });
     }
 });
 
